@@ -7,6 +7,8 @@ to peform this whittling.
 
 # Word2Man
 
-# Understanding compositional distributional semantics AKA lambek
+@Bollu please?
 
-@Alok, please fill this up.
+# Understanding compositional distributional semantics
+
+Compositional distributional models of meaning are models that are developed by a compositonal understanding the meaning of a word in context. 

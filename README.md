@@ -15,3 +15,4 @@ Compositional distributional models of meaning are models that are developed by 
 
 - [GloVe: Global Vectors for Word Representation](https://nlp.stanford.edu/pubs/glove.pdf)
 - [A Compositional Explanation of the ‘Pet Fish’ Phenomenon](https://arxiv.org/pdf/1509.06594.pdf)
+- [Integrating Type Theory and Distributional Semantics: A Case Study on Adjective–Noun Compositions](https://www.mitpressjournals.org/doi/pdf/10.1162/COLI_a_00264)

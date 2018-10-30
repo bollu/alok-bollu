@@ -12,3 +12,6 @@ to peform this whittling.
 # Understanding compositional distributional semantics
 
 Compositional distributional models of meaning are models that are developed by a compositonal understanding the meaning of a word in context. 
+
+- [GloVe: Global Vectors for Word Representation](https://nlp.stanford.edu/pubs/glove.pdf)
+- [A Compositional Explanation of the ‘Pet Fish’ Phenomenon](https://arxiv.org/pdf/1509.06594.pdf)

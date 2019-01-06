@@ -1,0 +1,13 @@
+Task 1: [RED] Reproduce word2vec (gensim) {Alok}
+Task 2: [RED] Reproduce poincare embeddings {Druid}
+Task 2: [ORANGE] Implement SGD over Reimannian manifolds
+
+> Generate a formal understanding of word clustering in Word2Vec
+> Look into affine transformation from vector spaces
+
+15 Aug 2018:
+> Reproduce Word2Vec, Poincare Embeddings and (ElMo?)
+> Explore all manifolds that can be trained upon (dimensionality > 3 )
+
+Side Quest:
+> How can we prove Word2Vec wrong? a. Adversarial attacks b. Fixing a simensionality to train upon (and adjust dimensioanlity accordingly) to try to find the "meaning" od distance and clustering

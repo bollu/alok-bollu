@@ -1,0 +1,115 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+AddWordToVocab	word2phrase.c	/^int AddWordToVocab(char *word) {$/;"	f
+AddWordToVocab	word2vec.c	/^int AddWordToVocab(char *word) {$/;"	f
+ArgPos	word2phrase.c	/^int ArgPos(char *str, int argc, char **argv) {$/;"	f
+ArgPos	word2vec.c	/^int ArgPos(char *str, int argc, char **argv) {$/;"	f
+CC	makefile	/^CC = gcc$/;"	m
+CFLAGS	makefile	/^CFLAGS = -lm -pthread -O3 -march=native -Wall -funroll-loops -Wno-unused-result$/;"	m
+CreateBinaryTree	word2vec.c	/^void CreateBinaryTree() {$/;"	f
+EXP_TABLE_SIZE	word2vec.c	22;"	d	file:
+GetWordHash	word2phrase.c	/^int GetWordHash(char *word) {$/;"	f
+GetWordHash	word2vec.c	/^int GetWordHash(char *word) {$/;"	f
+InitNet	word2vec.c	/^void InitNet() {$/;"	f
+InitUnigramTable	word2vec.c	/^void InitUnigramTable() {$/;"	f
+LearnVocabFromTrainFile	word2phrase.c	/^void LearnVocabFromTrainFile() {$/;"	f
+LearnVocabFromTrainFile	word2vec.c	/^void LearnVocabFromTrainFile() {$/;"	f
+MAX_CODE_LENGTH	word2vec.c	25;"	d	file:
+MAX_EXP	word2vec.c	23;"	d	file:
+MAX_SENTENCE_LENGTH	word2vec.c	24;"	d	file:
+MAX_STRING	word2phrase.c	21;"	d	file:
+MAX_STRING	word2vec.c	21;"	d	file:
+N	compute-accuracy.c	/^const long long N = 1;                   \/\/ number of closest words$/;"	v
+N	distance.c	/^const long long N = 40;                  \/\/ number of closest words that will be shown$/;"	v
+N	word-analogy.c	/^const long long N = 40;                  \/\/ number of closest words that will be shown$/;"	v
+ReadVocab	word2vec.c	/^void ReadVocab() {$/;"	f
+ReadWord	word2phrase.c	/^void ReadWord(char *word, FILE *fin, char *eof) {$/;"	f
+ReadWord	word2vec.c	/^void ReadWord(char *word, FILE *fin, char *eof) {$/;"	f
+ReadWordIndex	word2phrase.c	/^int ReadWordIndex(FILE *fin, char *eof) {$/;"	f
+ReadWordIndex	word2vec.c	/^int ReadWordIndex(FILE *fin, char *eof) {$/;"	f
+ReduceVocab	word2phrase.c	/^void ReduceVocab() {$/;"	f
+ReduceVocab	word2vec.c	/^void ReduceVocab() {$/;"	f
+SaveVocab	word2vec.c	/^void SaveVocab() {$/;"	f
+SearchVocab	word2phrase.c	/^int SearchVocab(char *word) {$/;"	f
+SearchVocab	word2vec.c	/^int SearchVocab(char *word) {$/;"	f
+SortVocab	word2phrase.c	/^void SortVocab() {$/;"	f
+SortVocab	word2vec.c	/^void SortVocab() {$/;"	f
+TrainModel	word2phrase.c	/^void TrainModel() {$/;"	f
+TrainModel	word2vec.c	/^void TrainModel() {$/;"	f
+TrainModelThread	word2vec.c	/^void *TrainModelThread(void *id) {$/;"	f
+VocabCompare	word2phrase.c	/^int VocabCompare(const void *a, const void *b) {$/;"	f
+VocabCompare	word2vec.c	/^int VocabCompare(const void *a, const void *b) {$/;"	f
+alpha	word2vec.c	/^real alpha = 0.025, starting_alpha, sample = 1e-3;$/;"	v
+binary	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+cbow	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+classes	word2vec.c	/^long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;$/;"	v
+cn	word2phrase.c	/^  long long cn;$/;"	m	struct:vocab_word	file:
+cn	word2vec.c	/^  long long cn;$/;"	m	struct:vocab_word	file:
+code	word2vec.c	/^  char *word, *code, codelen;$/;"	m	struct:vocab_word	file:
+codelen	word2vec.c	/^  char *word, *code, codelen;$/;"	m	struct:vocab_word	file:
+debug_mode	word2phrase.c	/^int debug_mode = 2, min_count = 5, *vocab_hash, min_reduce = 1;$/;"	v
+debug_mode	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+expTable	word2vec.c	/^real *syn0, *syn1, *syn1neg, *expTable;$/;"	v
+file_size	word2vec.c	/^long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;$/;"	v
+hs	word2vec.c	/^int hs = 0, negative = 5;$/;"	v
+iter	word2vec.c	/^long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;$/;"	v
+layer1_size	word2vec.c	/^long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;$/;"	v
+main	compute-accuracy.c	/^int main(int argc, char **argv)$/;"	f
+main	distance.c	/^int main(int argc, char **argv) {$/;"	f
+main	word-analogy.c	/^int main(int argc, char **argv) {$/;"	f
+main	word2phrase.c	/^int main(int argc, char **argv) {$/;"	f
+main	word2vec.c	/^int main(int argc, char **argv) {$/;"	f
+max_size	compute-accuracy.c	/^const long long max_size = 2000;         \/\/ max length of strings$/;"	v
+max_size	distance.c	/^const long long max_size = 2000;         \/\/ max length of strings$/;"	v
+max_size	word-analogy.c	/^const long long max_size = 2000;         \/\/ max length of strings$/;"	v
+max_w	compute-accuracy.c	/^const long long max_w = 50;              \/\/ max length of vocabulary entries$/;"	v
+max_w	distance.c	/^const long long max_w = 50;              \/\/ max length of vocabulary entries$/;"	v
+max_w	word-analogy.c	/^const long long max_w = 50;              \/\/ max length of vocabulary entries$/;"	v
+min_count	word2phrase.c	/^int debug_mode = 2, min_count = 5, *vocab_hash, min_reduce = 1;$/;"	v
+min_count	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+min_reduce	word2phrase.c	/^int debug_mode = 2, min_count = 5, *vocab_hash, min_reduce = 1;$/;"	v
+min_reduce	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+negative	word2vec.c	/^int hs = 0, negative = 5;$/;"	v
+next_random	word2phrase.c	/^unsigned long long next_random = 1;$/;"	v
+normalize_text	demo-train-big-model-v1.sh	/^normalize_text() {$/;"	f
+num_threads	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+output_file	word2phrase.c	/^char train_file[MAX_STRING], output_file[MAX_STRING];$/;"	v
+output_file	word2vec.c	/^char train_file[MAX_STRING], output_file[MAX_STRING];$/;"	v
+point	word2vec.c	/^  int *point;$/;"	m	struct:vocab_word	file:
+read_vocab_file	word2vec.c	/^char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];$/;"	v
+real	word2phrase.c	/^typedef float real;                    \/\/ Precision of float numbers$/;"	t	file:
+real	word2vec.c	/^typedef float real;                    \/\/ Precision of float numbers$/;"	t	file:
+sample	word2vec.c	/^real alpha = 0.025, starting_alpha, sample = 1e-3;$/;"	v
+save_vocab_file	word2vec.c	/^char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];$/;"	v
+start	word2vec.c	/^clock_t start;$/;"	v
+starting_alpha	word2vec.c	/^real alpha = 0.025, starting_alpha, sample = 1e-3;$/;"	v
+syn0	word2vec.c	/^real *syn0, *syn1, *syn1neg, *expTable;$/;"	v
+syn1	word2vec.c	/^real *syn0, *syn1, *syn1neg, *expTable;$/;"	v
+syn1neg	word2vec.c	/^real *syn0, *syn1, *syn1neg, *expTable;$/;"	v
+table	word2vec.c	/^int *table;$/;"	v
+table_size	word2vec.c	/^const int table_size = 1e8;$/;"	v
+threshold	word2phrase.c	/^real threshold = 100;$/;"	v
+train_file	word2phrase.c	/^char train_file[MAX_STRING], output_file[MAX_STRING];$/;"	v
+train_file	word2vec.c	/^char train_file[MAX_STRING], output_file[MAX_STRING];$/;"	v
+train_words	word2phrase.c	/^long long train_words = 0;$/;"	v
+train_words	word2vec.c	/^long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;$/;"	v
+vocab	word2phrase.c	/^struct vocab_word *vocab;$/;"	v	typeref:struct:vocab_word
+vocab	word2vec.c	/^struct vocab_word *vocab;$/;"	v	typeref:struct:vocab_word
+vocab_hash	word2phrase.c	/^int debug_mode = 2, min_count = 5, *vocab_hash, min_reduce = 1;$/;"	v
+vocab_hash	word2vec.c	/^int *vocab_hash;$/;"	v
+vocab_hash_size	word2phrase.c	/^const int vocab_hash_size = 500000000; \/\/ Maximum 500M entries in the vocabulary$/;"	v
+vocab_hash_size	word2vec.c	/^const int vocab_hash_size = 30000000;  \/\/ Maximum 30 * 0.7 = 21M words in the vocabulary$/;"	v
+vocab_max_size	word2phrase.c	/^long long vocab_max_size = 10000, vocab_size = 0;$/;"	v
+vocab_max_size	word2vec.c	/^long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;$/;"	v
+vocab_size	word2phrase.c	/^long long vocab_max_size = 10000, vocab_size = 0;$/;"	v
+vocab_size	word2vec.c	/^long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;$/;"	v
+vocab_word	word2phrase.c	/^struct vocab_word {$/;"	s	file:
+vocab_word	word2vec.c	/^struct vocab_word {$/;"	s	file:
+window	word2vec.c	/^int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;$/;"	v
+word	word2phrase.c	/^  char *word;$/;"	m	struct:vocab_word	file:
+word	word2vec.c	/^  char *word, *code, codelen;$/;"	m	struct:vocab_word	file:
+word_count_actual	word2vec.c	/^long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;$/;"	v

@@ -88,7 +88,10 @@ def mk_onehot(sampler, w, device):
 def mk_skipgrams_sentence_dataset(s, sampler, device):
     """s: current sentence, sampler: sampler, device: current device
        returns: torch.DataSet of values
-   """
+    """
+    # TODO: bench this. It is quite likely that creating all the tensors
+    # on the CPU and then sending them to the GPU in one shot is way better
+    # than piecemeal allocating on the GPU(?)
     out = []
     for (w, wctx, is_positive) in list(mk_skipgrams_sentence(s, sampler))[:10]:
         x_ = mk_onehot(sampler, w, device)
@@ -114,19 +117,18 @@ class Word2Vec(nn.Module):
 
     # run the forward pass which matches word y in the context of x
     def forward(self, x_, y_):
+        # 2d vectors of data x batch_size
+        # TODO: is batch_size outer or inner dim?
         xembed = self.embedding(x_)
-        # print("xembed: %s" % (xembed, ))
-        xembed = xembed.view((self.nhidden,))
-        # print("xembed: %s" % (xembed, ))
-
         yembed = self.embedding(y_)
-        # print("yembed: %s" % (yembed, ))
-        yembed = yembed.view((1, -1))
-        yembed = yembed.view((self.nhidden,))
 
-        score = torch.dot(xembed, yembed)
+        assert (len(xembed) == len(yembed))
+
+        score = 0
+        for i in range(len(xembed)):
+            score += torch.dot(xembed[i], yembed[i])
+
         log_probs = F.logsigmoid(score)
-        # print("log_probs: %s" % (log_probs, ))
         return log_probs
 
 # Corpus contains a list of sentences. Each s is a list of words
@@ -195,37 +197,40 @@ def train(savepath, loadpath):
     for epoch in range(2):
         for s in corpus:
             # TODO: allow constructing this per mutiple sentences
-            print ("making dataloader...")
+            # https://discuss.pytorch.org/t/a-call-to-torch-cuda-is-available-makes-an-unrelated-multi-processing-computation-crash/4075/3
+            # There seems to be some subtlety around CUDA / spawning.
             dataloader = DataLoader(mk_skipgrams_sentence_dataset(s, sampler, device), 
-                                    batch_size=4,
-                                    shuffle=True,
-                                    num_workers=4)
-            print ("dataloader: %s" % (dataloader, ))
-            for (i, train) in enumerate(dataloader):
-                # print("training on sample: %s" % (train,))
-                (w, wctx, is_positive) = train
-                print ("i: %s | train: %s" % (i, train))
-                #TODO: learn if this is actually the correct way of doing things...
-                x_ = mk_onehot(sampler, w, device)
-                y_ = mk_onehot(sampler, wctx, device)
+                                    batch_size=30,
+                                    shuffle=True)
+                                    # num_workers=4)
+            for batch in dataloader:
+                for train in batch:
+                    # TODO: understand why I need to perform this column indexing.
+                    print("training on sample: \n%s\n" % (train,))
+                    x_ = train[:, 0]
+                    print("x_: %s" % (x_, ))
+                    y_ = train[:, 1]
+                    print("y_: %s" % (y_, ))
+                    is_positive = train[:, 2]
+                    print("is_positive: %s" % (is_positive, ))
 
-                optimizer.zero_grad()   # zero the gradient buffers
-                y = model(x_, y_)
-                # print("y: %s" % y)
-                loss = criterion(y, Variable(torch.Tensor([is_positive])).to(device))
-                loss.backward()
-                optimizer.step()
+                    optimizer.zero_grad()   # zero the gradient buffers
+                    y = model(x_, y_)
+                    print("y: %s" % (y, ))
+                    loss = criterion(y, is_positive.float())
+                    loss.backward()
+                    optimizer.step()
 
-                running_loss += loss.item()
-                del loss
+                    running_loss += loss.item()
+                    del loss
 
-                cur_print_time = datetime.datetime.now()
-                if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
-                    print('[%d, %5d] loss: %.3f | time: %s' %
-                          (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP, 
-                           (cur_print_time - last_print_time)))
-                    last_print_time = cur_print_time
-                    running_loss = 0.0
+                    cur_print_time = datetime.datetime.now()
+                    if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
+                        print('[%d, %5d] loss: %.3f | time: %s' %
+                              (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP, 
+                               (cur_print_time - last_print_time)))
+                        last_print_time = cur_print_time
+                        running_loss = 0.0
 
 
 @click.command()

@@ -16,9 +16,10 @@ import click
 import datetime 
  
 
+LEARNING_RATE=0.1
 LOSS_PRINT_STEP = 50
 BATCH_SIZE = 100
-EPOCHS = 20
+EPOCHS = 200
 
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
@@ -226,22 +227,26 @@ def train(savepath, loadpath):
     print("done.")
 
     print("setting up signal handler...")
-    def signal_term_handler(signal, frame):
+    def save_model():
         print ("saving model to %s" % savepath)
         torch.save(model, savepath)
-        sys.exit(0)
-    signal.signal(signal.SIGTERM, signal_term_handler)
-    signal.signal(signal.SIGINT, signal_term_handler)
+
+    def save_model_handler(signal, frame):
+	save_model()
+	sys.exit(0)
+    signal.signal(signal.SIGTERM, save_model_handler)
+    signal.signal(signal.SIGINT, save_model_handler)
     print ("setup signal handlers.")
 
     # optimise
-    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.MSELoss()
     print ("constructed optimizer and criterion.")
 
     last_print_time = datetime.datetime.now()
     running_loss = 0
     for epoch in range(EPOCHS):
+	if savepath is not None: save_model()
         dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler) for s in corpus])
         dataloader = DataLoader(dataset,
                                 batch_size=BATCH_SIZE,

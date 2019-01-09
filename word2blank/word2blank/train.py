@@ -73,12 +73,14 @@ def mk_skipgrams_sentence(s, sampler):
         yield ([s[i], sampler.sample(), 0])
         # yield ([s[i], sampler.sample(), 0])
 
-def mk_onehot(sampler, w):
+def mk_onehot(sampler, w, device):
     # v = torch.zeros(len(sampler)).float()
     #v[sampler.wordix(w)] = 1.0
     # return v
 
-    return Variable(torch.LongTensor([sampler.wordix(w)]))
+    # TODO: understand why this does not work
+    # return Variable(torch.LongTensor([sampler.wordix(w)], device=device))
+    return Variable(torch.LongTensor([sampler.wordix(w)])).to(device)
 
 
 # Word2Vec word2vec
@@ -129,10 +131,19 @@ print ("Done.")
 def cli():
     pass
 
+def torch_status_dump():
+    print("---")
+    print("CUDA available?: %s" % torch.cuda.is_available())
+    print("GPU device: |%s|" % torch.cuda.get_device_name(0))
+    print("---")
+
 @click.command()
 @click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
 @click.option('--loadpath', default=None, help='Path to load model from')
 def train(savepath, loadpath):
+    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+    print("device: %s" % device)
+
     # TODO: also save optimizer data so we can restart
     if loadpath is not None:
         print("loading model from %s" % loadpath)
@@ -144,6 +155,7 @@ def train(savepath, loadpath):
     assert (model)
     print("network: ")
     print(model)
+    model.to(device)
 
     def signal_term_handler(signal, frame):
         print ("saving model to %s" % savepath)
@@ -156,6 +168,7 @@ def train(savepath, loadpath):
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     criterion = nn.MSELoss()
 
+    last_print_time = datetime.datetime.now()
     running_loss = 0
     i = 0
     for epoch in range(2):
@@ -164,20 +177,24 @@ def train(savepath, loadpath):
                 i += 1
                 # print("training on sample: %s" % (train,))
                 (w, wctx, is_positive) = train
-                x_ = mk_onehot(sampler, w)
-                y_ = mk_onehot(sampler, wctx)
+                #TODO: learn if this is actually the correct way of doing things...
+                x_ = mk_onehot(sampler, w, device)
+                y_ = mk_onehot(sampler, wctx, device)
 
                 optimizer.zero_grad()   # zero the gradient buffers
                 y = model(x_, y_)
                 # print("y: %s" % y)
-                loss = criterion(y, Variable(torch.Tensor([is_positive])))
+                loss = criterion(y, Variable(torch.Tensor([is_positive])).to(device))
                 loss.backward()
                 optimizer.step()
 
                 running_loss += loss.item()
+                cur_print_time = datetime.datetime.now()
                 if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
-                    print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP))
+                    print('[%d, %5d] loss: %.3f | time: %s' %
+                          (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP, 
+                           (cur_print_time - last_print_time)))
+                    last_print_time = cur_print_time
                     running_loss = 0.0
 
 
@@ -210,5 +227,6 @@ cli.add_command(train)
 cli.add_command(test)
 
 if __name__ == "__main__":
+    torch_status_dump()
     cli()
 

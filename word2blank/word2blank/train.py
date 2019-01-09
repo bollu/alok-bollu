@@ -70,7 +70,7 @@ def mk_skipgrams_sentence(s, sampler):
     for i in range(1, len(s) - 1):
         yield (s[i], s[i - 1], 1)
         yield (s[i], s[i + 1], 1)
-        # yield ([s[i], sampler.sample(), 0])
+        yield ([s[i], sampler.sample(), 0])
         # yield ([s[i], sampler.sample(), 0])
 
 def mk_onehot(sampler, w):
@@ -135,14 +135,22 @@ def cli():
 def train(savepath, loadpath):
     # TODO: also save optimizer data so we can restart
     if loadpath is not None:
-        model = torch.load(MODELPATH)
+        print("loading model from %s" % loadpath)
+        model = torch.load(loadpath)
         model.eval()
     else:
-        model = Word2Vec(sampler, nhidden=3)
+        model = Word2Vec(sampler, nhidden=100)
 
     assert (model)
     print("network: ")
     print(model)
+
+    def signal_term_handler(signal, frame):
+        print ("saving model to %s" % savepath)
+        torch.save(model, savepath)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, signal_term_handler)
+    signal.signal(signal.SIGINT, signal_term_handler)
 
     # optimise
     optimizer = optim.SGD(model.parameters(), lr=0.01)
@@ -172,11 +180,6 @@ def train(savepath, loadpath):
                           (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP))
                     running_loss = 0.0
 
-    # register code to save the model
-    def signal_term_handler(signal, frame):
-        torch.save(model, MODELPATH)
-        sys.exit(0)
-    signal.signal(signal.SIGTERM, signal_term_handler)
 
 @click.command()
 @click.argument('modelpath')
@@ -186,23 +189,22 @@ def test(modelpath):
     criterion = nn.MSELoss()
 
     # list of all words
-    WORDS = list(itertools.chain.from_iterable(corpus))
+    WORDS = list(set(itertools.chain.from_iterable(corpus)))
 
     # find closest vectors to each word in the model
     with torch.no_grad():
-        dmin = 1000
-        wmin = "NONE"
-        for wcur in WORDS:
+        for wcur in WORDS[:50]:
+            ws = []
             print ("curword: %s " % (wcur, ))
             for wother in WORDS:
                 vcur = mk_onehot(sampler, wcur)
                 vother = mk_onehot(sampler, wother)
 
                 d = model(vcur, vother)
-                if d < dmin: 
-                    dmin = distcur
-                    wmin = wother
-                print ("dist: %s --> %s | %s" % (wcur, wother, curdist))
+                ws.append((wother, d))
+            ws.sort(key=lambda wd: wd[1], reverse=True)
+            ws = ws [:10]
+            print ("\n".join(["\t%s -> %s" % (w, d) for (w, d) in ws]))
 
 cli.add_command(train)
 cli.add_command(test)

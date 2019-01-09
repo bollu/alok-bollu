@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import gensim.downloader as api
 from gensim.models.word2vec import Word2Vec
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import numpy as np
 import signal
 import sys
@@ -16,7 +16,10 @@ import click
 import datetime 
  
 
-LOSS_PRINT_STEP = 4
+LOSS_PRINT_STEP = 500
+BATCH_SIZE = 100
+EPOCHS = 20
+
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
     return now.strftime("%X-%a-%b") + ".model"
@@ -157,17 +160,13 @@ class Word2Vec(nn.Module):
         # TODO: is batch_size outer or inner dim?
         xembed = self.embedding(x_)
         yembed = self.embedding(y_)
-        print("xembed: %s" % xembed)
-        print("yembed: %s" % xembed)
 
         assert (len(xembed) == len(yembed))
 
         score = 0
         for i in range(len(xembed)):
             score += torch.dot(xembed[i], yembed[i])
-            print("score: %s" % score)
-        print("score: %s" % score)
-        _ = raw_input("> enter char to continue.")
+        # _ = raw_input("> enter char to continue.")
 
         log_probs = F.logsigmoid(score)
         return log_probs
@@ -239,42 +238,40 @@ def train(savepath, loadpath):
 
     last_print_time = datetime.datetime.now()
     running_loss = 0
-    i = 0
-    for epoch in range(2):
-        for s in corpus:
-            # TODO: allow constructing this per mutiple sentences
-            # https://discuss.pytorch.org/t/a-call-to-torch-cuda-is-available-makes-an-unrelated-multi-processing-computation-crash/4075/3
-            # There seems to be some subtlety around CUDA / spawning.
-            print ("constructing dataloader...")
-            dataloader = DataLoader(SentenceSkipgramDataset(s, sampler), 
-                                    batch_size=30,
-                                    shuffle=True)
-                                    # num_workers=4)
-            print ("done.")
-            for batch in dataloader:
-                i += 1
-                batch.to(device)
-                # TODO: understand why I need to perform this column indexing.
-                x_ = batch[:, 0].to(device)
-                y_ = batch[:, 1].to(device)
-                is_positive = batch[:, 2].to(device)
+    for epoch in range(EPOCHS):
+        dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler) for s in corpus])
+        dataloader = DataLoader(dataset,
+                                batch_size=BATCH_SIZE,
+                                shuffle=True)
+                                # num_workers=4)
+        print ("done.")
+        for i, batch in enumerate(dataloader):
+            batch.to(device)
+            # TODO: understand why I need to perform this column indexing.
+            x_ = batch[:, 0].to(device)
+            y_ = batch[:, 1].to(device)
+            is_positive = batch[:, 2].to(device)
 
-                optimizer.zero_grad()   # zero the gradient buffers
-                y = model(x_, y_)
-                loss = criterion(y, is_positive.float())
-                loss.backward()
-                optimizer.step()
+            # Loss calculation
+            optimizer.zero_grad()   # zero the gradient buffers
+            y = model(x_, y_)
+            loss = criterion(y, is_positive.float())
+            loss.backward()
+            optimizer.step()
 
-                running_loss += loss.item()
-                del loss
+            running_loss += loss.item()
+            del loss
 
-                cur_print_time = datetime.datetime.now()
-                if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
-                    print('[%d, %5d] loss: %.3f | time: %s' %
-                          (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP, 
-                           (cur_print_time - last_print_time)))
-                    last_print_time = cur_print_time
-                    running_loss = 0.0
+            cur_print_time = datetime.datetime.now()
+            if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
+                print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, time: %s]' %
+                      (epoch + 1,
+                       i + 1,
+                       (i + 1) * BATCH_SIZE,
+                       running_loss / LOSS_PRINT_STEP, 
+                       (cur_print_time - last_print_time)))
+                last_print_time = cur_print_time
+                running_loss = 0.0
 
 
 @click.command()

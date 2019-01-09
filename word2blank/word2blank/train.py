@@ -189,6 +189,8 @@ def train(savepath, loadpath):
                 optimizer.step()
 
                 running_loss += loss.item()
+                del loss
+
                 cur_print_time = datetime.datetime.now()
                 if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
                     print('[%d, %5d] loss: %.3f | time: %s' %

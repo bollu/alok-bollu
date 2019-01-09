@@ -75,14 +75,52 @@ def mk_skipgrams_sentence(s, sampler):
         # yield ([s[i], sampler.sample(), 0])
 
 
-def mk_onehot(sampler, w, device):
+def mk_onehot(sampler, w):
     # v = torch.zeros(len(sampler)).float()
     #v[sampler.wordix(w)] = 1.0
     # return v
 
     # TODO: understand why this does not work
     # return Variable(torch.LongTensor([sampler.wordix(w)], device=device))
-    return Variable(torch.LongTensor([sampler.wordix(w)])).to(device)
+    return Variable(torch.LongTensor([sampler.wordix(w)]))
+
+class SentenceSkipgramDataset(Dataset):
+    def __init__(self, s, sampler):
+        self.s = s
+        self.sampler = sampler
+        self.NNEGATIVES = 4
+        self.NPOSITIVES = (len(self.s) - 2)
+
+    def __getitem__(self, idx):
+        print ("making item: %s" % idx)
+        # move index by 1 so we are in range [1..len - 2]
+        # TODO: generalize this to a window.
+        if (idx >= self.NPOSITIVES):
+             idx -= self.NPOSITIVES
+             x_ = s[idx]
+             y_ = sampler.sample()
+             is_positive_ = 0
+        else:
+            idx += 1
+            assert(idx >= 1)
+            assert(idx <= len(self.sampler) - 2)
+
+            if idx % 2 == 0:
+                (x_, y_, is_positive_) = (self.s[idx], self.s[idx - 1], 1)
+            else:
+                (x_, y_, is_positive_) = (self.s[idx], self.s[idx + 1], 1)
+        x_ = mk_onehot(sampler, x_)
+        y_ = mk_onehot(sampler, y_)
+        is_positive_ = Variable(torch.LongTensor([is_positive_]))
+        out =  torch.cat([x_, y_, is_positive_])
+        print ("out: %s" % out)
+        return out
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return self.NPOSITIVES + self.NNEGATIVES
+
 
 
 def mk_skipgrams_sentence_dataset(s, sampler, device):
@@ -186,10 +224,12 @@ def train(savepath, loadpath):
         sys.exit(0)
     signal.signal(signal.SIGTERM, signal_term_handler)
     signal.signal(signal.SIGINT, signal_term_handler)
+    print ("setup signal handlers.")
 
     # optimise
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     criterion = nn.MSELoss()
+    print ("constructed optimizer and criterion.")
 
     last_print_time = datetime.datetime.now()
     running_loss = 0
@@ -199,38 +239,39 @@ def train(savepath, loadpath):
             # TODO: allow constructing this per mutiple sentences
             # https://discuss.pytorch.org/t/a-call-to-torch-cuda-is-available-makes-an-unrelated-multi-processing-computation-crash/4075/3
             # There seems to be some subtlety around CUDA / spawning.
-            dataloader = DataLoader(mk_skipgrams_sentence_dataset(s, sampler, device), 
+            print ("constructing dataloader...")
+            dataloader = DataLoader(SentenceSkipgramDataset(s, sampler), 
                                     batch_size=30,
                                     shuffle=True)
                                     # num_workers=4)
+            print ("done.")
             for batch in dataloader:
-                for train in batch:
-                    # TODO: understand why I need to perform this column indexing.
-                    print("training on sample: \n%s\n" % (train,))
-                    x_ = train[:, 0]
-                    print("x_: %s" % (x_, ))
-                    y_ = train[:, 1]
-                    print("y_: %s" % (y_, ))
-                    is_positive = train[:, 2]
-                    print("is_positive: %s" % (is_positive, ))
+                batch.to(device)
+                # TODO: understand why I need to perform this column indexing.
+                x_ = batch[:, 0].to(device)
+                print("x_: %s" % (x_, ))
+                y_ = batch[:, 1].to(device)
+                print("y_: %s" % (y_, ))
+                is_positive = batch[:, 2].to(device)
+                print("is_positive: %s" % (is_positive, ))
 
-                    optimizer.zero_grad()   # zero the gradient buffers
-                    y = model(x_, y_)
-                    print("y: %s" % (y, ))
-                    loss = criterion(y, is_positive.float())
-                    loss.backward()
-                    optimizer.step()
+                optimizer.zero_grad()   # zero the gradient buffers
+                y = model(x_, y_)
+                print("y: %s" % (y, ))
+                loss = criterion(y, is_positive.float())
+                loss.backward()
+                optimizer.step()
 
-                    running_loss += loss.item()
-                    del loss
+                running_loss += loss.item()
+                del loss
 
-                    cur_print_time = datetime.datetime.now()
-                    if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
-                        print('[%d, %5d] loss: %.3f | time: %s' %
-                              (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP, 
-                               (cur_print_time - last_print_time)))
-                        last_print_time = cur_print_time
-                        running_loss = 0.0
+                cur_print_time = datetime.datetime.now()
+                if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
+                    print('[%d, %5d] loss: %.3f | time: %s' %
+                          (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP, 
+                           (cur_print_time - last_print_time)))
+                    last_print_time = cur_print_time
+                    running_loss = 0.0
 
 
 @click.command()

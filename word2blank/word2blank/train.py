@@ -9,8 +9,16 @@ import torch.optim as optim
 import gensim.downloader as api
 from gensim.models.word2vec import Word2Vec
 import numpy as np
+import signal
+import sys
+import click
+import datetime 
+ 
 
-
+LOSS_PRINT_STEP = 2000
+def DEFAULT_MODELPATH():
+    now = datetime.datetime.now()
+    return now.strftime("%X-%a-%b") + ".model"
 
 # Compute frequencies of words in the given sentence ws, and the current
 # word frequences wfs
@@ -73,68 +81,132 @@ def mk_onehot(sampler, w):
     return Variable(torch.LongTensor([sampler.wordix(w)]))
 
 
-# Classical word2vec
+# Word2Vec word2vec
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
-class Classical(nn.Module):
+class Word2Vec(nn.Module):
     def __init__(self, sampler, nhidden):
         self.nhidden = nhidden
         nwords = len(sampler)
         """nwords: number of words"""
-        super(Classical, self).__init__()
+        super(Word2Vec, self).__init__()
         self.embedding = nn.Embedding(len(sampler), nhidden)
 
     # run the forward pass which matches word y in the context of x
     def forward(self, x_, y_):
         xembed = self.embedding(x_)
-        print("xembed: %s" % (xembed, ))
+        # print("xembed: %s" % (xembed, ))
         xembed = xembed.view((self.nhidden,))
-        print("xembed: %s" % (xembed, ))
+        # print("xembed: %s" % (xembed, ))
 
         yembed = self.embedding(y_)
-        print("yembed: %s" % (yembed, ))
+        # print("yembed: %s" % (yembed, ))
         yembed = yembed.view((1, -1))
         yembed = yembed.view((self.nhidden,))
 
         score = torch.dot(xembed, yembed)
         log_probs = F.logsigmoid(score)
-        print("log_probs: %s" % (log_probs, ))
+        # print("log_probs: %s" % (log_probs, ))
         return log_probs
+
 # Corpus contains a list of sentences. Each s is a list of words
 # Data pulled from:
 # https://github.com/RaRe-Technologies/gensim-data
+print ("loading corpus text8...")
 corpus = api.load('text8') 
 NSENTENCES = 10
 corpus = list(itertools.islice(corpus, NSENTENCES))
+print ("Done.")
 
 # Count word frequencies
+print("counting word frequencies...")
 wfs = Counter()
 for s in corpus:
     update_wfs(s, wfs)
 sampler = Sampler(wfs)
+print ("Done.")
 
-if __name__ == "__main__":
-    classical = Classical(sampler, nhidden=3)
+@click.group()
+def cli():
+    pass
+
+@click.command()
+@click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
+@click.option('--loadpath', default=None, help='Path to load model from')
+def train(savepath, loadpath):
+    # TODO: also save optimizer data so we can restart
+    if loadpath is not None:
+        model = torch.load(MODELPATH)
+        model.eval()
+    else:
+        model = Word2Vec(sampler, nhidden=3)
+
+    assert (model)
     print("network: ")
-    print(classical)
+    print(model)
 
     # optimise
-    optimizer = optim.SGD(classical.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
     criterion = nn.MSELoss()
 
-    print("criterion:\n%s" % (criterion, ))
+    running_loss = 0
+    i = 0
+    for epoch in range(2):
+        for  s in corpus:
+            for train in mk_skipgrams_sentence(s, sampler):
+                i += 1
+                # print("training on sample: %s" % (train,))
+                (w, wctx, is_positive) = train
+                x_ = mk_onehot(sampler, w)
+                y_ = mk_onehot(sampler, wctx)
 
-    for s in corpus:
-        # s = s[:10]
-        print("training on sentence:\n---\n%s\n---" % " ".join(s))
-        for train in mk_skipgrams_sentence(s, sampler):
-            print("training on sample: %s" % (train,))
-            (w, wctx, is_positive) = train
-            x_ = mk_onehot(sampler, w)
-            y_ = mk_onehot(sampler, wctx)
+                optimizer.zero_grad()   # zero the gradient buffers
+                y = model(x_, y_)
+                # print("y: %s" % y)
+                loss = criterion(y, Variable(torch.Tensor([is_positive])))
+                loss.backward()
+                optimizer.step()
 
-            optimizer.zero_grad()   # zero the gradient buffers
-            y = classical(x_, y_)
-            # print("y: %s" % y)
-            loss = criterion(y, Variable(torch.Tensor([is_positive])))
-            loss.backward()
-            optimizer.step()
+                running_loss += loss.item()
+                if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
+                    print('[%d, %5d] loss: %.3f' %
+                          (epoch + 1, i + 1, running_loss / LOSS_PRINT_STEP))
+                    running_loss = 0.0
+
+    # register code to save the model
+    def signal_term_handler(signal, frame):
+        torch.save(model, MODELPATH)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, signal_term_handler)
+
+@click.command()
+@click.argument('modelpath')
+def test(modelpath):
+    model = torch.load(modelpath)
+    model.eval()
+    criterion = nn.MSELoss()
+
+    # list of all words
+    WORDS = list(itertools.chain.from_iterable(corpus))
+
+    # find closest vectors to each word in the model
+    with torch.no_grad():
+        dmin = 1000
+        wmin = "NONE"
+        for wcur in WORDS:
+            print ("curword: %s " % (wcur, ))
+            for wother in WORDS:
+                vcur = mk_onehot(sampler, wcur)
+                vother = mk_onehot(sampler, wother)
+
+                d = model(vcur, vother)
+                if d < dmin: 
+                    dmin = distcur
+                    wmin = wother
+                print ("dist: %s --> %s | %s" % (wcur, wother, curdist))
+
+cli.add_command(train)
+cli.add_command(test)
+
+if __name__ == "__main__":
+    cli()
+

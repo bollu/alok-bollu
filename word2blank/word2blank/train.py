@@ -16,7 +16,7 @@ import click
 import datetime 
  
 
-LOSS_PRINT_STEP = 1
+LOSS_PRINT_STEP = 4
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
     return now.strftime("%X-%a-%b") + ".model"
@@ -92,7 +92,6 @@ class SentenceSkipgramDataset(Dataset):
         self.NPOSITIVES = (len(self.s) - 2)
 
     def __getitem__(self, idx):
-        print ("making item: %s" % idx)
         # move index by 1 so we are in range [1..len - 2]
         # TODO: generalize this to a window.
         if (idx >= self.NPOSITIVES):
@@ -113,7 +112,6 @@ class SentenceSkipgramDataset(Dataset):
         y_ = mk_onehot(sampler, y_)
         is_positive_ = Variable(torch.LongTensor([is_positive_]))
         out =  torch.cat([x_, y_, is_positive_])
-        print ("out: %s" % out)
         return out
 
     def __len__(self):
@@ -159,12 +157,17 @@ class Word2Vec(nn.Module):
         # TODO: is batch_size outer or inner dim?
         xembed = self.embedding(x_)
         yembed = self.embedding(y_)
+        print("xembed: %s" % xembed)
+        print("yembed: %s" % xembed)
 
         assert (len(xembed) == len(yembed))
 
         score = 0
         for i in range(len(xembed)):
             score += torch.dot(xembed[i], yembed[i])
+            print("score: %s" % score)
+        print("score: %s" % score)
+        _ = raw_input("> enter char to continue.")
 
         log_probs = F.logsigmoid(score)
         return log_probs
@@ -216,8 +219,11 @@ def train(savepath, loadpath):
     assert (model)
     print("network: ")
     print(model)
+    print("transferring model to device...")
     model.to(device)
+    print("done.")
 
+    print("setting up signal handler...")
     def signal_term_handler(signal, frame):
         print ("saving model to %s" % savepath)
         torch.save(model, savepath)
@@ -227,7 +233,7 @@ def train(savepath, loadpath):
     print ("setup signal handlers.")
 
     # optimise
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.001)
     criterion = nn.MSELoss()
     print ("constructed optimizer and criterion.")
 
@@ -246,18 +252,15 @@ def train(savepath, loadpath):
                                     # num_workers=4)
             print ("done.")
             for batch in dataloader:
+                i += 1
                 batch.to(device)
                 # TODO: understand why I need to perform this column indexing.
                 x_ = batch[:, 0].to(device)
-                print("x_: %s" % (x_, ))
                 y_ = batch[:, 1].to(device)
-                print("y_: %s" % (y_, ))
                 is_positive = batch[:, 2].to(device)
-                print("is_positive: %s" % (is_positive, ))
 
                 optimizer.zero_grad()   # zero the gradient buffers
                 y = model(x_, y_)
-                print("y: %s" % (y, ))
                 loss = criterion(y, is_positive.float())
                 loss.backward()
                 optimizer.step()

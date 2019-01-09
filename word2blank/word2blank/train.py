@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import gensim.downloader as api
 from gensim.models.word2vec import Word2Vec
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 import numpy as np
 import signal
 import sys
@@ -15,7 +16,7 @@ import click
 import datetime 
  
 
-LOSS_PRINT_STEP = 2000
+LOSS_PRINT_STEP = 1
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
     return now.strftime("%X-%a-%b") + ".model"
@@ -73,6 +74,7 @@ def mk_skipgrams_sentence(s, sampler):
         yield ([s[i], sampler.sample(), 0])
         # yield ([s[i], sampler.sample(), 0])
 
+
 def mk_onehot(sampler, w, device):
     # v = torch.zeros(len(sampler)).float()
     #v[sampler.wordix(w)] = 1.0
@@ -82,6 +84,23 @@ def mk_onehot(sampler, w, device):
     # return Variable(torch.LongTensor([sampler.wordix(w)], device=device))
     return Variable(torch.LongTensor([sampler.wordix(w)])).to(device)
 
+
+def mk_skipgrams_sentence_dataset(s, sampler, device):
+    """s: current sentence, sampler: sampler, device: current device
+       returns: torch.DataSet of values
+   """
+    out = []
+    for (w, wctx, is_positive) in list(mk_skipgrams_sentence(s, sampler))[:10]:
+        x_ = mk_onehot(sampler, w, device)
+        y_ = mk_onehot(sampler, wctx, device)
+        is_positive_ = Variable(torch.LongTensor([is_positive])).to(device)
+        vec_ = torch.cat([x_, y_, is_positive_])
+        out.append(vec_)
+    print ("out: %s" % out)
+    out = torch.stack(out)
+    print ("out: %s" % out)
+    out = TensorDataset(out)
+    return out
 
 # Word2Vec word2vec
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
@@ -126,6 +145,8 @@ for s in corpus:
     update_wfs(s, wfs)
 sampler = Sampler(wfs)
 print ("Done.")
+
+
 
 @click.group()
 def cli():
@@ -172,11 +193,18 @@ def train(savepath, loadpath):
     running_loss = 0
     i = 0
     for epoch in range(2):
-        for  s in corpus:
-            for train in mk_skipgrams_sentence(s, sampler):
-                i += 1
+        for s in corpus:
+            # TODO: allow constructing this per mutiple sentences
+            print ("making dataloader...")
+            dataloader = DataLoader(mk_skipgrams_sentence_dataset(s, sampler, device), 
+                                    batch_size=4,
+                                    shuffle=True,
+                                    num_workers=4)
+            print ("dataloader: %s" % (dataloader, ))
+            for (i, train) in enumerate(dataloader):
                 # print("training on sample: %s" % (train,))
                 (w, wctx, is_positive) = train
+                print ("i: %s | train: %s" % (i, train))
                 #TODO: learn if this is actually the correct way of doing things...
                 x_ = mk_onehot(sampler, w, device)
                 y_ = mk_onehot(sampler, wctx, device)

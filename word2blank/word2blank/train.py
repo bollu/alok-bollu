@@ -16,7 +16,7 @@ import click
 import datetime 
  
 
-LOSS_PRINT_STEP = 500
+LOSS_PRINT_STEP = 50
 BATCH_SIZE = 100
 EPOCHS = 20
 
@@ -159,17 +159,20 @@ class Word2Vec(nn.Module):
         # 2d vectors of data x batch_size
         # TODO: is batch_size outer or inner dim?
         xembed = self.embedding(x_)
+
+	# todo: normalize according to reimannian metric
+        xembed = F.normalize(xembed, p=2, dim=1)
+
         yembed = self.embedding(y_)
+        yembed = F.normalize(yembed, p=2, dim=1)
 
         assert (len(xembed) == len(yembed))
 
-        score = 0
-        for i in range(len(xembed)):
-            score += torch.dot(xembed[i], yembed[i])
-        # _ = raw_input("> enter char to continue.")
+        #TODO: insert reimannian metric here as Ay         
+	elemprod = xembed * yembed
+	dot = torch.sum(elemprod, dim=1)                                                                       
 
-        log_probs = F.logsigmoid(score)
-        return log_probs
+        return dot
 
 # Corpus contains a list of sentences. Each s is a list of words
 # Data pulled from:
@@ -232,7 +235,7 @@ def train(savepath, loadpath):
     print ("setup signal handlers.")
 
     # optimise
-    optimizer = optim.SGD(model.parameters(), lr=0.001)
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
     criterion = nn.MSELoss()
     print ("constructed optimizer and criterion.")
 
@@ -244,7 +247,6 @@ def train(savepath, loadpath):
                                 batch_size=BATCH_SIZE,
                                 shuffle=True)
                                 # num_workers=4)
-        print ("done.")
         for i, batch in enumerate(dataloader):
             batch.to(device)
             # TODO: understand why I need to perform this column indexing.
@@ -254,7 +256,9 @@ def train(savepath, loadpath):
 
             # Loss calculation
             optimizer.zero_grad()   # zero the gradient buffers
+            # why does this not auto batch?
             y = model(x_, y_)
+            # print("is_positive: %s | y: %s " % (is_positive, y))
             loss = criterion(y, is_positive.float())
             loss.backward()
             optimizer.step()

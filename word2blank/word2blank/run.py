@@ -18,8 +18,8 @@ import os
  
 
 LEARNING_RATE=0.05
-LOSS_PRINT_STEP = 50
-BATCH_SIZE = 200
+LOSS_PRINT_STEP = 10
+BATCH_SIZE = 50
 EPOCHS = 2000
 NHIDDEN = 300
 
@@ -260,15 +260,20 @@ def train(savepath, loadpath):
     criterion = nn.MSELoss()
     print ("constructed optimizer and criterion.")
 
+
+    dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler) for s in corpus])
+    print("full concat dataset: %s" % dataset)
+    print("len of dataset: %s" % len(dataset))
+
+    dataloader = DataLoader(dataset,
+                            batch_size=BATCH_SIZE,
+                            shuffle=True)
+    print("constructed dataloader.")
+
     last_print_time = datetime.datetime.now()
     running_loss = 0
     for epoch in range(EPOCHS):
 	if savepath is not None: save_model()
-        dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler) for s in corpus])
-        dataloader = DataLoader(dataset,
-                                batch_size=BATCH_SIZE,
-                                shuffle=True)
-                                # num_workers=4)
         for i, batch in enumerate(dataloader):
             batch.to(device)
             # TODO: understand why I need to perform this column indexing.
@@ -300,7 +305,6 @@ def train(savepath, loadpath):
                            ))
                 last_print_time = now
                 running_loss = 0.0
-
 
 @click.command()
 @click.argument('modelpath')

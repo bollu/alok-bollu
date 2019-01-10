@@ -224,7 +224,10 @@ def torch_status_dump():
 @click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
 @click.option('--loadpath', default=None, help='Path to load model from')
 def train(savepath, loadpath):
-    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+    # TODO: figure out how to ask for the least loaded cuda device...
+    # for now, use the *last* device, since most people will pick up
+    # the first devices. So, this should give us a free CUDA card :]
+    device = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
     print("device: %s" % device)
 
     # TODO: also save optimizer data so we can restart

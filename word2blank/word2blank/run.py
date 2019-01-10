@@ -177,10 +177,12 @@ class Word2Vec(nn.Module):
 
         return dot
 
-# Corpus contains a list of sentences. Each s is a list of words
+# Corpus contains a list of sentences. Each sentence is a list of words
 # Data pulled from:
 # https://github.com/RaRe-Technologies/gensim-data
 CORPUS_NAME="text8"
+# We first try to load locally. If this fails, we ask gensim
+# to kindly download the data for us.
 print ("loading corpus: %s" % (CORPUS_NAME, ))
 try:
     print("loading gensim locally...")
@@ -188,7 +190,6 @@ try:
     module = __import__(CORPUS_NAME)
     corpus = module.load_data()
     print("Done.")
-# except URLError as u:
 except Exception as e:
     print("unable to find text8 locally.\nERROR: %s" % (e, ))
     print("Downloading using gensim-data...")

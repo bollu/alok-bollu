@@ -102,7 +102,7 @@ class SentenceSkipgramDataset(Dataset):
         # TODO: generalize this to a window.
         if (idx >= self.NPOSITIVES):
              idx -= self.NPOSITIVES
-             x_ = s[idx]
+             x_ = self.s[idx]
              y_ = sampler.sample()
              is_positive_ = 0
         else:
@@ -195,6 +195,7 @@ except Exception as e:
     print("Downloading using gensim-data...")
     corpus = api.load(CORPUS_NAME)
     print("Done.")
+
 
 # Count word frequencies
 print("counting word frequencies...")

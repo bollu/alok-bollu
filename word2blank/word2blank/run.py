@@ -18,9 +18,10 @@ import os
  
 
 LEARNING_RATE=0.05
-LOSS_PRINT_STEP = 10
+LOSS_PRINT_NBATCHES = 10
+MODEL_SAVE_NBATCHES = 100
 BATCH_SIZE = 50
-EPOCHS = 2000
+EPOCHS = 2
 NHIDDEN = 300
 
 def DEFAULT_MODELPATH():
@@ -294,18 +295,22 @@ def train(savepath, loadpath):
             del loss
 
             now = datetime.datetime.now()
-            if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
+            if i % LOSS_PRINT_NBATCHES == LOSS_PRINT_NBATCHES - 1:    # print every 2000 mini-batches
                 print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, dt: %s, time:%s]' %
                           (epoch + 1,
                            i + 1,
                            (i + 1) * BATCH_SIZE,
-                           running_loss / LOSS_PRINT_STEP, 
+                           running_loss / LOSS_PRINT_NBATCHES, 
                            (now - last_print_time),
                            now.strftime("%X-%a-%b") + ".model"
                            ))
                 last_print_time = now
                 running_loss = 0.0
 
+            if i % MODEL_SAVE_NBATCHES == MODEL_SAVE_NBATCHES - 1:
+                save_model()
+    # save the model at the end of the training run
+    save_model()
 @click.command()
 @click.argument('modelpath')
 def test(modelpath):

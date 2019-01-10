@@ -180,8 +180,21 @@ class Word2Vec(nn.Module):
 # Corpus contains a list of sentences. Each s is a list of words
 # Data pulled from:
 # https://github.com/RaRe-Technologies/gensim-data
-print ("loading corpus text8...")
-corpus = api.load('text8') 
+CORPUS_NAME="text8"
+print ("loading corpus: %s" % (CORPUS_NAME, ))
+try:
+    print("loading gensim locally...")
+    sys.path.insert(0, api.base_dir)
+    module = __import__(CORPUS_NAME)
+    corpus = module.load_data()
+    print("Done.")
+# except URLError as u:
+except Exception as e:
+    print("unable to find text8 locally.\nERROR: %s" % (e, ))
+    print("Downloading using gensim-data...")
+    corpus = api.load(CORPUS_NAME)
+    print("Done.")
+
 NSENTENCES = 10
 corpus = list(itertools.islice(corpus, NSENTENCES))
 print ("Done.")
@@ -276,14 +289,14 @@ def train(savepath, loadpath):
 
             cur_print_time = datetime.datetime.now()
             if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
-            print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, dt: %s, time:%s]' %
-                      (epoch + 1,
-                       i + 1,
-                       (i + 1) * BATCH_SIZE,
-                       running_loss / LOSS_PRINT_STEP, 
-                       (cur_print_time - last_print_time),
-                       now.strftime("%X-%a-%b") + ".model"
-                       ))
+                print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, dt: %s, time:%s]' %
+                          (epoch + 1,
+                           i + 1,
+                           (i + 1) * BATCH_SIZE,
+                           running_loss / LOSS_PRINT_STEP, 
+                           (cur_print_time - last_print_time),
+                           now.strftime("%X-%a-%b") + ".model"
+                           ))
                 last_print_time = cur_print_time
                 running_loss = 0.0
 

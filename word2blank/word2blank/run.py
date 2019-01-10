@@ -94,7 +94,7 @@ class SentenceSkipgramDataset(Dataset):
     def __init__(self, s, sampler):
         self.s = s
         self.sampler = sampler
-        self.NNEGATIVES = 4
+        self.NNEGATIVES = len(self.s)
         self.NPOSITIVES = (len(self.s) - 2)
 
     def __getitem__(self, idx):

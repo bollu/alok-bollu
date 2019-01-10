@@ -2,7 +2,7 @@
 #SBATCH -p long
 #SBATCH --time=01:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name=word2blank
+#SBATCH --job-name=word2____
 #SBATCH --mem-per-cpu=4096
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END

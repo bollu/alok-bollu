@@ -17,11 +17,11 @@ import datetime
 import os
  
 
-LEARNING_RATE=0.1
+LEARNING_RATE=0.05
 LOSS_PRINT_STEP = 50
-BATCH_SIZE = 100
-EPOCHS = 900
-NHIDDEN = 200
+BATCH_SIZE = 200
+EPOCHS = 2000
+NHIDDEN = 300
 
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
@@ -195,10 +195,6 @@ except Exception as e:
     print("Downloading using gensim-data...")
     corpus = api.load(CORPUS_NAME)
     print("Done.")
-
-NSENTENCES = 10
-corpus = list(itertools.islice(corpus, NSENTENCES))
-print ("Done.")
 
 # Count word frequencies
 print("counting word frequencies...")

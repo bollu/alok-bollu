@@ -1,0 +1,5 @@
+md5: e7c9ff36d837e5ce0aa6265b7bcff468
+outs:
+- cache: true
+  md5: 9c94a32789bd137d0e92118da38b901f
+  path: cur.model

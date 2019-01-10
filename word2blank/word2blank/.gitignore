@@ -21,3 +21,5 @@ tags
 
 # slurm
 slurm-*.out
+
+/cur.model

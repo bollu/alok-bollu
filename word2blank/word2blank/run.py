@@ -20,6 +20,7 @@ LEARNING_RATE=0.1
 LOSS_PRINT_STEP = 50
 BATCH_SIZE = 100
 EPOCHS = 900
+NHIDDEN = 200
 
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
@@ -217,7 +218,7 @@ def train(savepath, loadpath):
         model = torch.load(loadpath)
         model.eval()
     else:
-        model = Word2Vec(sampler, nhidden=100)
+        model = Word2Vec(sampler, nhidden=NHIDDEN)
 
     assert (model)
     print("network: ")
@@ -273,12 +274,14 @@ def train(savepath, loadpath):
 
             cur_print_time = datetime.datetime.now()
             if i % LOSS_PRINT_STEP == LOSS_PRINT_STEP - 1:    # print every 2000 mini-batches
-                print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, time: %s]' %
+            print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, dt: %s, time:%s]' %
                       (epoch + 1,
                        i + 1,
                        (i + 1) * BATCH_SIZE,
                        running_loss / LOSS_PRINT_STEP, 
-                       (cur_print_time - last_print_time)))
+                       (cur_print_time - last_print_time),
+                       now.strftime("%X-%a-%b") + ".model"
+                       ))
                 last_print_time = cur_print_time
                 running_loss = 0.0
 

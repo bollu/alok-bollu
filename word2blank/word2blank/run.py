@@ -244,7 +244,6 @@ def train(savepath, loadpath):
     model.to(device)
     print("done.")
 
-    print("setting up signal handler...")
     def save_model():
         print ("saving model to %s" % savepath)
         torch.save(model, savepath)
@@ -252,9 +251,12 @@ def train(savepath, loadpath):
     def save_model_handler(signal, frame):
 	save_model()
 	sys.exit(0)
-    signal.signal(signal.SIGTERM, save_model_handler)
-    signal.signal(signal.SIGINT, save_model_handler)
-    print ("setup signal handlers.")
+
+    # disable saving on C-c, it seems unstable and prone to destroying the
+    # model...
+    #signal.signal(signal.SIGTERM, save_model_handler)
+    #signal.signal(signal.SIGINT, save_model_handler)
+    #print ("setup signal handlers.")
 
     # optimise
     optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)

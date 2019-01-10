@@ -19,7 +19,7 @@ import datetime
 LEARNING_RATE=0.1
 LOSS_PRINT_STEP = 50
 BATCH_SIZE = 100
-EPOCHS = 200
+EPOCHS = 900
 
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()

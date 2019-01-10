@@ -14,6 +14,7 @@ import signal
 import sys
 import click
 import datetime 
+import os
  
 
 LEARNING_RATE=0.1
@@ -213,11 +214,12 @@ def train(savepath, loadpath):
     print("device: %s" % device)
 
     # TODO: also save optimizer data so we can restart
-    if loadpath is not None:
+    if loadpath is not None and os.path.isfile(loadpath):
         print("loading model from %s" % loadpath)
         model = torch.load(loadpath)
         model.eval()
     else:
+        print("creating new model...")
         model = Word2Vec(sampler, nhidden=NHIDDEN)
 
     assert (model)

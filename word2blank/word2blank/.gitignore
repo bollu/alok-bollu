@@ -18,3 +18,6 @@ Session.vim
 tags
 # Persistent undo
 [._]*.un~
+
+# slurm
+slurm-*.out

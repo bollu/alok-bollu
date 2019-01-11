@@ -27,7 +27,7 @@ LOSS_PRINT_NBATCHES = 5
 MODEL_SAVE_NBATCHES = 200
 BATCH_SIZE = 1024
 EPOCHS = 1000
-NHIDDEN = 20
+NHIDDEN = 100
 WINDOW_SIZE=2
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -61,6 +61,15 @@ def update_wfs(ws, wfs):
         if w in STOPWORDS: continue
         wfs[w] += 1
 
+def plot_wfs(wfs):
+    freqs = [math.log(val / ftot) for val in wfs.values()]
+    freqs.sort(reverse=True)
+    import matplotlib as mpl
+    mpl.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.plot(range(len(freqs)), freqs)
+    plt.savefig("wordfrequency.png")
+
 # http://mccormickml.com/2017/01/11/word2vec-tutorial-part-2-negative-sampling/
 # Sampler to sample from given frequency distribution
 class Sampler:
@@ -75,14 +84,8 @@ class Sampler:
         THROW_BELOW_FREQ = MIN_FREQ * 1.2
         print("max freq: %s | min freq %s | freq below thrown: %s" % (MAX_FREQ, MIN_FREQ, THROW_BELOW_FREQ))
 
-
-        freqs = [math.log(val / ftot) for val in wfs.values()]
-        freqs.sort(reverse=True)
-        import matplotlib as mpl
-        mpl.use('Agg')
-        import matplotlib.pyplot as plt
-        plt.plot(range(len(freqs)), freqs)
-        plt.savefig("wordfrequency.png")
+        # plot the wfs
+        plot_wfs(wfs)
         
         # TODO: add more stopwords
         todelete = set()
@@ -258,14 +261,6 @@ except Exception as e:
     print("Downloading using gensim-data...")
     corpus = api.load(CORPUS_NAME)
     print("Done.")
-
-print(">>>> HACK: reducing size of corpus <<<<")
-corpus = list(itertools.islice(corpus, 1))
-
-print("corpus:\n%s" % " ".join(corpus[0]))
-
-
-
 
 # Count word frequencies
 print("counting word frequencies...")

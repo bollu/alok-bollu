@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p long
-#SBATCH --time=01:00:00
+#SBATCH --time=08:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name=word2____
 #SBATCH --mem-per-cpu=4096

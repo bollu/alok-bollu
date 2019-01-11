@@ -9,24 +9,45 @@ import torch.optim as optim
 import gensim.downloader as api
 from gensim.models.word2vec import Word2Vec
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
+from tabulate import tabulate
 import numpy as np
 import signal
 import sys
 import click
 import datetime 
 import os
+import math
  
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
 
 torch.manual_seed(1)
 
-LEARNING_RATE=0.02
-LOSS_PRINT_NBATCHES = 10
-MODEL_SAVE_NBATCHES = 100
+LEARNING_RATE=0.1
+LOSS_PRINT_NBATCHES = 3
+MODEL_SAVE_NBATCHES = 50
 BATCH_SIZE = 128
 EPOCHS = 2
 NHIDDEN = 300
 WINDOW_SIZE=2
+
+STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
+             "you", "your", "yours", "yourself", "yourselves", "he", "him", 
+             "his", "himself", "she", "her", "hers", "herself", "it", "its", 
+             "itself", "they", "them", "their", "theirs", "themselves", 
+             "what", "which", "who", "whom", "this", "that", "these", 
+             "those", "am", "is", "are", "was", "were", "be", "been", 
+             "being", "have", "has", "had", "having", "do", "does", 
+             "did", "doing", "a", "an", "the", "and", "but", 
+             "if", "or", "because", "as", "until", "while", 
+             "of", "at", "by", "for", "with", "about", 
+             "against", "between", "into", "through", "during", "before", 
+             "after", "above", "below", "to", "from", "up", "down", "in", 
+             "out", "on", "off", "over", "under", "again", "further", "then", 
+             "once", "here", "there", "when", "where", "why", "how", "all", 
+             "any", "both", "each", "few", "more", "most", "other", "some", 
+             "such", "no", "nor", "not", "only", "own", "same", "so", 
+             "than", "too", "very", "s", "t", "can", "will", "just", "don", 
+             "should", "now"])
 
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
@@ -37,30 +58,60 @@ def DEFAULT_MODELPATH():
 def update_wfs(ws, wfs):
     """ws: iterable, wfs: Counter"""
     for w in ws:
+        if w in STOPWORDS: continue
         wfs[w] += 1
 
 # http://mccormickml.com/2017/01/11/word2vec-tutorial-part-2-negative-sampling/
 # Sampler to sample from given frequency distribution
 class Sampler:
     def __init__(self, wfs):
-
         POW = 0.75 # recommended power to raise to 
-        for w in wfs:
-            wfs[w] = wfs[w] ** POW
 
-        # total count
+        # TODO: refactor code
+        ftot = float(sum(wfs.values()))
+        MAX_FREQ = max(wfs.values()) / ftot
+        MIN_FREQ = min(wfs.values()) / ftot
+        # 80/20: Throw stuff that less that 20% from the bottom.
+        THROW_BELOW_FREQ = MIN_FREQ * 1.2
+        print("max freq: %s | min freq %s | freq below thrown: %s" % (MAX_FREQ, MIN_FREQ, THROW_BELOW_FREQ))
+
+
+        freqs = [math.log(val / ftot) for val in wfs.values()]
+        freqs.sort(reverse=True)
+        import matplotlib as mpl
+        mpl.use('Agg')
+        import matplotlib.pyplot as plt
+        plt.plot(range(len(freqs)), freqs)
+        plt.savefig("wordfrequency.png")
+        
+        # TODO: add more stopwords
+        todelete = set()
+        for w in wfs: 
+            if wfs[w] / ftot <= THROW_BELOW_FREQ: todelete.add(w)
+
+        print("#words thrown away: %s | thrown/total ratio: %s" % 
+              (len(todelete), float(len(todelete)) / len(wfs)))
+        # delete words that occur with way less frequency
+        for w in todelete: del wfs[w]
+        print("#words left over: %s" % (len(wfs)))
+
+        # now that we have thrown stuff away, revise total frequency
         ftot = float(sum(wfs.values()))
         # words
         self.ws = list(wfs.keys())
         # word to its index
         self.ws2ix = { self.ws[i]: i for i in range(len(self.ws)) }
-
         # probabilities of words in the same order
         self.probs = [float(wfs[w]) / ftot for w in self.ws]
 
     # return words in the sampler
     def words(self):
         return self.ws
+
+    def wordprob(self, w):
+        if w in self.ws2ix:
+            return self.probs[self.ws2ix[w]]
+        return 0
 
     # get the numerical index of a word
     def wordix(self, w):
@@ -88,24 +139,27 @@ def mk_onehot(sampler, w):
     return Variable(torch.LongTensor([sampler.wordix(w)]))
 
 # probability of keeping a word
-def calc_prob_keep_word(w, wfs, total):
+def calc_prob_keep_word(w, sampler):
     # http://mccormickml.com/2017/01/11/word2vec-tutorial-part-2-negative-sampling/
     T = 0.001
-    z = wfs[w]
-    return ((z / T) ** 0.5 + 1) * (T / z)
+    z = sampler.wordprob(w)
+    if z == 0: return 0
+
+    prob =  ((z / T) ** 0.5 + 1) * (T / (z + T))
+    return prob
 
 class SentenceSkipgramDataset(Dataset):
-    def __init__(self, s, sampler, wfs, window_size):
+    def __init__(self, s, sampler, window_size):
         """
         sampler: sampler for negative sampling
         wfs: word frequencies
         window_size: window size
         """
-        self.s =[]
         # SUBSAMPLING
-        total_words = sum(wfs.values())
-        for w in s:
-            if torch.rand(1)[0] < calc_prob_keep_word(w, wfs, total_words):
+        self.s =[]
+        rand = torch.rand(len(s))
+        for i, w in enumerate(s):
+            if rand[i] < calc_prob_keep_word(w, sampler):
                 self.s.append(w)
 
         self.sampler = sampler
@@ -162,7 +216,8 @@ def cosine_similarity_batched_vec(xs, ys):
 
     # as done in:
     # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
-    dot = F.logsigmoid(dot)
+    #dot = F.logsigmoid(dot)
+    # dot = F.sigmoid(dot)
 
     return dot
 
@@ -170,10 +225,10 @@ def cosine_similarity_batched_vec(xs, ys):
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
 class Word2Vec(nn.Module):
     def __init__(self, sampler, nhidden):
+        super(Word2Vec, self).__init__()
         self.nhidden = nhidden
         nwords = len(sampler)
         """nwords: number of words"""
-        super(Word2Vec, self).__init__()
         self.embedding = nn.Embedding(len(sampler), nhidden)
 
     # run the forward pass which matches word y in the context of x
@@ -208,8 +263,9 @@ except Exception as e:
 # Count word frequencies
 print("counting word frequencies...")
 wfs = Counter()
-for s in corpus:
-    update_wfs(s, wfs)
+for ws in corpus:
+    update_wfs(ws, wfs)
+
 sampler = Sampler(wfs)
 print ("Done.")
 
@@ -224,6 +280,28 @@ def torch_status_dump():
     print("CUDA available?: %s" % torch.cuda.is_available())
     print("GPU device: |%s|" % torch.cuda.get_device_name(0))
     print("---")
+
+def eval_model_on_common_words(sampler, model, device):
+    word_pairs = [("like", "dislike"),
+                  ("king", "queen"),
+                  ("king", "king"),
+                  ("like", "king"),
+                  ("brother", "king"),
+                  ("brother", "hunger")]
+
+    headers = ["word1", "word2", "similarity"]
+    table = []
+    for (x, y) in word_pairs:
+        x_ = mk_onehot(sampler, x).to(device)
+        y_ = mk_onehot(sampler, y).to(device)
+        with torch.no_grad():
+            sim = model(x_, y_)
+            table.append((x, y, sim))
+    print(tabulate(table, headers))
+
+    
+
+
 
 @click.command()
 @click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
@@ -271,9 +349,9 @@ def train(savepath, loadpath):
     print ("constructed optimizer and criterion.")
 
 
-    dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler, wfs, WINDOW_SIZE) for s in corpus])
-    print("full concat dataset: %s" % dataset)
-    print("len of dataset: %s" % len(dataset))
+    print("constructing dataset...")
+    dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler, WINDOW_SIZE) for s in corpus])
+    print("Done. number of samples in dataset: %s" % len(dataset))
 
     dataloader = DataLoader(dataset,
                             batch_size=BATCH_SIZE,
@@ -282,21 +360,23 @@ def train(savepath, loadpath):
 
     last_print_time = datetime.datetime.now()
     running_loss = 0
+    print("starting training. time: %s" % (last_print_time))
     for epoch in range(EPOCHS):
 	if savepath is not None: save_model()
         for i, batch in enumerate(dataloader):
-            batch.to(device)
+            # batch.to(device)
             # TODO: understand why I need to perform this column indexing.
             x_ = batch[:, 0].to(device)
             y_ = batch[:, 1].to(device)
             is_positive = batch[:, 2].to(device)
 
-            # Loss calculation
-            optimizer.zero_grad()   # zero the gradient buffers
             # why does this not auto batch?
             y = model(x_, y_)
-            # print("is_positive: %s | y: %s " % (is_positive, y))
+            # Loss calculation
             loss = criterion(y, is_positive.float())
+            print("loss: %s" % loss.item())
+            # Step
+            optimizer.zero_grad()   # zero the gradient buffers
             loss.backward()
             optimizer.step()
 
@@ -305,46 +385,51 @@ def train(savepath, loadpath):
 
             now = datetime.datetime.now()
             if i % LOSS_PRINT_NBATCHES == LOSS_PRINT_NBATCHES - 1:    # print every 2000 mini-batches
-                print('[epoch:%s, batch:%5d, elems: %5d, loss: %.3f, dt: %s, time:%s]' %
+                print('[epoch:%s, batch:%5d, elems: %5d, loss(per item): %.3f, dt: %s, time:%s]' %
                           (epoch + 1,
                            i + 1,
                            (i + 1) * BATCH_SIZE,
-                           running_loss / LOSS_PRINT_NBATCHES, 
+                           running_loss / (LOSS_PRINT_NBATCHES * BATCH_SIZE), 
                            (now - last_print_time),
                            now.strftime("%X-%a-%b") + ".model"
                            ))
                 last_print_time = now
                 running_loss = 0.0
+                eval_model_on_common_words(sampler, model, device)
 
             if i % MODEL_SAVE_NBATCHES == MODEL_SAVE_NBATCHES - 1:
                 save_model()
     # save the model at the end of the training run
     save_model()
+
+
 @click.command()
 @click.argument('modelpath')
 def test(modelpath):
-    model = torch.load(modelpath)
-    model.eval()
-    criterion = nn.MSELoss()
-
-    # list of all words
-    WORDS = list(set(itertools.chain.from_iterable(corpus)))
-
-    # find closest vectors to each word in the model
-    with torch.no_grad():
-        for wcur in WORDS[:50]:
-            ws = []
-            print ("curword: %s " % (wcur, ))
-            for wother in WORDS:
-                vcur = mk_onehot(sampler, wcur)
-                vother = mk_onehot(sampler, wother)
-
-                d = model(vcur, vother)
-                ws.append((wother, d))
-            ws.sort(key=lambda wd: wd[1], reverse=True)
-            ws = ws [:10]
-            print ("\n".join(["\t%s -> %s" % (w, d) for (w, d) in ws]))
-
+    pass
+#     model = torch.load(modelpath)
+#     model.eval()
+#     # criterion = nn.MSELoss()
+#     criterion = nn.BCELoss()
+# 
+#     # list of all words
+#     WORDS = list(set(itertools.chain.from_iterable(corpus)))
+# 
+#     # find closest vectors to each word in the model
+#     with torch.no_grad():
+#         for wcur in WORDS[:50]:
+#             ws = []
+#             print ("curword: %s " % (wcur, ))
+#             for wother in WORDS:
+#                 vcur = mk_onehot(sampler, wcur)
+#                 vother = mk_onehot(sampler, wother)
+# 
+#                 d = model(vcur, vother)
+#                 ws.append((wother, d))
+#             ws.sort(key=lambda wd: wd[1], reverse=True)
+#             ws = ws [:10]
+#             print ("\n".join(["\t%s -> %s" % (w, d) for (w, d) in ws]))
+# 
 cli.add_command(train)
 cli.add_command(test)
 

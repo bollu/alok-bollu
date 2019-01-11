@@ -17,12 +17,13 @@ import datetime
 import os
  
 
-LEARNING_RATE=0.001
+LEARNING_RATE=0.01
 LOSS_PRINT_NBATCHES = 10
 MODEL_SAVE_NBATCHES = 100
-BATCH_SIZE = 50
+BATCH_SIZE = 16
 EPOCHS = 2
 NHIDDEN = 300
+WINDOW_SIZE=2
 
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
@@ -42,7 +43,7 @@ class Sampler:
 
         POW = 0.75 # recommended power to raise to 
         for w in wfs:
-            wfs[w] = wfs[w] ** 0.75
+            wfs[w] = wfs[w] ** POW
 
         # total count
         ftot = float(sum(wfs.values()))
@@ -72,14 +73,6 @@ class Sampler:
             return s[0]
         return s
 
-# Make skipgram pairs with window size 1
-def mk_skipgrams_sentence(s, sampler):
-    """s: current sentence, wfs: word frequencies"""
-    for i in range(1, len(s) - 1):
-        yield (s[i], s[i - 1], 1)
-        yield (s[i], s[i + 1], 1)
-        yield ([s[i], sampler.sample(), 0])
-        # yield ([s[i], sampler.sample(), 0])
 
 
 def mk_onehot(sampler, w):
@@ -91,12 +84,35 @@ def mk_onehot(sampler, w):
     # return Variable(torch.LongTensor([sampler.wordix(w)], device=device))
     return Variable(torch.LongTensor([sampler.wordix(w)]))
 
+# probability of keeping a word
+def calc_prob_keep_word(w, wfs, total):
+    # http://mccormickml.com/2017/01/11/word2vec-tutorial-part-2-negative-sampling/
+    T = 0.001
+    z = wfs[w]
+    return ((z / T) ** 0.5 + 1) * (T / z)
+
 class SentenceSkipgramDataset(Dataset):
-    def __init__(self, s, sampler):
-        self.s = s
+    def __init__(self, s, sampler, wfs, window_size):
+        """
+        sampler: sampler for negative sampling
+        wfs: word frequencies
+        window_size: window size
+        """
+        self.s =[]
+        # SUBSAMPLING
+        total_words = sum(wfs.values())
+        for w in s:
+            if torch.rand(1)[0] < calc_prob_keep_word(w, wfs, total_words):
+                self.s.append(w)
+
         self.sampler = sampler
+        self.window_size = window_size
         self.NNEGATIVES = len(self.s)
-        self.NPOSITIVES = (len(self.s) - 2)
+        # for every word that is in the context [window_size, len(self.s) - window_size],
+        # we have (window_size * 2) elements
+        # idx / (WINDOW_SIZE * 2) -> word to pick
+        # (idx % (WINDOW_SIZE * 2) - WINDOW_SIZE) -> position wrt context
+        self.NPOSITIVES = (len(self.s) - 2 * window_size) * (window_size * 2)
 
     def __getitem__(self, idx):
         # move index by 1 so we are in range [1..len - 2]
@@ -107,14 +123,16 @@ class SentenceSkipgramDataset(Dataset):
              y_ = sampler.sample()
              is_positive_ = 0
         else:
-            idx += 1
-            assert(idx >= 1)
-            assert(idx <= len(self.sampler) - 2)
+            base_idx = idx // (self.window_size * 2)
+            base_idx += self.window_size
 
-            if idx % 2 == 0:
-                (x_, y_, is_positive_) = (self.s[idx], self.s[idx - 1], 1)
-            else:
-                (x_, y_, is_positive_) = (self.s[idx], self.s[idx + 1], 1)
+            sign =  1 if (idx % 2) == 0 else (-1)
+            delta = (idx % (self.window_size)) * sign
+            assert(0 <= base_idx < len(self.s))
+            assert(0 <= base_idx + delta < len(self.s))
+
+            (x_, y_, is_positive_) = (self.s[base_idx], self.s[base_idx + delta], 1)
+
         x_ = mk_onehot(sampler, x_)
         y_ = mk_onehot(sampler, y_)
         is_positive_ = Variable(torch.LongTensor([is_positive_]))
@@ -127,26 +145,6 @@ class SentenceSkipgramDataset(Dataset):
         return self.NPOSITIVES + self.NNEGATIVES
 
 
-
-def mk_skipgrams_sentence_dataset(s, sampler, device):
-    """s: current sentence, sampler: sampler, device: current device
-       returns: torch.DataSet of values
-    """
-    # TODO: bench this. It is quite likely that creating all the tensors
-    # on the CPU and then sending them to the GPU in one shot is way better
-    # than piecemeal allocating on the GPU(?)
-    out = []
-    for (w, wctx, is_positive) in list(mk_skipgrams_sentence(s, sampler))[:10]:
-        x_ = mk_onehot(sampler, w, device)
-        y_ = mk_onehot(sampler, wctx, device)
-        is_positive_ = Variable(torch.LongTensor([is_positive])).to(device)
-        vec_ = torch.cat([x_, y_, is_positive_])
-        out.append(vec_)
-    print ("out: %s" % out)
-    out = torch.stack(out)
-    print ("out: %s" % out)
-    out = TensorDataset(out)
-    return out
 
 def cosine_similarity_batched_vec(xs, ys):
     """Return the cosine similarity of each indivisual xs[i] with ys[i]"""
@@ -166,7 +164,7 @@ def cosine_similarity_batched_vec(xs, ys):
 # Word2Vec word2vec
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
 class Word2Vec(nn.Module):
-    def __init__(self, sampler, nhidden):
+    def __init__(self, sampler, nhidden, window_size):
         self.nhidden = nhidden
         nwords = len(sampler)
         """nwords: number of words"""
@@ -268,7 +266,7 @@ def train(savepath, loadpath):
     print ("constructed optimizer and criterion.")
 
 
-    dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler) for s in corpus])
+    dataset = ConcatDataset([SentenceSkipgramDataset(s, sampler, wfs, WINDOW_SIZE) for s in corpus])
     print("full concat dataset: %s" % dataset)
     print("len of dataset: %s" % len(dataset))
 

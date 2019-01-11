@@ -277,6 +277,12 @@ sampler = Sampler(wfs)
 print ("Done.")
 
 
+# setup device
+device = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
+print("device: %s" % device)
+
+
+
 
 @click.group()
 def cli():
@@ -311,9 +317,6 @@ def train(savepath, loadpath):
     # TODO: figure out how to ask for the least loaded cuda device...
     # for now, use the *last* device, since most people will pick up
     # the first devices. So, this should give us a free CUDA card :]
-    device = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
-    print("device: %s" % device)
-
     # TODO: also save optimizer data so we can restart
     if loadpath is not None and os.path.isfile(loadpath):
         print("loading model from %s" % loadpath)
@@ -406,30 +409,37 @@ def train(savepath, loadpath):
 @click.command()
 @click.argument('modelpath')
 def test(modelpath):
-    pass
-#     model = torch.load(modelpath)
-#     model.eval()
-#     # criterion = nn.MSELoss()
-#     criterion = nn.BCELoss()
-# 
-#     # list of all words
-#     WORDS = list(set(itertools.chain.from_iterable(corpus)))
-# 
-#     # find closest vectors to each word in the model
-#     with torch.no_grad():
-#         for wcur in WORDS[:50]:
-#             ws = []
-#             print ("curword: %s " % (wcur, ))
-#             for wother in WORDS:
-#                 vcur = mk_onehot(sampler, wcur)
-#                 vother = mk_onehot(sampler, wother)
-# 
-#                 d = model(vcur, vother)
-#                 ws.append((wother, d))
-#             ws.sort(key=lambda wd: wd[1], reverse=True)
-#             ws = ws [:10]
-#             print ("\n".join(["\t%s -> %s" % (w, d) for (w, d) in ws]))
-# 
+    model = torch.load(modelpath)
+    model.eval()
+    criterion = nn.MSELoss()
+ 
+    # list of all words
+    WORDS = sampler.words()
+
+    def find_sim(w1, w2):
+        with torch.no_grad():
+            vcur = mk_onehot(sampler, w1).to(device)
+            vother = mk_onehot(sampler, w2).to(device)
+            return model(vcur, vother)[0]
+ 
+    # find closest vectors to each word in the model
+    with torch.no_grad():
+        for wcur in WORDS[:50]:
+            ws = []
+            print ("* %s " % (wcur, ))
+            for wother in WORDS:
+                ws.append((wother, find_sim(wcur, wother)))
+            # pick ascending and descding words, so top 10 and bottom 5
+            wsout = []
+            ws.sort(key=lambda wd: wd[1], reverse=True)
+            wsout = ws [:10]
+
+            ws.sort(key=lambda wd: wd[1])
+            wsout += ws [:5]
+            print ("\n".join(["\t%s -> %s" % (w, d) for (w, d) in wsout]))
+    # drop people in a terminal at this point.
+    import pudb; pudb.set_trace()
+ 
 cli.add_command(train)
 cli.add_command(test)
 

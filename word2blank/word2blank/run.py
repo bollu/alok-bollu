@@ -16,11 +16,14 @@ import click
 import datetime 
 import os
  
+# https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
 
-LEARNING_RATE=0.01
+torch.manual_seed(1)
+
+LEARNING_RATE=0.02
 LOSS_PRINT_NBATCHES = 10
 MODEL_SAVE_NBATCHES = 100
-BATCH_SIZE = 16
+BATCH_SIZE = 4
 EPOCHS = 2
 NHIDDEN = 300
 WINDOW_SIZE=2
@@ -107,7 +110,8 @@ class SentenceSkipgramDataset(Dataset):
 
         self.sampler = sampler
         self.window_size = window_size
-        self.NNEGATIVES = len(self.s)
+        self.NNEGATIVES_PER_WORD = 4
+        self.NNEGATIVES = len(self.s) * self.NNEGATIVES_PER_WORD
         # for every word that is in the context [window_size, len(self.s) - window_size],
         # we have (window_size * 2) elements
         # idx / (WINDOW_SIZE * 2) -> word to pick
@@ -119,6 +123,7 @@ class SentenceSkipgramDataset(Dataset):
         # TODO: generalize this to a window.
         if (idx >= self.NPOSITIVES):
              idx -= self.NPOSITIVES
+             idx = idx / self.NNEGATIVES_PER_WORD
              x_ = self.s[idx]
              y_ = sampler.sample()
              is_positive_ = 0
@@ -164,7 +169,7 @@ def cosine_similarity_batched_vec(xs, ys):
 # Word2Vec word2vec
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
 class Word2Vec(nn.Module):
-    def __init__(self, sampler, nhidden, window_size):
+    def __init__(self, sampler, nhidden):
         self.nhidden = nhidden
         nwords = len(sampler)
         """nwords: number of words"""

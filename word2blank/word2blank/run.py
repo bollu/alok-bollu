@@ -22,12 +22,12 @@ import math
 
 torch.manual_seed(1)
 
-LEARNING_RATE=0.1
-LOSS_PRINT_NBATCHES = 3
-MODEL_SAVE_NBATCHES = 50
-BATCH_SIZE = 128
-EPOCHS = 2
-NHIDDEN = 300
+LEARNING_RATE=1000
+LOSS_PRINT_NBATCHES = 5
+MODEL_SAVE_NBATCHES = 200
+BATCH_SIZE = 1024
+EPOCHS = 1000
+NHIDDEN = 20
 WINDOW_SIZE=2
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -259,6 +259,13 @@ except Exception as e:
     corpus = api.load(CORPUS_NAME)
     print("Done.")
 
+print(">>>> HACK: reducing size of corpus <<<<")
+corpus = list(itertools.islice(corpus, 1))
+
+print("corpus:\n%s" % " ".join(corpus[0]))
+
+
+
 
 # Count word frequencies
 print("counting word frequencies...")
@@ -282,13 +289,7 @@ def torch_status_dump():
     print("---")
 
 def eval_model_on_common_words(sampler, model, device):
-    word_pairs = [("like", "dislike"),
-                  ("king", "queen"),
-                  ("king", "king"),
-                  ("like", "king"),
-                  ("brother", "king"),
-                  ("brother", "hunger")]
-
+    word_pairs = [("sensory", "system"), ("situations", "development"), ("workers", "system")]
     headers = ["word1", "word2", "similarity"]
     table = []
     for (x, y) in word_pairs:
@@ -374,7 +375,6 @@ def train(savepath, loadpath):
             y = model(x_, y_)
             # Loss calculation
             loss = criterion(y, is_positive.float())
-            print("loss: %s" % loss.item())
             # Step
             optimizer.zero_grad()   # zero the gradient buffers
             loss.backward()

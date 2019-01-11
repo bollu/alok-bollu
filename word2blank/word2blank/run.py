@@ -17,7 +17,7 @@ import datetime
 import os
  
 
-LEARNING_RATE=0.05
+LEARNING_RATE=0.001
 LOSS_PRINT_NBATCHES = 10
 MODEL_SAVE_NBATCHES = 100
 BATCH_SIZE = 50
@@ -148,6 +148,21 @@ def mk_skipgrams_sentence_dataset(s, sampler, device):
     out = TensorDataset(out)
     return out
 
+def cosine_similarity_batched_vec(xs, ys):
+    """Return the cosine similarity of each indivisual xs[i] with ys[i]"""
+    xs = F.normalize(xs, p=2, dim=1)
+    ys = F.normalize(ys, p=2, dim=1)
+    assert (len(xs) == len(ys))
+    #TODO: insert reimannian metric here as Ay         
+    elemprod = xs * ys
+    dot = torch.sum(elemprod, dim=1)
+
+    # as done in:
+    # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
+    dot = F.logsigmoid(dot)
+
+    return dot
+
 # Word2Vec word2vec
 # https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb
 class Word2Vec(nn.Module):
@@ -163,20 +178,9 @@ class Word2Vec(nn.Module):
         # 2d vectors of data x batch_size
         # TODO: is batch_size outer or inner dim?
         xembed = self.embedding(x_)
-
-	# todo: normalize according to reimannian metric
-        xembed = F.normalize(xembed, p=2, dim=1)
-
         yembed = self.embedding(y_)
-        yembed = F.normalize(yembed, p=2, dim=1)
 
-        assert (len(xembed) == len(yembed))
-
-        #TODO: insert reimannian metric here as Ay         
-	elemprod = xembed * yembed
-	dot = torch.sum(elemprod, dim=1)                                                                       
-
-        return dot
+        return cosine_similarity_batched_vec(xembed, yembed)
 
 # Corpus contains a list of sentences. Each sentence is a list of words
 # Data pulled from:

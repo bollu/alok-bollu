@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import gensim.downloader as api
+from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from gensim.models.word2vec import Word2Vec
 import numpy as np
 import signal
@@ -43,17 +44,23 @@ STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves",
              "should", "now"])
 
 class TimeLogger:
+    """Provide an API to log start and end times of tasks"""
     def __init__(self):
+        self.ts = []
         pass
     def start(self, toprint):
-        self.t = datetime.datetime.now()
+        self.ts.append(datetime.datetime.now())
         print(str(toprint) + "...", end="")
         sys.stdout.flush()
 
     def end(self, toprint=None):
+        depth = len(self.ts) - 1
+
+        start = self.ts.pop()
         now = datetime.datetime.now()
+
         if(toprint): print(toprint)
-        print("Done. time: %s" % (now - self.t))
+        print(" " * depth + "Done. time: %s" % (now - start))
         if (toprint): print("--")
         sys.stdout.flush()
 
@@ -82,7 +89,7 @@ def load_corpus(LOGGER):
 
     corpus = list(corpus)
     print("number of documents in corpus: %s" % (len(corpus), ))
-    DOCS_TO_TAKE = len(corpus)
+    DOCS_TO_TAKE = 1
     print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
     corpus = corpus[:DOCS_TO_TAKE]
     corpus = flatten(corpus)
@@ -183,35 +190,37 @@ def mk_word_histogram(ws, vocab):
         w2f[w] += 1
     return w2f
 
-# =========== Actual code ============
-LOGGER = TimeLogger()
+class SkipGramDataset(Dataset):
+    def __init__(self, LOGGER, params, TEXT, VOCAB, VOCABSIZE):
+        self.params = params
+        self.TEXT = TEXT
 
-# setup device
-LOGGER.start("setting up device")
-DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
-LOGGER.end("device: %s" % DEVICE)
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, idx):
+        idx = idx + params.WINDOWSIZE
+        wsfocusix = [self.TEXT[idx]]
+        wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.params.WINDOWSIZE, self.params.WINDOWSIZE + 1)]
+
+        return torch.stack([hot(wsfocusix, self.W2I, self.VOCABSIZE), hot(wsctxix, self.W2I, self.VOCABSIZE)])
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return (len(self.TEXT) - 2 * self.params.WINDOWSIZE) 
 
 
-TEXT = load_corpus(LOGGER)
-LOGGER.start("filtering stopwords")
-TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
-LOGGER.end()
-
-VOCAB = set(TEXT)
-VOCABSIZE = len(VOCAB)
-
-LOGGER.start("creating I2W, W2I")
-I2W = dict(enumerate(VOCAB))
-W2I = { v: k for (k, v) in I2W.items() }
-LOGGER.end()
-
-LOGGER.start("counting frequency of words")
-W2F = mk_word_histogram(TEXT, VOCAB)
-LOGGER.end()
-
-params = Parameters(LOGGER, DEVICE, VOCABSIZE)
-
-def hot(ws, W2I):
+def hot(ws, W2I, VOCABSIZE):
     """
     hot vector for each word in ws
     """
@@ -220,13 +229,13 @@ def hot(ws, W2I):
     return v
 
 
-def cli_prompt():
+def cli_prompt(W2I, I2W, VOCABSIZE):
     """Call to launch prompt interface."""
 
     def test_find_close_vectors(w, normalized_embed):
         """ Find vectors close to w in the normalized embedding"""
         # [1 x VOCABSIZE] 
-        whot = hot([w], W2I).to(DEVICE)
+        whot = hot([w], W2I, VOCABSIZE).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
         wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
 
@@ -256,6 +265,35 @@ def cli_prompt():
         except Exception as e:
             print("exception:\n%s" % (e, ))
 
+# =========== Actual code ============
+LOGGER = TimeLogger()
+
+# setup device
+LOGGER.start("setting up device")
+DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
+LOGGER.end("device: %s" % DEVICE)
+
+
+TEXT = load_corpus(LOGGER)
+LOGGER.start("filtering stopwords")
+TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
+LOGGER.end()
+
+
+LOGGER.start("building vocabulary")
+VOCAB = set(TEXT)
+VOCABSIZE = len(VOCAB)
+LOGGER.end()
+
+LOGGER.start("creating parameters...")
+params = Parameters(LOGGER, DEVICE, VOCABSIZE)
+LOGGER.end()
+
+LOGGER.start("creating dataset...")
+DATASET = SkipGramDataset(LOGGER, params, TEXT, VOCAB, VOCABSIZE)
+LOGGER.end()
+
+
 @click.group()
 def cli():
     pass
@@ -281,14 +319,7 @@ def traincli(loadpath, savepath):
         LOGGEr.end()
 
     LOGGER.start("creating DATA\n")
-    DATA = []
-    for i in progressbar.progressbar(range((len(TEXT) - 2 * params.WINDOWSIZE))):
-        ix = i + params.WINDOWSIZE
-
-        wsfocus = [TEXT[ix]]
-        wsctx = [TEXT[ix + deltaix] for deltaix in range(-params.WINDOWSIZE, params.WINDOWSIZE + 1)]
-        DATA.append(torch.stack([hot(wsfocus, W2I), hot(wsctx, W2I)]))
-    DATA = torch.stack(DATA)
+    DATA = DataLoader(DATASET, batch_size=params.BATCHSIZE, shuffle=True)
     LOGGER.end()
 
     LOGGER.start("creating optimizer and loss function")
@@ -304,11 +335,11 @@ def traincli(loadpath, savepath):
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-    with progressbar.ProgressBar(max_value=params.EPOCHS * len(DATA) / params.BATCHSIZE) as bar:
+    with progressbar.ProgressBar(max_value=math.ceil(params.EPOCHS * len(DATA))) as bar:
         loss_sum = 0
         ix = 0
         for epoch in range(params.EPOCHS):
-            for train in batch(DATA, params.BATCHSIZE):
+            for train in DATA:
                 ix += 1
                 # [BATCHSIZE x VOCABSIZE]
                 xs = train[:, 0].to(DEVICE)
@@ -345,9 +376,9 @@ def traincli(loadpath, savepath):
 
                 if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
                     save()
-    
+        print("FINAL BAR VALUE: %s" % bar.value) 
     save()
-    cli_prompt()
+    cli_prompt(DATASET.W2I, DATASET.I2W, VOCABSIZE)
 
 
 @click.command()
@@ -358,7 +389,7 @@ def testcli(loadpath):
     with open(loadpath, "rb") as lf:
         params = torch.load(lf)
 
-    cli_prompt()
+    cli_prompt(DATASET.W2I, DATASET.I2W, VOCABSIZE)
 
 
 cli.add_command(traincli)

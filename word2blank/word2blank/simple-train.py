@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
+from __future__ import unicode_literals
 from collections import Counter
 
 import itertools
@@ -17,6 +18,9 @@ import click
 import datetime 
 import math
 import progressbar
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit import prompt
+from prompt_toolkit import print_formatted_text
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -78,7 +82,7 @@ def load_corpus(LOGGER):
 
     corpus = list(corpus)
     print("number of documents in corpus: %s" % (len(corpus), ))
-    DOCS_TO_TAKE = 20
+    DOCS_TO_TAKE = 1
     print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
     corpus = corpus[:DOCS_TO_TAKE]
     corpus = flatten(corpus)
@@ -86,15 +90,8 @@ def load_corpus(LOGGER):
     LOGGER.end()
     return corpus
 
-def hot(ws, w2i):
-    """
-    hot vector for each word in ws
-    """
-    v = Variable(torch.zeros(VOCABSIZE).float())
-    for w in ws: v[w2i[w]] = 1.0
-    return v
 
-def batch(xs):
+def batch(xs, BATCHSIZE):
     ix = 0
     while ix + BATCHSIZE < len(xs):
         data = xs[ix:ix+BATCHSIZE]
@@ -176,7 +173,7 @@ class Parameters:
 
         # metric, currently identity matrix
         LOGGER.start("creating metric")
-        METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
+        self.METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
         LOGGER.end()
 # =========== Actual code ============
 LOGGER = TimeLogger()
@@ -203,8 +200,15 @@ LOGGER.end()
 
 params = Parameters(LOGGER, DEVICE, VOCABSIZE)
 
+def hot(ws, w2i):
+    """
+    hot vector for each word in ws
+    """
+    v = Variable(torch.zeros(VOCABSIZE).float())
+    for w in ws: v[w2i[w]] = 1.0
+    return v
 
-def test_find_close_vectors(w, wnormalized_embed):
+def test_find_close_vectors(w, normalized_embed):
     """ Find vectors close to w """
     # [1 x VOCABSIZE] 
     whot = hot([w], w2i).to(DEVICE)
@@ -220,21 +224,16 @@ def test_find_close_vectors(w, wnormalized_embed):
     return wordweights
 
 
-@click.group()
-@click.argument("loadpath")
-def test(loadpath):
-    global params
-    if loadpath is not None:
-        params = torch.load(loadpath)
-
+def test():
     # [VOCABSIZE x EMBEDSIZE]
     EMBEDNORM = normalize(params.EMBEDM, params.METRIC)
+    COMPLETER = WordCompleter(VOCAB)
 
-    ws = raw_input("type in words>>").split()
+    ws = prompt("type in word>", completer=COMPLETER).split()
     for w in ws:
         whot = hot([w], w2i).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), params.METRIC)
+        wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
 
         wordweights = test_find_close_vectors(w, EMBEDNORM)
         for (word, weight) in wordweights[:10]:
@@ -244,27 +243,35 @@ def test(loadpath):
 def cli():
     pass
 
-@click.group()
+@click.command()
 @click.option('--loadpath', default=None, help='Path to load model from')
-@click.option('--savepath', default=None, help='Path to save model from')
-def train(loadpath, savepath):
+@click.option('--savepath',
+              default=("save-auto-%s" % (datetime.datetime.now(), )),
+                       help='Path to save model from')
+def traincli(loadpath, savepath):
     global params
+    def save():
+        LOGGER.start("saving model to %s" % (savepath))
+        with open(savepath, "wb") as sf:
+            torch.save(params, sf)
+            LOGGER.end()
+
     if loadpath is not None:
         params = torch.load(loadpath)
 
-    LOGGER.start("creating DATA")
+    LOGGER.start("creating DATA\n")
     DATA = []
-    for i in progressbar.progressbar(range((len(TEXT) - 2 * WINDOWSIZE))):
-        ix = i + WINDOWSIZE
+    for i in progressbar.progressbar(range((len(TEXT) - 2 * params.WINDOWSIZE))):
+        ix = i + params.WINDOWSIZE
 
         wsfocus = [TEXT[ix]]
-        wsctx = [TEXT[ix + deltaix] for deltaix in range(-WINDOWSIZE, WINDOWSIZE + 1)]
-        DATA.append(torch.stack([hot(wsfocus), hot(wsctx)]))
+        wsctx = [TEXT[ix + deltaix] for deltaix in range(-params.WINDOWSIZE, params.WINDOWSIZE + 1)]
+        DATA.append(torch.stack([hot(wsfocus, w2i), hot(wsctx, w2i)]))
     DATA = torch.stack(DATA)
     LOGGER.end()
 
     LOGGER.start("creating optimizer and loss function")
-    optimizer = optim.SGD([EMBEDM], lr=LEARNING_RATE)
+    optimizer = optim.SGD([params.EMBEDM], lr=params.LEARNING_RATE)
     loss = nn.MSELoss()
     LOGGER.end()
 
@@ -276,11 +283,11 @@ def train(loadpath, savepath):
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-    with progressbar.ProgressBar(max_value=EPOCHS * len(DATA) / BATCHSIZE) as bar:
+    with progressbar.ProgressBar(max_value=params.EPOCHS * len(DATA) / params.BATCHSIZE) as bar:
         loss_sum = 0
         ix = 0
-        for epoch in range(EPOCHS):
-            for train in batch(DATA):
+        for epoch in range(params.EPOCHS):
+            for train in batch(DATA, params.BATCHSIZE):
                 ix += 1
                 # [BATCHSIZE x VOCABSIZE]
                 xs = train[:, 0].to(DEVICE)
@@ -290,12 +297,12 @@ def train(loadpath, savepath):
                 optimizer.zero_grad()   # zero the gradient buffers
                 # embedded vectors of the batch vectors
                 # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-                xsembeds = torch.mm(xs, EMBEDM)
+                xsembeds = torch.mm(xs, params.EMBEDM)
 
                 # dots(BATCHSIZE x EMBEDSIZE], 
                 #     [VOCABSIZE x EMBEDSIZE],
                 #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-                xs_dots_embeds = dots(xsembeds, EMBEDM, METRIC)
+                xs_dots_embeds = dots(xsembeds, params.EMBEDM, params.METRIC)
 
                 l = loss(ysopt, xs_dots_embeds)
                 loss_sum += torch.sum(torch.abs(l)).item()
@@ -304,33 +311,33 @@ def train(loadpath, savepath):
                 bar.update(bar.value + 1)
 
                 PRINT_PER_NUM_ELEMENTS = 10000
-                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // BATCHSIZE
+                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // params.BATCHSIZE
                 if (ix % PRINT_PER_NUM_BATCHES == 0):
                     print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
-                          (loss_sum, loss_sum / PRINT_PER_NUM_BATCHES, loss_sum / PRINT_PER_NUM_ELEMENTS))
+                          (loss_sum,
+                           loss_sum / PRINT_PER_NUM_BATCHES,
+                           loss_sum / PRINT_PER_NUM_ELEMENTS))
                     loss_sum = 0
 
                 SAVE_PER_NUM_ELEMENTS = 20000
-                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // BATCHSIZE
+                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // params.BATCHSIZE
 
                 if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
-                    LOGGER.start("saving model to %s" % (savepath))
-                    torch.save(params, savepath)
-                    LOGGER.end()
+                    save()
     
-    LOGGER.start("saving model to %s" % (savepath))
-    torch.save(params, savepath)
-    LOGGER.end()
-@click.command()
-@click.argument(modelpath)
-def testcli():
-    EMBEDM.load_state_dict(torch.load(modelpath))
-    while True:
-        try:
-            test()
-        except Exception as e:
-            print("exception:\n%s" % (e, ))
+    save()
 
+
+@click.command()
+@click.argument("loadpath")
+def testcli(loadpath):
+    global params
+
+    with open(loadpath, "rb") as lf:
+        params = torch.load(lf)
+    test()
+
+cli.add_command(traincli)
+cli.add_command(testcli)
 if __name__ == "__main__":
-    torch_status_dump()
     cli()

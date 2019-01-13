@@ -4,3 +4,4 @@ click
 tabulate
 terminalplot
 progressbar2
+prompt_toolkit

@@ -224,7 +224,7 @@ def test_find_close_vectors(w, normalized_embed):
     return wordweights
 
 
-def test():
+def prompt_word():
     # [VOCABSIZE x EMBEDSIZE]
     EMBEDNORM = normalize(params.EMBEDM, params.METRIC)
     COMPLETER = WordCompleter(VOCAB)
@@ -243,21 +243,25 @@ def test():
 def cli():
     pass
 
+def DEFAULT_MODELPATH():
+    now = datetime.datetime.now()
+    return now.strftime("save-auto-%X-%a-%b") + ".model"
+
 @click.command()
-@click.option('--loadpath', default=None, help='Path to load model from')
-@click.option('--savepath',
-              default=("save-auto-%s" % (datetime.datetime.now(), )),
-                       help='Path to save model from')
+@click.option('--loadpath', default=None, help='Path to load model')
+@click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
 def traincli(loadpath, savepath):
     global params
     def save():
-        LOGGER.start("saving model to %s" % (savepath))
+        LOGGER.start("saving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             torch.save(params, sf)
             LOGGER.end()
 
     if loadpath is not None:
+        LOGGER.start("loading model from: %s" % (loadpath))
         params = torch.load(loadpath)
+        LOGGEr.end()
 
     LOGGER.start("creating DATA\n")
     DATA = []
@@ -326,6 +330,7 @@ def traincli(loadpath, savepath):
                     save()
     
     save()
+    prompt_word()
 
 
 @click.command()
@@ -335,7 +340,9 @@ def testcli(loadpath):
 
     with open(loadpath, "rb") as lf:
         params = torch.load(lf)
-    test()
+
+    while True:
+        prompt_word()
 
 cli.add_command(traincli)
 cli.add_command(testcli)

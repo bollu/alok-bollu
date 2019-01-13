@@ -90,7 +90,7 @@ def load_corpus(LOGGER):
 
     corpus = list(corpus)
     print("number of documents in corpus: %s" % (len(corpus), ))
-    DOCS_TO_TAKE = 1
+    DOCS_TO_TAKE = 1 
     print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
     corpus = corpus[:DOCS_TO_TAKE]
     corpus = flatten(corpus)
@@ -168,13 +168,22 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 
+def current_time_str():
+    """Return the current time as a string"""
+    return datetime.datetime.now().strftime("%X-%a-%b")
+
+
 class Parameters:
-    def __init__(self, LOGGER, DEVICE, VOCABSIZE):
+    """God object containing everything the model has"""
+    def __init__(self, LOGGER, DEVICE, TEXT, VOCAB, VOCABSIZE):
+        """default values"""
         self.EPOCHS = 5
         self.BATCHSIZE = 4
         self.EMBEDSIZE = 100
         self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
+        self.create_time = current_time_str()
+
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, self.EMBEDSIZE).to(DEVICE), requires_grad=True))
         LOGGER.end()
@@ -182,6 +191,19 @@ class Parameters:
         # metric, currently identity matrix
         LOGGER.start("creating metric")
         self.METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
+        LOGGER.end()
+
+        LOGGER.start("creating OPTIMISER")
+        self.optimizer = optim.SGD([self.EMBEDM], lr=self.LEARNING_RATE)
+        LOGGER.end()
+
+
+        LOGGER.start("creating dataset...")
+        self.DATASET = SkipGramDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        LOGGER.end()
+
+        LOGGER.start("creating DATA\n")
+        self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
 
 def mk_word_histogram(ws, vocab):
@@ -192,12 +214,12 @@ def mk_word_histogram(ws, vocab):
     return w2f
 
 class SkipGramDataset(Dataset):
-    def __init__(self, LOGGER, params, TEXT, VOCAB, VOCABSIZE):
-        self.params = params
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
         self.TEXT = TEXT
 
         self.VOCAB = VOCAB
         self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
 
         LOGGER.start("creating I2W, W2I")
         self.I2W = dict(enumerate(VOCAB))
@@ -209,16 +231,16 @@ class SkipGramDataset(Dataset):
         LOGGER.end()
 
     def __getitem__(self, idx):
-        idx = idx + params.WINDOWSIZE
+        idx = idx + self.WINDOWSIZE
         wsfocusix = [self.TEXT[idx]]
-        wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.params.WINDOWSIZE, self.params.WINDOWSIZE + 1)]
+        wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
 
         return torch.stack([hot(wsfocusix, self.W2I, self.VOCABSIZE), hot(wsctxix, self.W2I, self.VOCABSIZE)])
 
     def __len__(self):
         # we can't query the first or last value.
         # first because it has no left, last because it has no right
-        return (len(self.TEXT) - 2 * self.params.WINDOWSIZE) 
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
 
 
 def hot(ws, W2I, VOCABSIZE):
@@ -230,20 +252,20 @@ def hot(ws, W2I, VOCABSIZE):
     return v
 
 
-def cli_prompt(W2I, I2W, VOCABSIZE):
+def cli_prompt():
     """Call to launch prompt interface."""
 
     def test_find_close_vectors(w, normalized_embed):
         """ Find vectors close to w in the normalized embedding"""
         # [1 x VOCABSIZE] 
-        whot = hot([w], W2I, VOCABSIZE).to(DEVICE)
+        whot = hot([w], PARAMS.W2I, PARAMS.VOCABSIZE).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
+        wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.EMBEDM), PARAMS.METRIC)
 
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(wembed, normalized_embed, params.METRIC)
+        wix2sim = dots(wembed, normalized_embed, PARAMS.METRIC)
 
-        wordweights = [(I2W[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+        wordweights = [(PARAMS.I2W[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
 
         return wordweights
@@ -252,7 +274,7 @@ def cli_prompt(W2I, I2W, VOCABSIZE):
     def prompt_word():
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
-        EMBEDNORM = normalize(params.EMBEDM, params.METRIC)
+        EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
         COMPLETER = WordCompleter(VOCAB)
 
         ws = prompt("type in word>", completer=COMPLETER).split()
@@ -287,44 +309,38 @@ VOCABSIZE = len(VOCAB)
 LOGGER.end()
 
 LOGGER.start("creating parameters...")
-params = Parameters(LOGGER, DEVICE, VOCABSIZE)
+PARAMS = Parameters(LOGGER, DEVICE, TEXT, VOCAB, VOCABSIZE)
 LOGGER.end()
 
-LOGGER.start("creating dataset...")
-DATASET = SkipGramDataset(LOGGER, params, TEXT, VOCAB, VOCABSIZE)
-LOGGER.end()
 
 
 @click.group()
 def cli():
     pass
 
+
 def DEFAULT_MODELPATH():
     now = datetime.datetime.now()
-    return now.strftime("save-auto-%X-%a-%b") + ".model"
+    return "save-auto-%s.model" % (current_time_str(), )
 
 @click.command()
 @click.option('--loadpath', default=None, help='Path to load model')
 @click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
 def traincli(loadpath, savepath):
-    global params
+    global PARAMS
     def save():
         LOGGER.start("saving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
-            torch.save(params, sf)
+            torch.save(PARAMS, sf)
             LOGGER.end()
 
     if loadpath is not None:
         LOGGER.start("loading model from: %s" % (loadpath))
-        params = torch.load(loadpath)
-        LOGGEr.end()
+        PARAMS = torch.load(loadpath)
+        LOGGER.end("loaded params from: %s" % PARAMS.create_time)
 
-    LOGGER.start("creating DATA\n")
-    DATA = DataLoader(DATASET, batch_size=params.BATCHSIZE, shuffle=True)
-    LOGGER.end()
 
     LOGGER.start("creating optimizer and loss function")
-    optimizer = optim.SGD([params.EMBEDM], lr=params.LEARNING_RATE)
     loss = nn.MSELoss()
     LOGGER.end()
 
@@ -336,35 +352,35 @@ def traincli(loadpath, savepath):
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-    with progressbar.ProgressBar(max_value=math.ceil(params.EPOCHS * len(DATA))) as bar:
+    with progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
         loss_sum = 0
         ix = 0
-        for epoch in range(params.EPOCHS):
-            for train in DATA:
+        for epoch in range(PARAMS.EPOCHS):
+            for train in PARAMS.DATA:
                 ix += 1
                 # [BATCHSIZE x VOCABSIZE]
                 xs = train[:, 0].to(DEVICE)
                 # [BATCHSIZE x VOCABSIZE]
                 ysopt = train[:, 1].to(DEVICE)
 
-                optimizer.zero_grad()   # zero the gradient buffers
+                PARAMS.optimizer.zero_grad()   # zero the gradient buffers
                 # embedded vectors of the batch vectors
                 # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-                xsembeds = torch.mm(xs, params.EMBEDM)
+                xsembeds = torch.mm(xs, PARAMS.EMBEDM)
 
                 # dots(BATCHSIZE x EMBEDSIZE], 
                 #     [VOCABSIZE x EMBEDSIZE],
                 #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-                xs_dots_embeds = dots(xsembeds, params.EMBEDM, params.METRIC)
+                xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
 
                 l = loss(ysopt, xs_dots_embeds)
                 loss_sum += torch.sum(torch.abs(l)).item()
                 l.backward()
-                optimizer.step()
+                PARAMS.optimizer.step()
                 bar.update(bar.value + 1)
 
                 PRINT_PER_NUM_ELEMENTS = 10000
-                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // params.BATCHSIZE
+                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
                 if (ix % PRINT_PER_NUM_BATCHES == 0):
                     print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
                           (loss_sum,
@@ -373,24 +389,27 @@ def traincli(loadpath, savepath):
                     loss_sum = 0
 
                 SAVE_PER_NUM_ELEMENTS = 20000
-                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // params.BATCHSIZE
+                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
 
                 if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
                     save()
         print("FINAL BAR VALUE: %s" % bar.value) 
     save()
-    cli_prompt(DATASET.W2I, DATASET.I2W, VOCABSIZE)
+    cli_prompt()
 
 
 @click.command()
 @click.argument("loadpath")
 def testcli(loadpath):
-    global params
+    global PARAMS
 
     with open(loadpath, "rb") as lf:
-        params = torch.load(lf)
+        global PARAMS
+        print("params: %s" % PARAMS)
+        PARAMS = torch.load(lf)
+        print("params: %s" % PARAMS)
 
-    cli_prompt(DATASET.W2I, DATASET.I2W, VOCABSIZE)
+    cli_prompt()
 
 
 cli.add_command(traincli)

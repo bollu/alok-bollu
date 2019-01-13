@@ -77,24 +77,27 @@ def cosinesim(v, w, metric):
     return norm(v, w, metric)
 
 def dots(vs, metric):
-    # M = [VOCABSIZE x EMBEDSIZE]
     # vs = [BATCHSIZE x EMBEDSIZE]
     # metric = [EMBEDSIZE x EMBEDSIZE]
-    # v[1XEMBEDSIZE] * metric[EMBEDxEMBED] * M[i, :]^T[EMBED x VOCAB] -> [1 x VOCAB]
-    # v[BATCHX1xEMBEDSIZE] * metric[BATCHxEMBEDxEMBED] * M[i, :]^T[EMBED x VOCAB] -> [1 x VOCAB]
+    # M^t = [EMBEDSIZE x VOCABSIZE] | [VOCABSIZE x EMBEDSIZE]
+    # out: [BATCHSIZE x VOCABSIZE]
+    # find the dot product of every vector v in `vs`, with each vector in `INM`
+    # read code below to see the unrolled version.
+
+    return torch.mm(torch.mm(vs, metric), INM.t())
 
 
     # outs = [BATCHSIZE x VOCABSIZE]
-    outs = torch.zeros([BATCHSIZE, VOCABSIZE])
-    for vix in range(BATCHSIZE):
-        # v = [1 x EMBEDSIZE]
-        v = vs[vix, :]
-        for wix in range(VOCABSIZE):
-            # w = [EMBEDSIZE x 1]
-            w = INM[wix, :]
-            # [1 x EMBEDSIZE] x [EMBEDSIZE x EMBEDSIZE] x [EMBEDSIZE x 1] = [1x1]
-            outs[vix][wix] = cosinesim(v, w, metric)
-    return outs
+    # outs = torch.zeros([BATCHSIZE, VOCABSIZE])
+    # for vix in range(BATCHSIZE):
+    #     # v = [1 x EMBEDSIZE]
+    #     v = vs[vix, :]
+    #     for wix in range(VOCABSIZE):
+    #         # w = [EMBEDSIZE x 1]
+    #         w = INM[wix, :]
+    #         # [1 x EMBEDSIZE] x [EMBEDSIZE x EMBEDSIZE] x [EMBEDSIZE x 1] = [1x1]
+    #         outs[vix][wix] = cosinesim(v, w, metric)
+    # return outs
 
 optimizer = optim.SGD([INM], lr=0.01)
 loss = nn.MSELoss()

@@ -49,18 +49,19 @@ class TimeLogger:
         self.ts = []
         pass
     def start(self, toprint):
+        depth = len(self.ts)
         self.ts.append(datetime.datetime.now())
-        print(str(toprint) + "...", end="")
+        print(" " * 4 * depth + str(toprint) + "...")
         sys.stdout.flush()
 
     def end(self, toprint=None):
-        depth = len(self.ts) - 1
+        depth = len(self.ts)
 
         start = self.ts.pop()
         now = datetime.datetime.now()
 
         if(toprint): print(toprint)
-        print(" " * depth + "Done. time: %s" % (now - start))
+        print(" " * 4 * depth + "Done. time: %s" % (now - start))
         if (toprint): print("--")
         sys.stdout.flush()
 

@@ -24,12 +24,14 @@ class TimeLogger:
     def start(self, toprint):
         self.t = datetime.datetime.now()
         print(str(toprint) + "...", end="")
+        sys.stdout.flush()
 
     def end(self, toprint=None):
         now = datetime.datetime.now()
         if(toprint): print(toprint)
         print("Done. time: %s" % (now - self.t))
         if (toprint): print("--")
+        sys.stdout.flush()
 
 LOGGER = TimeLogger()
 
@@ -38,28 +40,37 @@ LOGGER.start("setting up device")
 DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
 LOGGER.end("device: %s" % DEVICE)
 
+def flatten(ls):
+    return [item for sublist in ls for item in sublist]
+
 def load_corpus():
-    return  """we are about to study the idea of a computational process.
-     computational processes are abstract beings that inhabit computers.
-     as they evolve, processes manipulate other abstract things called data.
-     the evolution of a process is directed by a pattern of rules called a program.
-     people create programs to direct processes.
-     in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
+    # return  """we are about to study the idea of a computational process.
+    #  computational processes are abstract beings that inhabit computers.
+    #  as they evolve, processes manipulate other abstract things called data.
+    #  the evolution of a process is directed by a pattern of rules called a program.
+    #  people create programs to direct processes.
+    #  in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
     CORPUS_NAME = "text8"
     LOGGER.start("loading corpus: %s" % CORPUS_NAME)
     try:
         sys.path.insert(0, api.base_dir)
         module = __import__(CORPUS_NAME)
-        CORPUS = module.load_data()
+        corpus = module.load_data()
     except Exception as e:
         print("unable to find text8 locally.\nERROR: %s" % (e, ))
         print("Downloading using gensim-data...")
-        CORPUS = api.load(CORPUS_NAME)
+        corpus = api.load(CORPUS_NAME)
         print("Done.")
 
-    text = list(CORPUS)[0]
+    corpus = list(corpus)
+    print("number of documents in corpus: %s" % (len(corpus), ))
+    DOCS_TO_TAKE = 10
+    print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
+    corpus = corpus[:DOCS_TO_TAKE]
+    corpus = flatten(corpus)
+    print("number of words in corpus: %s" % (len(corpus), ))
     LOGGER.end()
-    return text
+    return corpus
 
 TEXT = load_corpus()
 
@@ -85,10 +96,10 @@ LOGGER.start("filtering stopwords")
 TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
 LOGGER.end()
 
-EPOCHS = 2
-BATCHSIZE = 2
+EPOCHS = 5
+BATCHSIZE = 4
 EMBEDSIZE = 100
-LEARNING_RATE = 0.025
+LEARNING_RATE = 0.1
 VOCAB = set(TEXT)
 WINDOWSIZE = 2
 
@@ -109,7 +120,7 @@ def hot(ws):
 
 LOGGER.start("creating DATA")
 DATA = []
-for i in range((len(TEXT) - 2 * WINDOWSIZE)):
+for i in progressbar.progressbar(range((len(TEXT) - 2 * WINDOWSIZE))):
     ix = i + WINDOWSIZE
 
     wsfocus = [TEXT[ix]]
@@ -210,8 +221,11 @@ LOGGER.end()
 # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
 with progressbar.ProgressBar(max_value=EPOCHS * len(DATA) / BATCHSIZE) as bar:
+    loss_sum = 0
+    ix = 0
     for epoch in range(EPOCHS):
         for train in batch(DATA):
+            ix += 1
             # [BATCHSIZE x VOCABSIZE]
             xs = train[:, 0].to(DEVICE)
             # [BATCHSIZE x VOCABSIZE]
@@ -228,29 +242,58 @@ with progressbar.ProgressBar(max_value=EPOCHS * len(DATA) / BATCHSIZE) as bar:
             xs_dots_embeds = dots(xsembeds, EMBEDM, METRIC)
 
             l = loss(ysopt, xs_dots_embeds)
+            loss_sum += torch.sum(torch.abs(l)).item()
             l.backward()
             optimizer.step()
             bar.update(bar.value + 1)
 
+            PRINT_PER_NUM_ELEMENTS = 10000
+            PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // BATCHSIZE
+            if (ix % PRINT_PER_NUM_BATCHES == 0):
+                print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
+                      (loss_sum, loss_sum / PRINT_PER_NUM_BATCHES, loss_sum / PRINT_PER_NUM_ELEMENTS))
+                loss_sum = 0
+
+def test_find_close_vectors(w, normalized_embed):
+    # [1 x VOCABSIZE] 
+    whot = hot([w]).to(DEVICE)
+    # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
+    wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), METRIC)
+
+    # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
+    wix2sim = dots(wembed, normalized_embed, METRIC)
+
+    wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+    wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
+
+    return wordweights
+
+def test_all_pairs(normalized_embed):
+    # testing
+    for w in VOCAB:
+        wordweights = test_find_close_vectors(w, normalized_embed)
+
+        print("* %s" % w)
+        for (word, weight) in wordweights[:4]:
+            print("\t%s: %s" % (word, weight))
 
 def test():
     # [VOCABSIZE x EMBEDSIZE]
     EMBEDNORM = normalize(EMBEDM, METRIC)
 
-    # testing
-    for w in VOCAB:
-        # [1 x VOCABSIZE] 
+    ws = raw_input("type in words>>").split()
+
+    for w in ws:
         whot = hot([w]).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
         wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), METRIC)
 
-        # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(wembed, EMBEDNORM, METRIC)
-
-        wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
-        wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
-
-        print("* %s" % w)
-        for (word, weight) in wordweights[:4]:
+        wordweights = test_find_close_vectors(w, EMBEDNORM)
+        for (word, weight) in wordweights[:10]:
             print("\t%s: %s" % (word, weight))
-test()
+
+while True:
+    try:
+        test()
+    except Exception as e:
+        print("exception:\n%s" % (e, ))

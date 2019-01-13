@@ -18,6 +18,26 @@ import datetime
 import math
 import progressbar
 
+
+STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
+             "you", "your", "yours", "yourself", "yourselves", "he", "him", 
+             "his", "himself", "she", "her", "hers", "herself", "it", "its", 
+             "itself", "they", "them", "their", "theirs", "themselves", 
+             "what", "which", "who", "whom", "this", "that", "these", 
+             "those", "am", "is", "are", "was", "were", "be", "been", 
+             "being", "have", "has", "had", "having", "do", "does", 
+             "did", "doing", "a", "an", "the", "and", "but", 
+             "if", "or", "because", "as", "until", "while", 
+             "of", "at", "by", "for", "with", "about", 
+             "against", "between", "into", "through", "during", "before", 
+             "after", "above", "below", "to", "from", "up", "down", "in", 
+             "out", "on", "off", "over", "under", "again", "further", "then", 
+             "once", "here", "there", "when", "where", "why", "how", "all", 
+             "any", "both", "each", "few", "more", "most", "other", "some", 
+             "such", "no", "nor", "not", "only", "own", "same", "so", 
+             "than", "too", "very", "s", "t", "can", "will", "just", "don", 
+             "should", "now"])
+
 class TimeLogger:
     def __init__(self):
         pass
@@ -33,17 +53,11 @@ class TimeLogger:
         if (toprint): print("--")
         sys.stdout.flush()
 
-LOGGER = TimeLogger()
+def load_corpus(LOGGER):
 
-# setup device
-LOGGER.start("setting up device")
-DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
-LOGGER.end("device: %s" % DEVICE)
+    def flatten(ls):
+        return [item for sublist in ls for item in sublist]
 
-def flatten(ls):
-    return [item for sublist in ls for item in sublist]
-
-def load_corpus():
     # return  """we are about to study the idea of a computational process.
     #  computational processes are abstract beings that inhabit computers.
     #  as they evolve, processes manipulate other abstract things called data.
@@ -64,7 +78,7 @@ def load_corpus():
 
     corpus = list(corpus)
     print("number of documents in corpus: %s" % (len(corpus), ))
-    DOCS_TO_TAKE = 10
+    DOCS_TO_TAKE = 20
     print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
     corpus = corpus[:DOCS_TO_TAKE]
     corpus = flatten(corpus)
@@ -72,62 +86,13 @@ def load_corpus():
     LOGGER.end()
     return corpus
 
-TEXT = load_corpus()
-
-STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
-             "you", "your", "yours", "yourself", "yourselves", "he", "him", 
-             "his", "himself", "she", "her", "hers", "herself", "it", "its", 
-             "itself", "they", "them", "their", "theirs", "themselves", 
-             "what", "which", "who", "whom", "this", "that", "these", 
-             "those", "am", "is", "are", "was", "were", "be", "been", 
-             "being", "have", "has", "had", "having", "do", "does", 
-             "did", "doing", "a", "an", "the", "and", "but", 
-             "if", "or", "because", "as", "until", "while", 
-             "of", "at", "by", "for", "with", "about", 
-             "against", "between", "into", "through", "during", "before", 
-             "after", "above", "below", "to", "from", "up", "down", "in", 
-             "out", "on", "off", "over", "under", "again", "further", "then", 
-             "once", "here", "there", "when", "where", "why", "how", "all", 
-             "any", "both", "each", "few", "more", "most", "other", "some", 
-             "such", "no", "nor", "not", "only", "own", "same", "so", 
-             "than", "too", "very", "s", "t", "can", "will", "just", "don", 
-             "should", "now"])
-LOGGER.start("filtering stopwords")
-TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
-LOGGER.end()
-
-EPOCHS = 5
-BATCHSIZE = 4
-EMBEDSIZE = 100
-LEARNING_RATE = 0.1
-VOCAB = set(TEXT)
-WINDOWSIZE = 2
-
-VOCABSIZE = len(VOCAB)
-
-LOGGER.start("creating i2w, w2i")
-i2w = dict(enumerate(VOCAB))
-w2i = { v: k for (k, v) in i2w.items() }
-LOGGER.end()
-
-def hot(ws):
+def hot(ws, w2i):
     """
     hot vector for each word in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
     for w in ws: v[w2i[w]] = 1.0
     return v
-
-LOGGER.start("creating DATA")
-DATA = []
-for i in progressbar.progressbar(range((len(TEXT) - 2 * WINDOWSIZE))):
-    ix = i + WINDOWSIZE
-
-    wsfocus = [TEXT[ix]]
-    wsctx = [TEXT[ix + deltaix] for deltaix in range(-WINDOWSIZE, WINDOWSIZE + 1)]
-    DATA.append(torch.stack([hot(wsfocus), hot(wsctx)]))
-DATA = torch.stack(DATA)
-LOGGER.end()
 
 def batch(xs):
     ix = 0
@@ -136,11 +101,6 @@ def batch(xs):
         ix += BATCHSIZE
         yield data
 
-# model matrix
-# EMBEDM = nn.Parameter(torch.randn(VOCABSIZE, EMBEDSIZE)).to(DEVICE)
-LOGGER.start("creating EMBEDM")
-EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
-LOGGER.end()
 
 def norm(v, w, metric):
     dot = torch.mm(torch.mm(v.view(1, -1), metric), w.view(-1, 1))
@@ -203,97 +163,174 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 
-LOGGER.start("creating optimizer and loss function")
-optimizer = optim.SGD([EMBEDM], lr=LEARNING_RATE)
-loss = nn.MSELoss()
+class Parameters:
+    def __init__(self, LOGGER, DEVICE, VOCABSIZE):
+        self.EPOCHS = 5
+        self.BATCHSIZE = 4
+        self.EMBEDSIZE = 100
+        self.LEARNING_RATE = 0.1
+        self.WINDOWSIZE = 2
+        LOGGER.start("creating EMBEDM")
+        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, self.EMBEDSIZE).to(DEVICE), requires_grad=True))
+        LOGGER.end()
+
+        # metric, currently identity matrix
+        LOGGER.start("creating metric")
+        METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
+        LOGGER.end()
+# =========== Actual code ============
+LOGGER = TimeLogger()
+
+# setup device
+LOGGER.start("setting up device")
+DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
+LOGGER.end("device: %s" % DEVICE)
+
+
+TEXT = load_corpus(LOGGER)
+LOGGER.start("filtering stopwords")
+TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
 LOGGER.end()
 
-# metric, currently identity matrix
-LOGGER.start("creating metric")
-METRIC = torch.eye(EMBEDSIZE).to(DEVICE)
+VOCAB = set(TEXT)
+VOCABSIZE = len(VOCAB)
+
+LOGGER.start("creating i2w, w2i")
+i2w = dict(enumerate(VOCAB))
+w2i = { v: k for (k, v) in i2w.items() }
 LOGGER.end()
 
-# Notice that we do not normalize the vectors in the hidden layer
-# when we train them! this is intentional: In general, these vectors don't
-# seem to be normalized by most people, so it's weird if we begin to
-# normalize them. 
-# Read also: what is the meaning of the length of a vector in word2vec?
-# https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-with progressbar.ProgressBar(max_value=EPOCHS * len(DATA) / BATCHSIZE) as bar:
-    loss_sum = 0
-    ix = 0
-    for epoch in range(EPOCHS):
-        for train in batch(DATA):
-            ix += 1
-            # [BATCHSIZE x VOCABSIZE]
-            xs = train[:, 0].to(DEVICE)
-            # [BATCHSIZE x VOCABSIZE]
-            ysopt = train[:, 1].to(DEVICE)
+params = Parameters(LOGGER, DEVICE, VOCABSIZE)
 
-            optimizer.zero_grad()   # zero the gradient buffers
-            # embedded vectors of the batch vectors
-            # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-            xsembeds = torch.mm(xs, EMBEDM)
 
-            # dots(BATCHSIZE x EMBEDSIZE], 
-            #     [VOCABSIZE x EMBEDSIZE],
-            #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-            xs_dots_embeds = dots(xsembeds, EMBEDM, METRIC)
-
-            l = loss(ysopt, xs_dots_embeds)
-            loss_sum += torch.sum(torch.abs(l)).item()
-            l.backward()
-            optimizer.step()
-            bar.update(bar.value + 1)
-
-            PRINT_PER_NUM_ELEMENTS = 10000
-            PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // BATCHSIZE
-            if (ix % PRINT_PER_NUM_BATCHES == 0):
-                print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
-                      (loss_sum, loss_sum / PRINT_PER_NUM_BATCHES, loss_sum / PRINT_PER_NUM_ELEMENTS))
-                loss_sum = 0
-
-def test_find_close_vectors(w, normalized_embed):
+def test_find_close_vectors(w, wnormalized_embed):
+    """ Find vectors close to w """
     # [1 x VOCABSIZE] 
-    whot = hot([w]).to(DEVICE)
+    whot = hot([w], w2i).to(DEVICE)
     # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-    wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), METRIC)
+    wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
 
     # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-    wix2sim = dots(wembed, normalized_embed, METRIC)
+    wix2sim = dots(wembed, normalized_embed, params.METRIC)
 
     wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
     wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
 
     return wordweights
 
-def test_all_pairs(normalized_embed):
-    # testing
-    for w in VOCAB:
-        wordweights = test_find_close_vectors(w, normalized_embed)
 
-        print("* %s" % w)
-        for (word, weight) in wordweights[:4]:
-            print("\t%s: %s" % (word, weight))
+@click.group()
+@click.argument("loadpath")
+def test(loadpath):
+    global params
+    if loadpath is not None:
+        params = torch.load(loadpath)
 
-def test():
     # [VOCABSIZE x EMBEDSIZE]
-    EMBEDNORM = normalize(EMBEDM, METRIC)
+    EMBEDNORM = normalize(params.EMBEDM, params.METRIC)
 
     ws = raw_input("type in words>>").split()
-
     for w in ws:
-        whot = hot([w]).to(DEVICE)
+        whot = hot([w], w2i).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), METRIC)
+        wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), params.METRIC)
 
         wordweights = test_find_close_vectors(w, EMBEDNORM)
         for (word, weight) in wordweights[:10]:
             print("\t%s: %s" % (word, weight))
 
-while True:
-    try:
-        test()
-    except Exception as e:
-        print("exception:\n%s" % (e, ))
+@click.group()
+def cli():
+    pass
+
+@click.group()
+@click.option('--loadpath', default=None, help='Path to load model from')
+@click.option('--savepath', default=None, help='Path to save model from')
+def train(loadpath, savepath):
+    global params
+    if loadpath is not None:
+        params = torch.load(loadpath)
+
+    LOGGER.start("creating DATA")
+    DATA = []
+    for i in progressbar.progressbar(range((len(TEXT) - 2 * WINDOWSIZE))):
+        ix = i + WINDOWSIZE
+
+        wsfocus = [TEXT[ix]]
+        wsctx = [TEXT[ix + deltaix] for deltaix in range(-WINDOWSIZE, WINDOWSIZE + 1)]
+        DATA.append(torch.stack([hot(wsfocus), hot(wsctx)]))
+    DATA = torch.stack(DATA)
+    LOGGER.end()
+
+    LOGGER.start("creating optimizer and loss function")
+    optimizer = optim.SGD([EMBEDM], lr=LEARNING_RATE)
+    loss = nn.MSELoss()
+    LOGGER.end()
+
+
+    # Notice that we do not normalize the vectors in the hidden layer
+    # when we train them! this is intentional: In general, these vectors don't
+    # seem to be normalized by most people, so it's weird if we begin to
+    # normalize them. 
+    # Read also: what is the meaning of the length of a vector in word2vec?
+    # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
+
+    with progressbar.ProgressBar(max_value=EPOCHS * len(DATA) / BATCHSIZE) as bar:
+        loss_sum = 0
+        ix = 0
+        for epoch in range(EPOCHS):
+            for train in batch(DATA):
+                ix += 1
+                # [BATCHSIZE x VOCABSIZE]
+                xs = train[:, 0].to(DEVICE)
+                # [BATCHSIZE x VOCABSIZE]
+                ysopt = train[:, 1].to(DEVICE)
+
+                optimizer.zero_grad()   # zero the gradient buffers
+                # embedded vectors of the batch vectors
+                # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+                xsembeds = torch.mm(xs, EMBEDM)
+
+                # dots(BATCHSIZE x EMBEDSIZE], 
+                #     [VOCABSIZE x EMBEDSIZE],
+                #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+                xs_dots_embeds = dots(xsembeds, EMBEDM, METRIC)
+
+                l = loss(ysopt, xs_dots_embeds)
+                loss_sum += torch.sum(torch.abs(l)).item()
+                l.backward()
+                optimizer.step()
+                bar.update(bar.value + 1)
+
+                PRINT_PER_NUM_ELEMENTS = 10000
+                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // BATCHSIZE
+                if (ix % PRINT_PER_NUM_BATCHES == 0):
+                    print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
+                          (loss_sum, loss_sum / PRINT_PER_NUM_BATCHES, loss_sum / PRINT_PER_NUM_ELEMENTS))
+                    loss_sum = 0
+
+                SAVE_PER_NUM_ELEMENTS = 20000
+                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // BATCHSIZE
+
+                if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
+                    LOGGER.start("saving model to %s" % (savepath))
+                    torch.save(params, savepath)
+                    LOGGER.end()
+    
+    LOGGER.start("saving model to %s" % (savepath))
+    torch.save(params, savepath)
+    LOGGER.end()
+@click.command()
+@click.argument(modelpath)
+def testcli():
+    EMBEDM.load_state_dict(torch.load(modelpath))
+    while True:
+        try:
+            test()
+        except Exception as e:
+            print("exception:\n%s" % (e, ))
+
+if __name__ == "__main__":
+    torch_status_dump()
+    cli()

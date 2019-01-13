@@ -1,5 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+from __future__ import print_function
 from collections import Counter
+
 import itertools
 import torch
 import torch.nn as nn
@@ -14,28 +16,52 @@ import sys
 import click
 import datetime 
 import math
-TEXT = """we are about to study the idea of a computational process.
-computational processes are abstract beings that inhabit computers.
-as they evolve, processes manipulate other abstract things called data.
-the evolution of a process is directed by a pattern of rules                                                                      called a program.
-people create programs to direct processes.
-in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
+import progressbar
+
+class TimeLogger:
+    def __init__(self):
+        pass
+    def start(self, toprint):
+        self.t = datetime.datetime.now()
+        print(str(toprint) + "...", end="")
+
+    def end(self, toprint=None):
+        now = datetime.datetime.now()
+        if(toprint): print(toprint)
+        print("Done. time: %s" % (now - self.t))
+        if (toprint): print("--")
+
+LOGGER = TimeLogger()
+
+# setup device
+LOGGER.start("setting up device")
+DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
+LOGGER.end("device: %s" % DEVICE)
+
 def load_corpus():
+    return  """we are about to study the idea of a computational process.
+     computational processes are abstract beings that inhabit computers.
+     as they evolve, processes manipulate other abstract things called data.
+     the evolution of a process is directed by a pattern of rules called a program.
+     people create programs to direct processes.
+     in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
     CORPUS_NAME = "text8"
-    print ("loading corpus: %s" % (CORPUS_NAME, ))
+    LOGGER.start("loading corpus: %s" % CORPUS_NAME)
     try:
-        print("loading gensim locally...")
         sys.path.insert(0, api.base_dir)
         module = __import__(CORPUS_NAME)
         CORPUS = module.load_data()
-        print("Done.")
     except Exception as e:
         print("unable to find text8 locally.\nERROR: %s" % (e, ))
         print("Downloading using gensim-data...")
         CORPUS = api.load(CORPUS_NAME)
         print("Done.")
 
-    TEXT = list(CORPUS)[0]
+    text = list(CORPUS)[0]
+    LOGGER.end()
+    return text
+
+TEXT = load_corpus()
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
              "you", "your", "yours", "yourself", "yourselves", "he", "him", 
@@ -55,18 +81,23 @@ STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves",
              "such", "no", "nor", "not", "only", "own", "same", "so", 
              "than", "too", "very", "s", "t", "can", "will", "just", "don", 
              "should", "now"])
+LOGGER.start("filtering stopwords")
 TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
+LOGGER.end()
 
-EPOCHS = 30
+EPOCHS = 2
 BATCHSIZE = 2
-EMBEDSIZE = 5
+EMBEDSIZE = 100
+LEARNING_RATE = 0.025
 VOCAB = set(TEXT)
 WINDOWSIZE = 2
 
 VOCABSIZE = len(VOCAB)
 
+LOGGER.start("creating i2w, w2i")
 i2w = dict(enumerate(VOCAB))
 w2i = { v: k for (k, v) in i2w.items() }
+LOGGER.end()
 
 def hot(ws):
     """
@@ -76,6 +107,7 @@ def hot(ws):
     for w in ws: v[w2i[w]] = 1.0
     return v
 
+LOGGER.start("creating DATA")
 DATA = []
 for i in range((len(TEXT) - 2 * WINDOWSIZE)):
     ix = i + WINDOWSIZE
@@ -84,6 +116,7 @@ for i in range((len(TEXT) - 2 * WINDOWSIZE)):
     wsctx = [TEXT[ix + deltaix] for deltaix in range(-WINDOWSIZE, WINDOWSIZE + 1)]
     DATA.append(torch.stack([hot(wsfocus), hot(wsctx)]))
 DATA = torch.stack(DATA)
+LOGGER.end()
 
 def batch(xs):
     ix = 0
@@ -93,15 +126,15 @@ def batch(xs):
         yield data
 
 # model matrix
-INM = nn.Parameter(torch.randn(VOCABSIZE, EMBEDSIZE))
+# EMBEDM = nn.Parameter(torch.randn(VOCABSIZE, EMBEDSIZE)).to(DEVICE)
+LOGGER.start("creating EMBEDM")
+EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+LOGGER.end()
 
 def norm(v, w, metric):
     dot = torch.mm(torch.mm(v.view(1, -1), metric), w.view(-1, 1))
     return dot
 
-def normalize(v, metric):
-    normsq = norm(v, v, metric).item()
-    return v.float() / torch.sqrt(normsq)
 
 def dots(vs, ws, metric):
     """Take the dot product of each element in vs with elements in ws"""
@@ -121,14 +154,30 @@ def dots(vs, ws, metric):
     #     v = vs[vix, :]
     #     for wix in range(VOCABSIZE):
     #         # w = [EMBEDSIZE x 1]
-    #         w = INM[wix, :]
+    #         w = EMBEDM[wix, :]
     #         # [1 x EMBEDSIZE] x [EMBEDSIZE x EMBEDSIZE] x [EMBEDSIZE x 1] = [1x1]
     #         outs[vix][wix] = cosinesim(v, w, metric)
     # return outs
+    
+def normalize(vs, metric):
+    # vs = [S1 x EMBEDSIZE]
+    # out = [S1 x EMBEDSIZE]
+
+    # vs_dots_vs = [S1 x S1]
+    vs_dots_vs = dots(vs, vs, metric)
+    # norm = S1 x 1
+    norm = torch.sqrt(torch.diag(vs_dots_vs)).view(-1, 1)
+    # normvs = S1 x 1
+    normvs =  vs / norm
+
+    ERROR_THRESHOLD = 0.1
+    assert(torch.norm(torch.diag(dots(normvs, normvs, metric)) - torch.ones(len(vs)).to(DEVICE)).item() < ERROR_THRESHOLD)
+    return normvs
 
 def cosinesim(v, w, metric):
     # vs = [1 x EMBEDSIZE]
     # ws = [1 x EMBEDSIZE]
+    # out = [1 x 1]
 
     # v . w / |v||w| = (v.w)^2 / |v|^2 |w|^2
     # [1 x 1]
@@ -143,11 +192,15 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 
-optimizer = optim.SGD([INM], lr=0.01)
+LOGGER.start("creating optimizer and loss function")
+optimizer = optim.SGD([EMBEDM], lr=LEARNING_RATE)
 loss = nn.MSELoss()
+LOGGER.end()
 
 # metric, currently identity matrix
-METRIC = torch.eye(EMBEDSIZE)
+LOGGER.start("creating metric")
+METRIC = torch.eye(EMBEDSIZE).to(DEVICE)
+LOGGER.end()
 
 # Notice that we do not normalize the vectors in the hidden layer
 # when we train them! this is intentional: In general, these vectors don't
@@ -156,50 +209,48 @@ METRIC = torch.eye(EMBEDSIZE)
 # Read also: what is the meaning of the length of a vector in word2vec?
 # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-for _ in range(EPOCHS):
-    for train in batch(DATA):
-        # [BATCHSIZE x VOCABSIZE]
-        xs = train[:, 0]
-        # [BATCHSIZE x VOCABSIZE]
-        ysopt = train[:, 1]
-        # [BATCHSIZE x EMBEDSIZE]
-        ysopt_embed = torch.mm(ysopt, INM)
+with progressbar.ProgressBar(max_value=EPOCHS * len(DATA) / BATCHSIZE) as bar:
+    for epoch in range(EPOCHS):
+        for train in batch(DATA):
+            # [BATCHSIZE x VOCABSIZE]
+            xs = train[:, 0].to(DEVICE)
+            # [BATCHSIZE x VOCABSIZE]
+            ysopt = train[:, 1].to(DEVICE)
 
-        optimizer.zero_grad()   # zero the gradient buffers
-        # embedded vectors of the batch vectors
-        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-        xsembeds = torch.mm(xs, INM)
+            optimizer.zero_grad()   # zero the gradient buffers
+            # embedded vectors of the batch vectors
+            # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+            xsembeds = torch.mm(xs, EMBEDM)
 
-        # dots(BATCHSIZE x EMBEDSIZE], 
-        #     [VOCABSIZE x EMBEDSIZE],
-        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x EMBEDSIZE]
-        xs_dots_embeds = dots(xsembeds, INM, METRIC)
+            # dots(BATCHSIZE x EMBEDSIZE], 
+            #     [VOCABSIZE x EMBEDSIZE],
+            #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+            xs_dots_embeds = dots(xsembeds, EMBEDM, METRIC)
 
-        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-        ysembed = torch.mm(ysopt, INM)
+            l = loss(ysopt, xs_dots_embeds)
+            l.backward()
+            optimizer.step()
+            bar.update(bar.value + 1)
 
-        l = loss(ysopt_embed, ysembed)
-        l.backward()
-        optimizer.step()
 
-# testing
-for w in VOCAB:
-    # [1 x VOCABSIZE] 
-    whot = hot([w])
-    # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-    wembed = torch.mm(whot.view(1, -1), INM)
+def test():
+    # [VOCABSIZE x EMBEDSIZE]
+    EMBEDNORM = normalize(EMBEDM, METRIC)
 
-    # [1 x VOCABSIZE]
-    w2sim = torch.zeros(VOCABSIZE).float()
-    # w2sim = cosinesim(wembed, INM, METRIC)
-    for ix in range(VOCABSIZE):
-        curembed = INM[ix, :].view(1, -1)
-        w2sim[ix] = cosinesim(wembed, curembed, METRIC)
+    # testing
+    for w in VOCAB:
+        # [1 x VOCABSIZE] 
+        whot = hot([w]).to(DEVICE)
+        # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
+        wembed = normalize(torch.mm(whot.view(1, -1), EMBEDM), METRIC)
 
-    wordweights = [(i2w[i], w2sim[i].item()) for i in range(VOCABSIZE)]
-    wordweights.sort(key=lambda (w, dot): dot, reverse=True)
-    wordweights = wordweights[:10]
+        # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
+        wix2sim = dots(wembed, EMBEDNORM, METRIC)
 
-    print("* %s"% w)
-    for (word, weight) in wordweights:
-        print("\t%s: %s" % (word, weight))
+        wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+        wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
+
+        print("* %s" % w)
+        for (word, weight) in wordweights[:4]:
+            print("\t%s: %s" % (word, weight))
+test()

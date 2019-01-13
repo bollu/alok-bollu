@@ -3,3 +3,4 @@ pudb
 click
 tabulate
 terminalplot
+progressbar2

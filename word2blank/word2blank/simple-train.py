@@ -208,36 +208,42 @@ def hot(ws, w2i):
     for w in ws: v[w2i[w]] = 1.0
     return v
 
-def test_find_close_vectors(w, normalized_embed):
-    """ Find vectors close to w """
-    # [1 x VOCABSIZE] 
-    whot = hot([w], w2i).to(DEVICE)
-    # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-    wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
 
-    # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-    wix2sim = dots(wembed, normalized_embed, params.METRIC)
+def prompt():
+    """Call to launch prompt interface."""
 
-    wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
-    wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
-
-    return wordweights
-
-
-def prompt_word():
-    # [VOCABSIZE x EMBEDSIZE]
-    EMBEDNORM = normalize(params.EMBEDM, params.METRIC)
-    COMPLETER = WordCompleter(VOCAB)
-
-    ws = prompt("type in word>", completer=COMPLETER).split()
-    for w in ws:
+    def test_find_close_vectors(w, normalized_embed):
+        """ Find vectors close to w in the normalized embedding"""
+        # [1 x VOCABSIZE] 
         whot = hot([w], w2i).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
         wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
 
-        wordweights = test_find_close_vectors(w, EMBEDNORM)
-        for (word, weight) in wordweights[:10]:
-            print("\t%s: %s" % (word, weight))
+        # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
+        wix2sim = dots(wembed, normalized_embed, params.METRIC)
+
+        wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+        wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
+
+        return wordweights
+
+
+    def prompt_word():
+        """Prompt for a word and print the closest vectors to the word"""
+        # [VOCABSIZE x EMBEDSIZE]
+        EMBEDNORM = normalize(params.EMBEDM, params.METRIC)
+        COMPLETER = WordCompleter(VOCAB)
+
+        ws = prompt("type in word>", completer=COMPLETER).split()
+        for w in ws:
+            wordweights = test_find_close_vectors(w, EMBEDNORM)
+            for (word, weight) in wordweights[:10]:
+                print("\t%s: %s" % (word, weight))
+    while True:
+        try:
+            prompt_word()
+        except Exception as e:
+            print("exception:\n%s" % (e, ))
 
 @click.group()
 def cli():
@@ -341,8 +347,8 @@ def testcli(loadpath):
     with open(loadpath, "rb") as lf:
         params = torch.load(lf)
 
-    while True:
-        prompt_word()
+    prompt()
+
 
 cli.add_command(traincli)
 cli.add_command(testcli)

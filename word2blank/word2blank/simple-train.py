@@ -80,6 +80,9 @@ def dots(vs, metric):
     # M = [VOCABSIZE x EMBEDSIZE]
     # vs = [BATCHSIZE x EMBEDSIZE]
     # metric = [EMBEDSIZE x EMBEDSIZE]
+    # v[1XEMBEDSIZE] * metric[EMBEDxEMBED] * M[i, :]^T[EMBED x VOCAB] -> [1 x VOCAB]
+    # v[BATCHX1xEMBEDSIZE] * metric[BATCHxEMBEDxEMBED] * M[i, :]^T[EMBED x VOCAB] -> [1 x VOCAB]
+
 
     # outs = [BATCHSIZE x VOCABSIZE]
     outs = torch.zeros([BATCHSIZE, VOCABSIZE])

@@ -1,7 +1,34 @@
-#!/usr/bin/env python
-from __future__ import print_function
-from __future__ import unicode_literals
+#!/usr/bin/env python3
 from collections import Counter
+
+
+import argparse
+import sys
+import datetime 
+
+def current_time_str():
+    """Return the current time as a string"""
+    return datetime.datetime.now().strftime("%X-%a-%b")
+
+def parse(s):
+    def DEFAULT_MODELPATH():
+        now = datetime.datetime.now()
+        return "save-auto-%s.model" % (current_time_str(), )
+    p = argparse.ArgumentParser()
+    sub = p.add_subparsers(dest="command")
+    train = sub.add_parser("train", help="train the model")
+    train.add_argument("--loadpath", help="path to model file to load from", default=None)
+    train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
+
+    test = sub.add_parser("test", help="test the model")
+    test.add_argument("loadpath",  help="path to model file")
+    
+    return p.parse_args(s)
+# if launching from the shell, parse first, then start loading datasets...
+if __name__ == "__main__":
+    global PARSED
+    PARSED = parse(sys.argv[1:])
+    assert (PARSED.command in ["train", "test"])
 
 import itertools
 import torch
@@ -11,16 +38,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 import gensim.downloader as api
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
-from gensim.models.word2vec import Word2Vec
 import numpy as np
-import signal
-import sys
-import click
-import datetime 
 import math
 import progressbar
+import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit import prompt
+from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
 
 
@@ -168,14 +191,10 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 
-def current_time_str():
-    """Return the current time as a string"""
-    return datetime.datetime.now().strftime("%X-%a-%b")
-
 
 class Parameters:
     """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE, TEXT, VOCAB, VOCABSIZE):
+    def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 5
         self.BATCHSIZE = 4
@@ -183,6 +202,18 @@ class Parameters:
         self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
         self.create_time = current_time_str()
+
+        TEXT = load_corpus(LOGGER)
+        LOGGER.start("filtering stopwords")
+        TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
+        LOGGER.end()
+
+
+        LOGGER.start("building vocabulary")
+        VOCAB = set(TEXT)
+        VOCABSIZE = len(VOCAB)
+        LOGGER.end()
+
 
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, self.EMBEDSIZE).to(DEVICE), requires_grad=True))
@@ -267,67 +298,44 @@ def cli_prompt():
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
         wix2sim = dots(wembed, normalized_embed, PARAMS.METRIC)
 
-        wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+        wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
 
         return wordweights
 
 
-    def prompt_word():
+    def prompt_word(session):
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
         EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
-        COMPLETER = WordCompleter(VOCAB)
+        COMPLETER = WordCompleter(PARAMS.DATASET.VOCAB)
 
-        ws = prompt("type in word>", completer=COMPLETER).split()
+        ws = session.prompt("type in word>", completer=COMPLETER).split()
         for w in ws:
             wordweights = test_find_close_vectors(w, EMBEDNORM)
             for (word, weight) in wordweights[:10]:
-                print("\t%s: %s" % (word, weight))
+                print_formatted_text("\t%s: %s" % (word, weight))
+
+    session = PromptSession()
     while True:
         try:
-            prompt_word()
+            prompt_word(session)
         except Exception as e:
-            print("exception:\n%s" % (e, ))
+            print_formatted_text("exception:\n%s" % (e, ))
+
 
 # =========== Actual code ============
 LOGGER = TimeLogger()
+
 
 # setup device
 LOGGER.start("setting up device")
 DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
 LOGGER.end("device: %s" % DEVICE)
 
-
-TEXT = load_corpus(LOGGER)
-LOGGER.start("filtering stopwords")
-TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
-LOGGER.end()
+PARAMS = Parameters(LOGGER, DEVICE)
 
 
-LOGGER.start("building vocabulary")
-VOCAB = set(TEXT)
-VOCABSIZE = len(VOCAB)
-LOGGER.end()
-
-LOGGER.start("creating parameters...")
-PARAMS = Parameters(LOGGER, DEVICE, TEXT, VOCAB, VOCABSIZE)
-LOGGER.end()
-
-
-
-@click.group()
-def cli():
-    pass
-
-
-def DEFAULT_MODELPATH():
-    now = datetime.datetime.now()
-    return "save-auto-%s.model" % (current_time_str(), )
-
-@click.command()
-@click.option('--loadpath', default=None, help='Path to load model')
-@click.option('--savepath', default=DEFAULT_MODELPATH(), help='Path to save model')
 def traincli(loadpath, savepath):
     global PARAMS
     def save():
@@ -400,8 +408,6 @@ def traincli(loadpath, savepath):
     cli_prompt()
 
 
-@click.command()
-@click.argument("loadpath")
 def testcli(loadpath):
     global PARAMS
 
@@ -412,7 +418,12 @@ def testcli(loadpath):
     cli_prompt()
 
 
-cli.add_command(traincli)
-cli.add_command(testcli)
+
 if __name__ == "__main__":
-    cli()
+    if PARSED.command == "train":
+        traincli(PARSED.loadpath, PARSED.savepath)
+    elif PARSED.command == "test":
+        testcli(PARSED.loadpath)
+    else:
+        raise RuntimeError("unknown command: %s" % PARSED.command)
+

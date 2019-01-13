@@ -10,7 +10,11 @@
 $ sbatch slurm-job.sh
 $ tail -f slurm-<number>.out # to view file as it's written to
 ```
+# To use
+```
+./run.py --help
+```
 
-# to investigate:
+# To investigate:
 - [sacred](https://sacred.readthedocs.io/en/latest/experiment.html)
 - [DVC](https://dvc.org/doc/get-started)

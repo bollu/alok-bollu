@@ -82,7 +82,7 @@ def load_corpus(LOGGER):
 
     corpus = list(corpus)
     print("number of documents in corpus: %s" % (len(corpus), ))
-    DOCS_TO_TAKE = 1
+    DOCS_TO_TAKE = len(corpus)
     print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
     corpus = corpus[:DOCS_TO_TAKE]
     corpus = flatten(corpus)
@@ -175,6 +175,14 @@ class Parameters:
         LOGGER.start("creating metric")
         self.METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
         LOGGER.end()
+
+def mk_word_histogram(ws, vocab):
+    """count frequency of words in words, given vocabulary size."""
+    w2f = { w : 0 for w in vocab }
+    for w in ws:
+        w2f[w] += 1
+    return w2f
+
 # =========== Actual code ============
 LOGGER = TimeLogger()
 
@@ -192,37 +200,40 @@ LOGGER.end()
 VOCAB = set(TEXT)
 VOCABSIZE = len(VOCAB)
 
-LOGGER.start("creating i2w, w2i")
-i2w = dict(enumerate(VOCAB))
-w2i = { v: k for (k, v) in i2w.items() }
+LOGGER.start("creating I2W, W2I")
+I2W = dict(enumerate(VOCAB))
+W2I = { v: k for (k, v) in I2W.items() }
 LOGGER.end()
 
+LOGGER.start("counting frequency of words")
+W2F = mk_word_histogram(TEXT, VOCAB)
+LOGGER.end()
 
 params = Parameters(LOGGER, DEVICE, VOCABSIZE)
 
-def hot(ws, w2i):
+def hot(ws, W2I):
     """
     hot vector for each word in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
-    for w in ws: v[w2i[w]] = 1.0
+    for w in ws: v[W2I[w]] = 1.0
     return v
 
 
-def prompt():
+def cli_prompt():
     """Call to launch prompt interface."""
 
     def test_find_close_vectors(w, normalized_embed):
         """ Find vectors close to w in the normalized embedding"""
         # [1 x VOCABSIZE] 
-        whot = hot([w], w2i).to(DEVICE)
+        whot = hot([w], W2I).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
         wembed = normalize(torch.mm(whot.view(1, -1), params.EMBEDM), params.METRIC)
 
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
         wix2sim = dots(wembed, normalized_embed, params.METRIC)
 
-        wordweights = [(i2w[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+        wordweights = [(I2W[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
 
         return wordweights
@@ -276,7 +287,7 @@ def traincli(loadpath, savepath):
 
         wsfocus = [TEXT[ix]]
         wsctx = [TEXT[ix + deltaix] for deltaix in range(-params.WINDOWSIZE, params.WINDOWSIZE + 1)]
-        DATA.append(torch.stack([hot(wsfocus, w2i), hot(wsctx, w2i)]))
+        DATA.append(torch.stack([hot(wsfocus, W2I), hot(wsctx, W2I)]))
     DATA = torch.stack(DATA)
     LOGGER.end()
 
@@ -336,7 +347,7 @@ def traincli(loadpath, savepath):
                     save()
     
     save()
-    prompt_word()
+    cli_prompt()
 
 
 @click.command()
@@ -347,7 +358,7 @@ def testcli(loadpath):
     with open(loadpath, "rb") as lf:
         params = torch.load(lf)
 
-    prompt()
+    cli_prompt()
 
 
 cli.add_command(traincli)

@@ -202,6 +202,8 @@ class Parameters:
         self.DATASET = SkipGramDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
         LOGGER.end()
 
+        # TODO: pytorch dataloader is sad since it doesn't save state.
+        # make a version that does save state.
         LOGGER.start("creating DATA\n")
         self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
@@ -258,14 +260,14 @@ def cli_prompt():
     def test_find_close_vectors(w, normalized_embed):
         """ Find vectors close to w in the normalized embedding"""
         # [1 x VOCABSIZE] 
-        whot = hot([w], PARAMS.W2I, PARAMS.VOCABSIZE).to(DEVICE)
+        whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
         wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.EMBEDM), PARAMS.METRIC)
 
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
         wix2sim = dots(wembed, normalized_embed, PARAMS.METRIC)
 
-        wordweights = [(PARAMS.I2W[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
+        wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
 
         return wordweights
@@ -405,9 +407,7 @@ def testcli(loadpath):
 
     with open(loadpath, "rb") as lf:
         global PARAMS
-        print("params: %s" % PARAMS)
         PARAMS = torch.load(lf)
-        print("params: %s" % PARAMS)
 
     cli_prompt()
 

@@ -20,8 +20,41 @@ as they evolve, processes manipulate other abstract things called data.
 the evolution of a process is directed by a pattern of rules                                                                      called a program.
 people create programs to direct processes.
 in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
-STOPWORDS = set(["the", "as", "in", "is", "to", "of", "that", "they", "a",
-                 "with", "by"])
+def load_corpus():
+    CORPUS_NAME = "text8"
+    print ("loading corpus: %s" % (CORPUS_NAME, ))
+    try:
+        print("loading gensim locally...")
+        sys.path.insert(0, api.base_dir)
+        module = __import__(CORPUS_NAME)
+        CORPUS = module.load_data()
+        print("Done.")
+    except Exception as e:
+        print("unable to find text8 locally.\nERROR: %s" % (e, ))
+        print("Downloading using gensim-data...")
+        CORPUS = api.load(CORPUS_NAME)
+        print("Done.")
+
+    TEXT = list(CORPUS)[0]
+
+STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
+             "you", "your", "yours", "yourself", "yourselves", "he", "him", 
+             "his", "himself", "she", "her", "hers", "herself", "it", "its", 
+             "itself", "they", "them", "their", "theirs", "themselves", 
+             "what", "which", "who", "whom", "this", "that", "these", 
+             "those", "am", "is", "are", "was", "were", "be", "been", 
+             "being", "have", "has", "had", "having", "do", "does", 
+             "did", "doing", "a", "an", "the", "and", "but", 
+             "if", "or", "because", "as", "until", "while", 
+             "of", "at", "by", "for", "with", "about", 
+             "against", "between", "into", "through", "during", "before", 
+             "after", "above", "below", "to", "from", "up", "down", "in", 
+             "out", "on", "off", "over", "under", "again", "further", "then", 
+             "once", "here", "there", "when", "where", "why", "how", "all", 
+             "any", "both", "each", "few", "more", "most", "other", "some", 
+             "such", "no", "nor", "not", "only", "own", "same", "so", 
+             "than", "too", "very", "s", "t", "can", "will", "just", "don", 
+             "should", "now"])
 TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
 
 EPOCHS = 30
@@ -62,29 +95,23 @@ def batch(xs):
 # model matrix
 INM = nn.Parameter(torch.randn(VOCABSIZE, EMBEDSIZE))
 
-
 def norm(v, w, metric):
     dot = torch.mm(torch.mm(v.view(1, -1), metric), w.view(-1, 1))
     return dot
 
 def normalize(v, metric):
     normsq = norm(v, v, metric).item()
-    return v.float() / math.sqrt(normsq)
+    return v.float() / torch.sqrt(normsq)
 
-def cosinesim(v, w, metric):
-    v = normalize(v, metric)
-    w = normalize(w, metric)
-    return norm(v, w, metric)
-
-def dots(vs, metric):
-    # vs = [BATCHSIZE x EMBEDSIZE]
+def dots(vs, ws, metric):
+    """Take the dot product of each element in vs with elements in ws"""
+    # vs = [S1 x EMBEDSIZE]
+    # ws = [S2 x EMBEDSIZE] | ws^t = [EMBEDSIZE x S2]
     # metric = [EMBEDSIZE x EMBEDSIZE]
-    # M^t = [EMBEDSIZE x VOCABSIZE] | [VOCABSIZE x EMBEDSIZE]
-    # out: [BATCHSIZE x VOCABSIZE]
-    # find the dot product of every vector v in `vs`, with each vector in `INM`
-    # read code below to see the unrolled version.
+    # vs * metric = [S1 x EMBEDSIZE]
+    # vs * metric * ws^t = [S1 x EMBEDSIZE] x [EMBEDSIZE x S1] = [S1 x S2]
 
-    return torch.mm(torch.mm(vs, metric), INM.t())
+    return torch.mm(torch.mm(vs, metric), ws.t())
 
 
     # outs = [BATCHSIZE x VOCABSIZE]
@@ -99,11 +126,35 @@ def dots(vs, metric):
     #         outs[vix][wix] = cosinesim(v, w, metric)
     # return outs
 
+def cosinesim(v, w, metric):
+    # vs = [1 x EMBEDSIZE]
+    # ws = [1 x EMBEDSIZE]
+
+    # v . w / |v||w| = (v.w)^2 / |v|^2 |w|^2
+    # [1 x 1]
+    vs_dot_ws = dots(v, w, metric)
+
+
+    # [1 x 1]
+    vs_dot_vs = torch.sqrt(dots(v, v, metric))
+    # [1 x 1]
+    ws_dot_ws = torch.sqrt(dots(w, w, metric))
+
+    return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
+
+
 optimizer = optim.SGD([INM], lr=0.01)
 loss = nn.MSELoss()
 
 # metric, currently identity matrix
-metric = torch.eye(EMBEDSIZE)
+METRIC = torch.eye(EMBEDSIZE)
+
+# Notice that we do not normalize the vectors in the hidden layer
+# when we train them! this is intentional: In general, these vectors don't
+# seem to be normalized by most people, so it's weird if we begin to
+# normalize them. 
+# Read also: what is the meaning of the length of a vector in word2vec?
+# https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
 for _ in range(EPOCHS):
     for train in batch(DATA):
@@ -111,16 +162,23 @@ for _ in range(EPOCHS):
         xs = train[:, 0]
         # [BATCHSIZE x VOCABSIZE]
         ysopt = train[:, 1]
+        # [BATCHSIZE x EMBEDSIZE]
+        ysopt_embed = torch.mm(ysopt, INM)
 
         optimizer.zero_grad()   # zero the gradient buffers
         # embedded vectors of the batch vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
         xsembeds = torch.mm(xs, INM)
 
-        # [BATCHSIZE x VOCABSIZE]
-        ysembeds = dots(xsembeds, metric)
+        # dots(BATCHSIZE x EMBEDSIZE], 
+        #     [VOCABSIZE x EMBEDSIZE],
+        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x EMBEDSIZE]
+        xs_dots_embeds = dots(xsembeds, INM, METRIC)
 
-        l = loss(ysembeds, ysopt)
+        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+        ysembed = torch.mm(ysopt, INM)
+
+        l = loss(ysopt_embed, ysembed)
         l.backward()
         optimizer.step()
 
@@ -131,13 +189,14 @@ for w in VOCAB:
     # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
     wembed = torch.mm(whot.view(1, -1), INM)
 
-    dots = torch.zeros(VOCABSIZE).float()
+    # [1 x VOCABSIZE]
+    w2sim = torch.zeros(VOCABSIZE).float()
+    # w2sim = cosinesim(wembed, INM, METRIC)
     for ix in range(VOCABSIZE):
-        v = INM[ix, :]
-        # print("*v: %s\n*wembed: %s\n*metric: %s"% (v, wembed, metric))
-        dots[ix] = cosinesim(v, wembed, metric)
+        curembed = INM[ix, :].view(1, -1)
+        w2sim[ix] = cosinesim(wembed, curembed, METRIC)
 
-    wordweights = [(i2w[i], dots[i].item()) for i in range(VOCABSIZE)]
+    wordweights = [(i2w[i], w2sim[i].item()) for i in range(VOCABSIZE)]
     wordweights.sort(key=lambda (w, dot): dot, reverse=True)
     wordweights = wordweights[:10]
 

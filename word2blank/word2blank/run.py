@@ -210,7 +210,7 @@ class Parameters:
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = None
+        self.NWORDS = 100000
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -384,6 +384,9 @@ def traincli(loadpath, savepath):
     bar =  progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA)))
     loss_sum = 0
     ix = 0
+    time_last_save = datetime.datetime.now()
+    time_last_print = datetime.datetime.now()
+    last_print_ix = 0
     for epoch in range(PARAMS.EPOCHS):
         for train in PARAMS.DATA:
             ix += 1
@@ -408,20 +411,28 @@ def traincli(loadpath, savepath):
             PARAMS.optimizer.step()
             bar.update(bar.value + 1)
 
-            PRINT_PER_NUM_ELEMENTS = 10000
-            PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
-            if (ix % PRINT_PER_NUM_BATCHES == 0):
-                print("\nLOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
+            # updating data
+            now = datetime.datetime.now()
+
+            # printing
+            TARGET_PRINT_TIME_IN_S = 20 # print progress every 20 seconds
+            if (now - time_last_print).seconds > TARGET_PRINT_TIME_IN_S:
+                nbatches = ix - last_print_ix
+                print("\nLOSSES sum: %s | avg per batch(#batch=%s): %s | avg per elements(#elems=%s): %s" % 
                       (loss_sum,
-                       loss_sum / PRINT_PER_NUM_BATCHES,
-                       loss_sum / PRINT_PER_NUM_ELEMENTS))
+                       nbatches,
+                       loss_sum / nbatches,
+                       nbatches * PARAMS.BATCHSIZE,
+                       loss_sum / (nbatches * PARAMS.BATCHSIZE)))
                 loss_sum = 0
+                time_last_print = now
+                last_print_ix = ix
 
-            SAVE_PER_NUM_ELEMENTS = 20000
-            SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
-
-            if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
+            # saving
+            TARGET_SAVE_TIME_IN_S = 60 * 15 # save every 15 minutes
+            if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
+                time_last_save = now
     save()
 
 

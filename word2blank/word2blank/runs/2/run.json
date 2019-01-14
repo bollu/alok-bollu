@@ -1,0 +1,135 @@
+{
+  "artifacts": [
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model",
+    "save-auto-07:17:23-Mon-Jan.model"
+  ],
+  "command": "main",
+  "experiment": {
+    "base_dir": "/home/bollu/alok-bollu/word2blank/word2blank",
+    "dependencies": [
+      "gensim==3.6.0",
+      "numpy==1.15.4",
+      "progressbar2==3.39.2",
+      "prompt-toolkit==2.0.7",
+      "sacred==0.7.4",
+      "torch==1.0.0"
+    ],
+    "mainfile": "run.py",
+    "name": "run",
+    "repositories": [
+      {
+        "commit": "f80d3ed4aec2e6bcb13ae876d77e9729b9619f21",
+        "dirty": true,
+        "url": "git://home/bollu/alok-bollu"
+      }
+    ],
+    "sources": [
+      [
+        "run.py",
+        "_sources/run_67ff585387469a2932c1261ded4124e0.py"
+      ]
+    ]
+  },
+  "heartbeat": "2019-01-14T01:49:31.632911",
+  "host": {
+    "ENV": {},
+    "cpu": "Intel(R) Xeon(R) CPU E5-2640 v4 @ 2.40GHz",
+    "gpus": {
+      "driver_version": "396.44",
+      "gpus": [
+        {
+          "model": "GeForce GTX 1080 Ti",
+          "persistence_mode": false,
+          "total_memory": 11178
+        },
+        {
+          "model": "GeForce GTX 1080 Ti",
+          "persistence_mode": false,
+          "total_memory": 11178
+        },
+        {
+          "model": "GeForce GTX 1080 Ti",
+          "persistence_mode": false,
+          "total_memory": 11178
+        },
+        {
+          "model": "GeForce GTX 1080 Ti",
+          "persistence_mode": false,
+          "total_memory": 11178
+        }
+      ]
+    },
+    "hostname": "gnode14",
+    "os": [
+      "Linux",
+      "Linux-4.15.0-36-generic-x86_64-with-Ubuntu-16.04-xenial"
+    ],
+    "python_version": "3.5.2"
+  },
+  "meta": {
+    "command": "main",
+    "options": {
+      "--beat_interval": null,
+      "--capture": null,
+      "--comment": null,
+      "--debug": false,
+      "--enforce_clean": false,
+      "--file_storage": null,
+      "--force": false,
+      "--help": false,
+      "--loglevel": null,
+      "--mongo_db": null,
+      "--name": null,
+      "--pdb": false,
+      "--print_config": false,
+      "--priority": null,
+      "--queue": false,
+      "--sql": null,
+      "--tiny_db": null,
+      "--unobserved": false
+    }
+  },
+  "resources": [],
+  "result": null,
+  "start_time": "2019-01-14T01:47:38.130659",
+  "status": "COMPLETED",
+  "stop_time": "2019-01-14T01:49:31.629756"
+}

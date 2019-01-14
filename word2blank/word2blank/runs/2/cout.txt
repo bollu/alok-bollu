@@ -1,0 +1,2075 @@
+INFO - run - Running command 'main'
+INFO - run - Started run with ID "2"
+creating optimizer and loss function...
+    Done. time: 0:00:00.000142
+
+                                                                               
+
+N/A% (0 of 3072) |                       | Elapsed Time: 0:00:00 ETA:  --:--:--
+                                                                               
+
+  0% (5 of 3072) |                       | Elapsed Time: 0:00:00 ETA:   0:01:11
+                                                                               
+
+  0% (9 of 3072) |                       | Elapsed Time: 0:00:00 ETA:   0:01:18
+                                                                               
+
+  0% (13 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:19
+                                                                               
+
+  0% (17 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:20
+                                                                               
+
+  0% (21 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:20
+                                                                               
+
+  0% (25 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:21
+                                                                               
+
+  0% (29 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:20
+                                                                               
+
+  1% (33 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:20
+                                                                               
+
+  1% (37 of 3072) |                      | Elapsed Time: 0:00:00 ETA:   0:01:20
+                                                                               
+
+  1% (41 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:19
+                                                                               
+
+  1% (45 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:19
+                                                                               
+
+  1% (49 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:18
+                                                                               
+
+  1% (53 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:18
+                                                                               
+
+  1% (57 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:18
+                                                                               
+
+  1% (61 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:18
+                                                                               
+
+  2% (65 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:17
+                                                                               
+
+  2% (69 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:17
+                                                                               
+
+  2% (73 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:17
+                                                                               
+
+  2% (77 of 3072) |                      | Elapsed Time: 0:00:01 ETA:   0:01:17
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.753374
+
+                                                                               
+
+  2% (78 of 3072) |                      | Elapsed Time: 0:00:02 ETA:   0:01:58
+                                                                               
+
+  2% (82 of 3072) |                      | Elapsed Time: 0:00:02 ETA:   0:01:58
+                                                                               
+
+  2% (86 of 3072) |                      | Elapsed Time: 0:00:02 ETA:   0:01:57
+                                                                               
+
+  2% (91 of 3072) |                      | Elapsed Time: 0:00:03 ETA:   0:01:59
+                                                                               
+
+  3% (96 of 3072) |                      | Elapsed Time: 0:00:03 ETA:   0:01:58
+                                                                               
+
+  3% (100 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:58
+                                                                               
+
+  3% (104 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:58
+                                                                               
+
+  3% (109 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:57
+                                                                               
+
+  3% (113 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:57
+                                                                               
+
+  3% (117 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:57
+                                                                               
+
+  3% (121 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:56
+                                                                               
+
+  4% (125 of 3072) |                     | Elapsed Time: 0:00:03 ETA:   0:01:56
+                                                                               
+
+  4% (129 of 3072) |                     | Elapsed Time: 0:00:04 ETA:   0:01:56
+                                                                               
+
+  4% (133 of 3072) |                     | Elapsed Time: 0:00:04 ETA:   0:01:53
+                                                                               
+
+  4% (138 of 3072) |                     | Elapsed Time: 0:00:04 ETA:   0:01:49
+                                                                               
+
+  4% (143 of 3072) |                     | Elapsed Time: 0:00:04 ETA:   0:01:46
+                                                                               
+
+  4% (147 of 3072) |#                    | Elapsed Time: 0:00:04 ETA:   0:01:44
+                                                                               
+
+  4% (152 of 3072) |#                    | Elapsed Time: 0:00:04 ETA:   0:01:42LOSSES sum: 15742.403213500977 | avg per batch: 201.8256822243715 | avg per elements: 1.5742403213500977
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.789287
+
+                                                                               
+
+  5% (156 of 3072) |#                    | Elapsed Time: 0:00:05 ETA:   0:01:57
+                                                                               
+
+  5% (161 of 3072) |#                    | Elapsed Time: 0:00:05 ETA:   0:01:57
+                                                                               
+
+  5% (166 of 3072) |#                    | Elapsed Time: 0:00:05 ETA:   0:01:59
+                                                                               
+
+  5% (171 of 3072) |#                    | Elapsed Time: 0:00:05 ETA:   0:01:57
+                                                                               
+
+  5% (176 of 3072) |#                    | Elapsed Time: 0:00:05 ETA:   0:01:56
+                                                                               
+
+  5% (181 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:55
+                                                                               
+
+  6% (186 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:53
+                                                                               
+
+  6% (191 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:53
+                                                                               
+
+  6% (196 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:53
+                                                                               
+
+  6% (201 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:51
+                                                                               
+
+  6% (206 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:51
+                                                                               
+
+  6% (211 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:47
+                                                                               
+
+  7% (216 of 3072) |#                    | Elapsed Time: 0:00:06 ETA:   0:01:44
+                                                                               
+
+  7% (221 of 3072) |#                    | Elapsed Time: 0:00:07 ETA:   0:01:41
+                                                                               
+
+  7% (226 of 3072) |#                    | Elapsed Time: 0:00:07 ETA:   0:01:39
+                                                                               
+
+  7% (231 of 3072) |#                    | Elapsed Time: 0:00:07 ETA:   0:01:37LOSSES sum: 15391.297729492188 | avg per batch: 197.32432986528445 | avg per elements: 1.5391297729492188
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.100624
+
+                                                                               
+
+  7% (234 of 3072) |#                    | Elapsed Time: 0:00:08 ETA:   0:02:30
+                                                                               
+
+  7% (239 of 3072) |#                    | Elapsed Time: 0:00:08 ETA:   0:02:30
+                                                                               
+
+  7% (244 of 3072) |#                    | Elapsed Time: 0:00:08 ETA:   0:02:30
+                                                                               
+
+  8% (249 of 3072) |#                    | Elapsed Time: 0:00:08 ETA:   0:02:29
+                                                                               
+
+  8% (254 of 3072) |#                    | Elapsed Time: 0:00:08 ETA:   0:02:29
+                                                                               
+
+  8% (259 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:02:29
+                                                                               
+
+  8% (264 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:02:28
+                                                                               
+
+  8% (269 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:02:28
+                                                                               
+
+  8% (274 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:02:18
+                                                                               
+
+  9% (279 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:02:10
+                                                                               
+
+  9% (284 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:02:04
+                                                                               
+
+  9% (289 of 3072) |#                    | Elapsed Time: 0:00:09 ETA:   0:01:58
+                                                                               
+
+  9% (294 of 3072) |##                   | Elapsed Time: 0:00:09 ETA:   0:01:54
+                                                                               
+
+  9% (299 of 3072) |##                   | Elapsed Time: 0:00:10 ETA:   0:01:50
+                                                                               
+
+  9% (304 of 3072) |##                   | Elapsed Time: 0:00:10 ETA:   0:01:47
+                                                                               
+
+ 10% (309 of 3072) |##                   | Elapsed Time: 0:00:10 ETA:   0:01:44LOSSES sum: 15136.42202758789 | avg per batch: 194.0566926613832 | avg per elements: 1.513642202758789
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.101755
+
+                                                                               
+
+ 10% (312 of 3072) |##                   | Elapsed Time: 0:00:11 ETA:   0:02:15
+                                                                               
+
+ 10% (317 of 3072) |##                   | Elapsed Time: 0:00:11 ETA:   0:02:14
+                                                                               
+
+ 10% (322 of 3072) |##                   | Elapsed Time: 0:00:11 ETA:   0:02:14
+                                                                               
+
+ 10% (327 of 3072) |##                   | Elapsed Time: 0:00:11 ETA:   0:02:14
+                                                                               
+
+ 10% (332 of 3072) |##                   | Elapsed Time: 0:00:11 ETA:   0:02:13
+                                                                               
+
+ 10% (336 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:02:16
+                                                                               
+
+ 11% (341 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:02:16
+                                                                               
+
+ 11% (346 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:02:15
+                                                                               
+
+ 11% (351 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:02:15
+                                                                               
+
+ 11% (356 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:02:07
+                                                                               
+
+ 11% (361 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:02:01
+                                                                               
+
+ 11% (366 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:01:56
+                                                                               
+
+ 12% (371 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:01:51
+                                                                               
+
+ 12% (376 of 3072) |##                   | Elapsed Time: 0:00:12 ETA:   0:01:47
+                                                                               
+
+ 12% (381 of 3072) |##                   | Elapsed Time: 0:00:13 ETA:   0:01:44
+                                                                               
+
+ 12% (386 of 3072) |##                   | Elapsed Time: 0:00:13 ETA:   0:01:41LOSSES sum: 14859.391296386719 | avg per batch: 190.50501662034256 | avg per elements: 1.485939129638672
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.048572
+
+                                                                               
+
+ 12% (390 of 3072) |##                   | Elapsed Time: 0:00:14 ETA:   0:02:06
+                                                                               
+
+ 12% (395 of 3072) |##                   | Elapsed Time: 0:00:14 ETA:   0:02:06
+                                                                               
+
+ 13% (400 of 3072) |##                   | Elapsed Time: 0:00:14 ETA:   0:02:06
+                                                                               
+
+ 13% (405 of 3072) |##                   | Elapsed Time: 0:00:14 ETA:   0:02:05
+                                                                               
+
+ 13% (410 of 3072) |##                   | Elapsed Time: 0:00:14 ETA:   0:02:05
+                                                                               
+
+ 13% (415 of 3072) |##                   | Elapsed Time: 0:00:14 ETA:   0:02:05
+                                                                               
+
+ 13% (420 of 3072) |##                   | Elapsed Time: 0:00:15 ETA:   0:02:05
+                                                                               
+
+ 13% (425 of 3072) |##                   | Elapsed Time: 0:00:15 ETA:   0:02:04
+                                                                               
+
+ 13% (430 of 3072) |##                   | Elapsed Time: 0:00:15 ETA:   0:02:04
+                                                                               
+
+ 14% (435 of 3072) |##                   | Elapsed Time: 0:00:15 ETA:   0:01:57
+                                                                               
+
+ 14% (440 of 3072) |###                  | Elapsed Time: 0:00:15 ETA:   0:01:52
+                                                                               
+
+ 14% (445 of 3072) |###                  | Elapsed Time: 0:00:15 ETA:   0:01:47
+                                                                               
+
+ 14% (450 of 3072) |###                  | Elapsed Time: 0:00:15 ETA:   0:01:44
+                                                                               
+
+ 14% (455 of 3072) |###                  | Elapsed Time: 0:00:15 ETA:   0:01:40
+                                                                               
+
+ 14% (460 of 3072) |###                  | Elapsed Time: 0:00:15 ETA:   0:01:37
+                                                                               
+
+ 15% (465 of 3072) |###                  | Elapsed Time: 0:00:16 ETA:   0:01:35LOSSES sum: 14667.097763061523 | avg per batch: 188.03971491104517 | avg per elements: 1.4667097763061523
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.001001
+
+                                                                               
+
+ 15% (468 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:54
+                                                                               
+
+ 15% (473 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:54
+                                                                               
+
+ 15% (478 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:54
+                                                                               
+
+ 15% (483 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:54
+                                                                               
+
+ 15% (488 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:53
+                                                                               
+
+ 16% (493 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:53
+                                                                               
+
+ 16% (498 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:53
+                                                                               
+
+ 16% (503 of 3072) |###                  | Elapsed Time: 0:00:17 ETA:   0:01:53
+                                                                               
+
+ 16% (508 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:52
+                                                                               
+
+ 16% (513 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:52
+                                                                               
+
+ 16% (518 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:47
+                                                                               
+
+ 17% (523 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:43
+                                                                               
+
+ 17% (528 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:39
+                                                                               
+
+ 17% (533 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:36
+                                                                               
+
+ 17% (538 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:33
+                                                                               
+
+ 17% (543 of 3072) |###                  | Elapsed Time: 0:00:18 ETA:   0:01:31LOSSES sum: 14467.152862548828 | avg per batch: 185.476318750626 | avg per elements: 1.4467152862548829
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.168337
+
+                                                                               
+
+ 17% (546 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:16
+                                                                               
+
+ 17% (551 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:16
+                                                                               
+
+ 18% (556 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:16
+                                                                               
+
+ 18% (561 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:15
+                                                                               
+
+ 18% (566 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:15
+                                                                               
+
+ 18% (571 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:15
+                                                                               
+
+ 18% (576 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:14
+                                                                               
+
+ 18% (581 of 3072) |###                  | Elapsed Time: 0:00:20 ETA:   0:02:14
+                                                                               
+
+ 19% (586 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:02:05
+                                                                               
+
+ 19% (591 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:58
+                                                                               
+
+ 19% (596 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:52
+                                                                               
+
+ 19% (601 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:47
+                                                                               
+
+ 19% (606 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:43
+                                                                               
+
+ 19% (611 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:39
+                                                                               
+
+ 20% (616 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:36
+                                                                               
+
+ 20% (621 of 3072) |####                 | Elapsed Time: 0:00:21 ETA:   0:01:33LOSSES sum: 14268.71223449707 | avg per batch: 182.93220813457782 | avg per elements: 1.426871223449707
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.031258
+
+                                                                               
+
+ 20% (624 of 3072) |####                 | Elapsed Time: 0:00:22 ETA:   0:01:55
+                                                                               
+
+ 20% (629 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:55
+                                                                               
+
+ 20% (634 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:55
+                                                                               
+
+ 20% (639 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:54
+                                                                               
+
+ 20% (644 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:54
+                                                                               
+
+ 21% (649 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:54
+                                                                               
+
+ 21% (654 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:54
+                                                                               
+
+ 21% (659 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:53
+                                                                               
+
+ 21% (664 of 3072) |####                 | Elapsed Time: 0:00:23 ETA:   0:01:53
+                                                                               
+
+ 21% (669 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:47
+                                                                               
+
+ 21% (674 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:42
+                                                                               
+
+ 22% (679 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:38
+                                                                               
+
+ 22% (684 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:34
+                                                                               
+
+ 22% (689 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:31
+                                                                               
+
+ 22% (694 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:28
+                                                                               
+
+ 22% (699 of 3072) |####                 | Elapsed Time: 0:00:24 ETA:   0:01:26LOSSES sum: 14142.886154174805 | avg per batch: 181.31905325865134 | avg per elements: 1.4142886154174805
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.273748
+
+                                                                               
+
+ 22% (702 of 3072) |####                 | Elapsed Time: 0:00:26 ETA:   0:02:26
+                                                                               
+
+ 23% (707 of 3072) |####                 | Elapsed Time: 0:00:26 ETA:   0:02:26
+                                                                               
+
+ 23% (712 of 3072) |####                 | Elapsed Time: 0:00:26 ETA:   0:02:25
+                                                                               
+
+ 23% (717 of 3072) |####                 | Elapsed Time: 0:00:26 ETA:   0:02:25
+                                                                               
+
+ 23% (722 of 3072) |####                 | Elapsed Time: 0:00:26 ETA:   0:02:25
+                                                                               
+
+ 23% (727 of 3072) |####                 | Elapsed Time: 0:00:26 ETA:   0:02:24
+                                                                               
+
+ 23% (732 of 3072) |#####                | Elapsed Time: 0:00:26 ETA:   0:02:24
+                                                                               
+
+ 23% (737 of 3072) |#####                | Elapsed Time: 0:00:26 ETA:   0:02:12
+                                                                               
+
+ 24% (742 of 3072) |#####                | Elapsed Time: 0:00:26 ETA:   0:02:03
+                                                                               
+
+ 24% (747 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:55
+                                                                               
+
+ 24% (752 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:49
+                                                                               
+
+ 24% (757 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:44
+                                                                               
+
+ 24% (762 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:40
+                                                                               
+
+ 24% (767 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:36
+                                                                               
+
+ 25% (772 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:33
+                                                                               
+
+ 25% (777 of 3072) |#####                | Elapsed Time: 0:00:27 ETA:   0:01:30LOSSES sum: 14003.668167114258 | avg per batch: 179.53420727069562 | avg per elements: 1.4003668167114258
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.102961
+
+                                                                               
+
+ 25% (780 of 3072) |#####                | Elapsed Time: 0:00:28 ETA:   0:01:52
+                                                                               
+
+ 25% (785 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:51
+                                                                               
+
+ 25% (790 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:51
+                                                                               
+
+ 25% (795 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:51
+                                                                               
+
+ 26% (800 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:50
+                                                                               
+
+ 26% (805 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:50
+                                                                               
+
+ 26% (810 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:50
+                                                                               
+
+ 26% (815 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:50
+                                                                               
+
+ 26% (820 of 3072) |#####                | Elapsed Time: 0:00:29 ETA:   0:01:50
+                                                                               
+
+ 26% (825 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:43
+                                                                               
+
+ 27% (830 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:38
+                                                                               
+
+ 27% (835 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:34
+                                                                               
+
+ 27% (840 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:31
+                                                                               
+
+ 27% (845 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:27
+                                                                               
+
+ 27% (850 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:25
+                                                                               
+
+ 27% (855 of 3072) |#####                | Elapsed Time: 0:00:30 ETA:   0:01:22LOSSES sum: 13878.175369262695 | avg per batch: 177.92532524695764 | avg per elements: 1.3878175369262695
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.105540
+
+                                                                               
+
+ 27% (858 of 3072) |#####                | Elapsed Time: 0:00:31 ETA:   0:01:48
+                                                                               
+
+ 28% (863 of 3072) |#####                | Elapsed Time: 0:00:31 ETA:   0:01:48
+                                                                               
+
+ 28% (868 of 3072) |#####                | Elapsed Time: 0:00:32 ETA:   0:01:47
+                                                                               
+
+ 28% (873 of 3072) |#####                | Elapsed Time: 0:00:32 ETA:   0:01:47
+                                                                               
+
+ 28% (878 of 3072) |######               | Elapsed Time: 0:00:32 ETA:   0:01:47
+                                                                               
+
+ 28% (883 of 3072) |######               | Elapsed Time: 0:00:32 ETA:   0:01:47
+                                                                               
+
+ 28% (888 of 3072) |######               | Elapsed Time: 0:00:32 ETA:   0:01:46
+                                                                               
+
+ 29% (893 of 3072) |######               | Elapsed Time: 0:00:32 ETA:   0:01:46
+                                                                               
+
+ 29% (898 of 3072) |######               | Elapsed Time: 0:00:32 ETA:   0:01:46
+                                                                               
+
+ 29% (903 of 3072) |######               | Elapsed Time: 0:00:32 ETA:   0:01:40
+                                                                               
+
+ 29% (908 of 3072) |######               | Elapsed Time: 0:00:33 ETA:   0:01:35
+                                                                               
+
+ 29% (913 of 3072) |######               | Elapsed Time: 0:00:33 ETA:   0:01:31
+                                                                               
+
+ 29% (918 of 3072) |######               | Elapsed Time: 0:00:33 ETA:   0:01:27
+                                                                               
+
+ 30% (923 of 3072) |######               | Elapsed Time: 0:00:33 ETA:   0:01:24
+                                                                               
+
+ 30% (928 of 3072) |######               | Elapsed Time: 0:00:33 ETA:   0:01:22
+                                                                               
+
+ 30% (933 of 3072) |######               | Elapsed Time: 0:00:33 ETA:   0:01:20LOSSES sum: 13806.891540527344 | avg per batch: 177.0114300067608 | avg per elements: 1.3806891540527344
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.058736
+
+                                                                               
+
+ 30% (936 of 3072) |######               | Elapsed Time: 0:00:34 ETA:   0:01:42
+                                                                               
+
+ 30% (941 of 3072) |######               | Elapsed Time: 0:00:34 ETA:   0:01:41
+                                                                               
+
+ 30% (945 of 3072) |######               | Elapsed Time: 0:00:34 ETA:   0:01:43
+                                                                               
+
+ 30% (950 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:43
+                                                                               
+
+ 31% (955 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:43
+                                                                               
+
+ 31% (960 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:43
+                                                                               
+
+ 31% (965 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:42
+                                                                               
+
+ 31% (970 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:42
+                                                                               
+
+ 31% (975 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:42
+                                                                               
+
+ 31% (980 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:36
+                                                                               
+
+ 32% (985 of 3072) |######               | Elapsed Time: 0:00:35 ETA:   0:01:31
+                                                                               
+
+ 32% (990 of 3072) |######               | Elapsed Time: 0:00:36 ETA:   0:01:27
+                                                                               
+
+ 32% (995 of 3072) |######               | Elapsed Time: 0:00:36 ETA:   0:01:24
+                                                                               
+
+ 32% (1000 of 3072) |######              | Elapsed Time: 0:00:36 ETA:   0:01:21
+                                                                               
+
+ 32% (1005 of 3072) |######              | Elapsed Time: 0:00:36 ETA:   0:01:18
+                                                                               
+
+ 32% (1010 of 3072) |######              | Elapsed Time: 0:00:36 ETA:   0:01:16LOSSES sum: 13615.166107177734 | avg per batch: 174.55341163048377 | avg per elements: 1.3615166107177734
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.033727
+
+                                                                               
+
+ 33% (1014 of 3072) |######              | Elapsed Time: 0:00:37 ETA:   0:01:36
+                                                                               
+
+ 33% (1019 of 3072) |######              | Elapsed Time: 0:00:37 ETA:   0:01:36
+                                                                               
+
+ 33% (1024 of 3072) |######              | Elapsed Time: 0:00:37 ETA:   0:01:35
+                                                                               
+
+ 33% (1029 of 3072) |######              | Elapsed Time: 0:00:37 ETA:   0:01:35
+                                                                               
+
+ 33% (1034 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:35
+                                                                               
+
+ 33% (1039 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:35
+                                                                               
+
+ 33% (1044 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:34
+                                                                               
+
+ 34% (1049 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:34
+                                                                               
+
+ 34% (1054 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:34
+                                                                               
+
+ 34% (1059 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:29
+                                                                               
+
+ 34% (1064 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:25
+                                                                               
+
+ 34% (1069 of 3072) |######              | Elapsed Time: 0:00:38 ETA:   0:01:21
+                                                                               
+
+ 34% (1074 of 3072) |######              | Elapsed Time: 0:00:39 ETA:   0:01:18
+                                                                               
+
+ 35% (1079 of 3072) |#######             | Elapsed Time: 0:00:39 ETA:   0:01:16
+                                                                               
+
+ 35% (1084 of 3072) |#######             | Elapsed Time: 0:00:39 ETA:   0:01:14
+                                                                               
+
+ 35% (1089 of 3072) |#######             | Elapsed Time: 0:00:39 ETA:   0:01:12LOSSES sum: 13500.020584106445 | avg per batch: 173.07718697572366 | avg per elements: 1.3500020584106445
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.229580
+
+                                                                               
+
+ 35% (1092 of 3072) |#######             | Elapsed Time: 0:00:40 ETA:   0:01:50
+                                                                               
+
+ 35% (1097 of 3072) |#######             | Elapsed Time: 0:00:40 ETA:   0:01:49
+                                                                               
+
+ 35% (1102 of 3072) |#######             | Elapsed Time: 0:00:40 ETA:   0:01:49
+                                                                               
+
+ 36% (1107 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:49
+                                                                               
+
+ 36% (1112 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:49
+                                                                               
+
+ 36% (1117 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:48
+                                                                               
+
+ 36% (1122 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:48
+                                                                               
+
+ 36% (1127 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:48
+                                                                               
+
+ 36% (1132 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:40
+                                                                               
+
+ 37% (1137 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:34
+                                                                               
+
+ 37% (1142 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:29
+                                                                               
+
+ 37% (1147 of 3072) |#######             | Elapsed Time: 0:00:41 ETA:   0:01:25
+                                                                               
+
+ 37% (1152 of 3072) |#######             | Elapsed Time: 0:00:42 ETA:   0:01:22
+                                                                               
+
+ 37% (1157 of 3072) |#######             | Elapsed Time: 0:00:42 ETA:   0:01:19
+                                                                               
+
+ 37% (1162 of 3072) |#######             | Elapsed Time: 0:00:42 ETA:   0:01:16
+                                                                               
+
+ 37% (1167 of 3072) |#######             | Elapsed Time: 0:00:42 ETA:   0:01:14LOSSES sum: 13426.721878051758 | avg per batch: 172.13745997502252 | avg per elements: 1.3426721878051757
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.205803
+
+                                                                               
+
+ 38% (1170 of 3072) |#######             | Elapsed Time: 0:00:43 ETA:   0:01:44
+                                                                               
+
+ 38% (1175 of 3072) |#######             | Elapsed Time: 0:00:43 ETA:   0:01:44
+                                                                               
+
+ 38% (1180 of 3072) |#######             | Elapsed Time: 0:00:43 ETA:   0:01:44
+                                                                               
+
+ 38% (1185 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:43
+                                                                               
+
+ 38% (1190 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:43
+                                                                               
+
+ 38% (1195 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:43
+                                                                               
+
+ 39% (1200 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:43
+                                                                               
+
+ 39% (1205 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:42
+                                                                               
+
+ 39% (1210 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:35
+                                                                               
+
+ 39% (1215 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:29
+                                                                               
+
+ 39% (1220 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:25
+                                                                               
+
+ 39% (1225 of 3072) |#######             | Elapsed Time: 0:00:44 ETA:   0:01:21
+                                                                               
+
+ 40% (1230 of 3072) |########            | Elapsed Time: 0:00:45 ETA:   0:01:18
+                                                                               
+
+ 40% (1235 of 3072) |########            | Elapsed Time: 0:00:45 ETA:   0:01:15
+                                                                               
+
+ 40% (1240 of 3072) |########            | Elapsed Time: 0:00:45 ETA:   0:01:12
+                                                                               
+
+ 40% (1245 of 3072) |########            | Elapsed Time: 0:00:45 ETA:   0:01:10LOSSES sum: 13284.993698120117 | avg per batch: 170.320432027181 | avg per elements: 1.3284993698120118
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.009272
+
+                                                                               
+
+ 40% (1248 of 3072) |########            | Elapsed Time: 0:00:46 ETA:   0:01:25
+                                                                               
+
+ 40% (1253 of 3072) |########            | Elapsed Time: 0:00:46 ETA:   0:01:24
+                                                                               
+
+ 40% (1258 of 3072) |########            | Elapsed Time: 0:00:46 ETA:   0:01:24
+                                                                               
+
+ 41% (1263 of 3072) |########            | Elapsed Time: 0:00:46 ETA:   0:01:24
+                                                                               
+
+ 41% (1268 of 3072) |########            | Elapsed Time: 0:00:46 ETA:   0:01:24
+                                                                               
+
+ 41% (1273 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:24
+                                                                               
+
+ 41% (1278 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:23
+                                                                               
+
+ 41% (1283 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:23
+                                                                               
+
+ 41% (1288 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:23
+                                                                               
+
+ 42% (1293 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:18
+                                                                               
+
+ 42% (1298 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:15
+                                                                               
+
+ 42% (1303 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:11
+                                                                               
+
+ 42% (1308 of 3072) |########            | Elapsed Time: 0:00:47 ETA:   0:01:09
+                                                                               
+
+ 42% (1313 of 3072) |########            | Elapsed Time: 0:00:48 ETA:   0:01:07
+                                                                               
+
+ 42% (1318 of 3072) |########            | Elapsed Time: 0:00:48 ETA:   0:01:05
+                                                                               
+
+ 43% (1323 of 3072) |########            | Elapsed Time: 0:00:48 ETA:   0:01:03LOSSES sum: 13225.563003540039 | avg per batch: 169.5585000453851 | avg per elements: 1.322556300354004
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.127167
+
+                                                                               
+
+ 43% (1326 of 3072) |########            | Elapsed Time: 0:00:49 ETA:   0:01:32
+                                                                               
+
+ 43% (1331 of 3072) |########            | Elapsed Time: 0:00:49 ETA:   0:01:32
+                                                                               
+
+ 43% (1336 of 3072) |########            | Elapsed Time: 0:00:49 ETA:   0:01:31
+                                                                               
+
+ 43% (1341 of 3072) |########            | Elapsed Time: 0:00:49 ETA:   0:01:31
+                                                                               
+
+ 43% (1346 of 3072) |########            | Elapsed Time: 0:00:49 ETA:   0:01:31
+                                                                               
+
+ 43% (1351 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:31
+                                                                               
+
+ 44% (1356 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:30
+                                                                               
+
+ 44% (1361 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:30
+                                                                               
+
+ 44% (1366 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:24
+                                                                               
+
+ 44% (1371 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:19
+                                                                               
+
+ 44% (1376 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:15
+                                                                               
+
+ 44% (1381 of 3072) |########            | Elapsed Time: 0:00:50 ETA:   0:01:12
+                                                                               
+
+ 45% (1386 of 3072) |#########           | Elapsed Time: 0:00:50 ETA:   0:01:09
+                                                                               
+
+ 45% (1391 of 3072) |#########           | Elapsed Time: 0:00:50 ETA:   0:01:07
+                                                                               
+
+ 45% (1396 of 3072) |#########           | Elapsed Time: 0:00:51 ETA:   0:01:04
+                                                                               
+
+ 45% (1401 of 3072) |#########           | Elapsed Time: 0:00:51 ETA:   0:01:03LOSSES sum: 13132.985748291016 | avg per batch: 168.37161215757712 | avg per elements: 1.3132985748291015
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.193895
+
+                                                                               
+
+ 45% (1404 of 3072) |#########           | Elapsed Time: 0:00:52 ETA:   0:01:31
+                                                                               
+
+ 45% (1409 of 3072) |#########           | Elapsed Time: 0:00:52 ETA:   0:01:30
+                                                                               
+
+ 46% (1414 of 3072) |#########           | Elapsed Time: 0:00:52 ETA:   0:01:30
+                                                                               
+
+ 46% (1419 of 3072) |#########           | Elapsed Time: 0:00:52 ETA:   0:01:30
+                                                                               
+
+ 46% (1424 of 3072) |#########           | Elapsed Time: 0:00:52 ETA:   0:01:30
+                                                                               
+
+ 46% (1429 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:29
+                                                                               
+
+ 46% (1434 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:29
+                                                                               
+
+ 46% (1439 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:29
+                                                                               
+
+ 47% (1444 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:23
+                                                                               
+
+ 47% (1449 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:18
+                                                                               
+
+ 47% (1454 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:14
+                                                                               
+
+ 47% (1459 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:10
+                                                                               
+
+ 47% (1464 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:07
+                                                                               
+
+ 47% (1469 of 3072) |#########           | Elapsed Time: 0:00:53 ETA:   0:01:05
+                                                                               
+
+ 47% (1474 of 3072) |#########           | Elapsed Time: 0:00:54 ETA:   0:01:03
+                                                                               
+
+ 48% (1479 of 3072) |#########           | Elapsed Time: 0:00:54 ETA:   0:01:01LOSSES sum: 13165.943344116211 | avg per batch: 168.79414543738733 | avg per elements: 1.316594334411621
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.107033
+
+                                                                               
+
+ 48% (1482 of 3072) |#########           | Elapsed Time: 0:00:55 ETA:   0:01:17
+                                                                               
+
+ 48% (1487 of 3072) |#########           | Elapsed Time: 0:00:55 ETA:   0:01:17
+                                                                               
+
+ 48% (1492 of 3072) |#########           | Elapsed Time: 0:00:55 ETA:   0:01:17
+                                                                               
+
+ 48% (1497 of 3072) |#########           | Elapsed Time: 0:00:55 ETA:   0:01:17
+                                                                               
+
+ 48% (1502 of 3072) |#########           | Elapsed Time: 0:00:55 ETA:   0:01:16
+                                                                               
+
+ 49% (1507 of 3072) |#########           | Elapsed Time: 0:00:55 ETA:   0:01:16
+                                                                               
+
+ 49% (1512 of 3072) |#########           | Elapsed Time: 0:00:56 ETA:   0:01:16
+                                                                               
+
+ 49% (1517 of 3072) |#########           | Elapsed Time: 0:00:56 ETA:   0:01:16
+                                                                               
+
+ 49% (1522 of 3072) |#########           | Elapsed Time: 0:00:56 ETA:   0:01:15
+                                                                               
+
+ 49% (1527 of 3072) |#########           | Elapsed Time: 0:00:56 ETA:   0:01:11
+                                                                               
+
+ 49% (1532 of 3072) |#########           | Elapsed Time: 0:00:56 ETA:   0:01:07
+                                                                               
+
+ 50% (1537 of 3072) |##########          | Elapsed Time: 0:00:56 ETA:   0:01:04
+                                                                               
+
+ 50% (1542 of 3072) |##########          | Elapsed Time: 0:00:56 ETA:   0:01:02
+                                                                               
+
+ 50% (1547 of 3072) |##########          | Elapsed Time: 0:00:56 ETA:   0:01:00
+                                                                               
+
+ 50% (1552 of 3072) |##########          | Elapsed Time: 0:00:56 ETA:   0:00:58
+                                                                               
+
+ 50% (1557 of 3072) |##########          | Elapsed Time: 0:00:57 ETA:   0:00:56LOSSES sum: 12993.63850402832 | avg per batch: 166.58510902600412 | avg per elements: 1.299363850402832
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.591475
+
+                                                                               
+
+ 50% (1560 of 3072) |##########          | Elapsed Time: 0:00:57 ETA:   0:00:49
+                                                                               
+
+ 50% (1565 of 3072) |##########          | Elapsed Time: 0:00:57 ETA:   0:00:49
+                                                                               
+
+ 51% (1570 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:49
+                                                                               
+
+ 51% (1575 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:48
+                                                                               
+
+ 51% (1580 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:48
+                                                                               
+
+ 51% (1585 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:48
+                                                                               
+
+ 51% (1590 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:48
+                                                                               
+
+ 51% (1595 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:48
+                                                                               
+
+ 52% (1600 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:48
+                                                                               
+
+ 52% (1605 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:47
+                                                                               
+
+ 52% (1610 of 3072) |##########          | Elapsed Time: 0:00:58 ETA:   0:00:47
+                                                                               
+
+ 52% (1615 of 3072) |##########          | Elapsed Time: 0:00:59 ETA:   0:00:47
+                                                                               
+
+ 52% (1620 of 3072) |##########          | Elapsed Time: 0:00:59 ETA:   0:00:47
+                                                                               
+
+ 52% (1625 of 3072) |##########          | Elapsed Time: 0:00:59 ETA:   0:00:46
+                                                                               
+
+ 53% (1630 of 3072) |##########          | Elapsed Time: 0:00:59 ETA:   0:00:45
+                                                                               
+
+ 53% (1635 of 3072) |##########          | Elapsed Time: 0:00:59 ETA:   0:00:44LOSSES sum: 12932.402801513672 | avg per batch: 165.80003591684195 | avg per elements: 1.2932402801513672
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.759854
+
+                                                                               
+
+ 53% (1638 of 3072) |##########          | Elapsed Time: 0:01:00 ETA:   0:00:52
+                                                                               
+
+ 53% (1643 of 3072) |##########          | Elapsed Time: 0:01:00 ETA:   0:00:51
+                                                                               
+
+ 53% (1648 of 3072) |##########          | Elapsed Time: 0:01:00 ETA:   0:00:51
+                                                                               
+
+ 53% (1653 of 3072) |##########          | Elapsed Time: 0:01:00 ETA:   0:00:51
+                                                                               
+
+ 53% (1658 of 3072) |##########          | Elapsed Time: 0:01:00 ETA:   0:00:51
+                                                                               
+
+ 54% (1663 of 3072) |##########          | Elapsed Time: 0:01:00 ETA:   0:00:51
+                                                                               
+
+ 54% (1668 of 3072) |##########          | Elapsed Time: 0:01:01 ETA:   0:00:51
+                                                                               
+
+ 54% (1673 of 3072) |##########          | Elapsed Time: 0:01:01 ETA:   0:00:50
+                                                                               
+
+ 54% (1678 of 3072) |##########          | Elapsed Time: 0:01:01 ETA:   0:00:52
+                                                                               
+
+ 54% (1683 of 3072) |##########          | Elapsed Time: 0:01:01 ETA:   0:00:52
+                                                                               
+
+ 54% (1688 of 3072) |##########          | Elapsed Time: 0:01:01 ETA:   0:00:52
+                                                                               
+
+ 55% (1693 of 3072) |###########         | Elapsed Time: 0:01:01 ETA:   0:00:50
+                                                                               
+
+ 55% (1698 of 3072) |###########         | Elapsed Time: 0:01:01 ETA:   0:00:48
+                                                                               
+
+ 55% (1703 of 3072) |###########         | Elapsed Time: 0:01:01 ETA:   0:00:47
+                                                                               
+
+ 55% (1708 of 3072) |###########         | Elapsed Time: 0:01:01 ETA:   0:00:46
+                                                                               
+
+ 55% (1713 of 3072) |###########         | Elapsed Time: 0:01:02 ETA:   0:00:45LOSSES sum: 12848.65267944336 | avg per batch: 164.72631640312 | avg per elements: 1.284865267944336
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.732349
+
+                                                                               
+
+ 55% (1716 of 3072) |###########         | Elapsed Time: 0:01:02 ETA:   0:00:48
+                                                                               
+
+ 56% (1721 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:48
+                                                                               
+
+ 56% (1726 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:48
+                                                                               
+
+ 56% (1731 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:48
+                                                                               
+
+ 56% (1736 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:48
+                                                                               
+
+ 56% (1741 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:47
+                                                                               
+
+ 56% (1746 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:47
+                                                                               
+
+ 56% (1751 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:47
+                                                                               
+
+ 57% (1756 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:47
+                                                                               
+
+ 57% (1761 of 3072) |###########         | Elapsed Time: 0:01:03 ETA:   0:00:47
+                                                                               
+
+ 57% (1766 of 3072) |###########         | Elapsed Time: 0:01:04 ETA:   0:00:46
+                                                                               
+
+ 57% (1771 of 3072) |###########         | Elapsed Time: 0:01:04 ETA:   0:00:46
+                                                                               
+
+ 57% (1776 of 3072) |###########         | Elapsed Time: 0:01:04 ETA:   0:00:45
+                                                                               
+
+ 57% (1781 of 3072) |###########         | Elapsed Time: 0:01:04 ETA:   0:00:44
+                                                                               
+
+ 58% (1786 of 3072) |###########         | Elapsed Time: 0:01:04 ETA:   0:00:42
+                                                                               
+
+ 58% (1791 of 3072) |###########         | Elapsed Time: 0:01:04 ETA:   0:00:41LOSSES sum: 12858.632583618164 | avg per batch: 164.85426389254056 | avg per elements: 1.2858632583618164
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.725714
+
+                                                                               
+
+ 58% (1794 of 3072) |###########         | Elapsed Time: 0:01:05 ETA:   0:00:45
+                                                                               
+
+ 58% (1799 of 3072) |###########         | Elapsed Time: 0:01:05 ETA:   0:00:45
+                                                                               
+
+ 58% (1804 of 3072) |###########         | Elapsed Time: 0:01:05 ETA:   0:00:45
+                                                                               
+
+ 58% (1809 of 3072) |###########         | Elapsed Time: 0:01:05 ETA:   0:00:45
+                                                                               
+
+ 59% (1814 of 3072) |###########         | Elapsed Time: 0:01:05 ETA:   0:00:45
+                                                                               
+
+ 59% (1819 of 3072) |###########         | Elapsed Time: 0:01:06 ETA:   0:00:44
+                                                                               
+
+ 59% (1824 of 3072) |###########         | Elapsed Time: 0:01:06 ETA:   0:00:44
+                                                                               
+
+ 59% (1829 of 3072) |###########         | Elapsed Time: 0:01:06 ETA:   0:00:44
+                                                                               
+
+ 59% (1834 of 3072) |###########         | Elapsed Time: 0:01:06 ETA:   0:00:44
+                                                                               
+
+ 59% (1839 of 3072) |###########         | Elapsed Time: 0:01:06 ETA:   0:00:44
+                                                                               
+
+ 60% (1844 of 3072) |############        | Elapsed Time: 0:01:06 ETA:   0:00:43
+                                                                               
+
+ 60% (1849 of 3072) |############        | Elapsed Time: 0:01:06 ETA:   0:00:43
+                                                                               
+
+ 60% (1854 of 3072) |############        | Elapsed Time: 0:01:06 ETA:   0:00:42
+                                                                               
+
+ 60% (1859 of 3072) |############        | Elapsed Time: 0:01:06 ETA:   0:00:41
+                                                                               
+
+ 60% (1864 of 3072) |############        | Elapsed Time: 0:01:07 ETA:   0:00:40
+                                                                               
+
+ 60% (1869 of 3072) |############        | Elapsed Time: 0:01:07 ETA:   0:00:39LOSSES sum: 12682.078826904297 | avg per batch: 162.59075419108072 | avg per elements: 1.2682078826904297
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.757441
+
+                                                                               
+
+ 60% (1872 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:43
+                                                                               
+
+ 61% (1877 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:43
+                                                                               
+
+ 61% (1882 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:43
+                                                                               
+
+ 61% (1887 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:42
+                                                                               
+
+ 61% (1892 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:42
+                                                                               
+
+ 61% (1897 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:42
+                                                                               
+
+ 61% (1902 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:42
+                                                                               
+
+ 62% (1907 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:42
+                                                                               
+
+ 62% (1912 of 3072) |############        | Elapsed Time: 0:01:08 ETA:   0:00:42
+                                                                               
+
+ 62% (1917 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:41
+                                                                               
+
+ 62% (1922 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:41
+                                                                               
+
+ 62% (1927 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:41
+                                                                               
+
+ 62% (1932 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:40
+                                                                               
+
+ 63% (1937 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:39
+                                                                               
+
+ 63% (1942 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:37
+                                                                               
+
+ 63% (1947 of 3072) |############        | Elapsed Time: 0:01:09 ETA:   0:00:37LOSSES sum: 12628.600067138672 | avg per batch: 161.9051290658804 | avg per elements: 1.2628600067138671
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.720084
+
+                                                                               
+
+ 63% (1950 of 3072) |############        | Elapsed Time: 0:01:10 ETA:   0:00:39
+                                                                               
+
+ 63% (1955 of 3072) |############        | Elapsed Time: 0:01:10 ETA:   0:00:39
+                                                                               
+
+ 63% (1960 of 3072) |############        | Elapsed Time: 0:01:10 ETA:   0:00:39
+                                                                               
+
+ 63% (1965 of 3072) |############        | Elapsed Time: 0:01:10 ETA:   0:00:39
+                                                                               
+
+ 64% (1970 of 3072) |############        | Elapsed Time: 0:01:11 ETA:   0:00:39
+                                                                               
+
+ 64% (1975 of 3072) |############        | Elapsed Time: 0:01:11 ETA:   0:00:39
+                                                                               
+
+ 64% (1980 of 3072) |############        | Elapsed Time: 0:01:11 ETA:   0:00:39
+                                                                               
+
+ 64% (1985 of 3072) |############        | Elapsed Time: 0:01:11 ETA:   0:00:38
+                                                                               
+
+ 64% (1990 of 3072) |############        | Elapsed Time: 0:01:11 ETA:   0:00:38
+                                                                               
+
+ 64% (1995 of 3072) |############        | Elapsed Time: 0:01:11 ETA:   0:00:38
+                                                                               
+
+ 65% (2000 of 3072) |#############       | Elapsed Time: 0:01:11 ETA:   0:00:38
+                                                                               
+
+ 65% (2005 of 3072) |#############       | Elapsed Time: 0:01:11 ETA:   0:00:38
+                                                                               
+
+ 65% (2010 of 3072) |#############       | Elapsed Time: 0:01:11 ETA:   0:00:36
+                                                                               
+
+ 65% (2015 of 3072) |#############       | Elapsed Time: 0:01:12 ETA:   0:00:35
+                                                                               
+
+ 65% (2020 of 3072) |#############       | Elapsed Time: 0:01:12 ETA:   0:00:34
+                                                                               
+
+ 65% (2025 of 3072) |#############       | Elapsed Time: 0:01:12 ETA:   0:00:34LOSSES sum: 12656.019653320312 | avg per batch: 162.2566622220553 | avg per elements: 1.2656019653320312
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.740291
+
+                                                                               
+
+ 66% (2028 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:37
+                                                                               
+
+ 66% (2033 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:37
+                                                                               
+
+ 66% (2038 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:37
+                                                                               
+
+ 66% (2043 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:37
+                                                                               
+
+ 66% (2048 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:36
+                                                                               
+
+ 66% (2053 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:36
+                                                                               
+
+ 66% (2058 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:36
+                                                                               
+
+ 67% (2063 of 3072) |#############       | Elapsed Time: 0:01:13 ETA:   0:00:36
+                                                                               
+
+ 67% (2068 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:36
+                                                                               
+
+ 67% (2073 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:36
+                                                                               
+
+ 67% (2078 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:35
+                                                                               
+
+ 67% (2083 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:35
+                                                                               
+
+ 67% (2088 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:34
+                                                                               
+
+ 68% (2093 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:33
+                                                                               
+
+ 68% (2098 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:32
+                                                                               
+
+ 68% (2103 of 3072) |#############       | Elapsed Time: 0:01:14 ETA:   0:00:31LOSSES sum: 12531.103500366211 | avg per batch: 160.6551730816181 | avg per elements: 1.2531103500366212
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.751524
+
+                                                                               
+
+ 68% (2106 of 3072) |#############       | Elapsed Time: 0:01:15 ETA:   0:00:35
+                                                                               
+
+ 68% (2111 of 3072) |#############       | Elapsed Time: 0:01:15 ETA:   0:00:34
+                                                                               
+
+ 68% (2116 of 3072) |#############       | Elapsed Time: 0:01:15 ETA:   0:00:34
+                                                                               
+
+ 69% (2121 of 3072) |#############       | Elapsed Time: 0:01:16 ETA:   0:00:34
+                                                                               
+
+ 69% (2126 of 3072) |#############       | Elapsed Time: 0:01:16 ETA:   0:00:34
+                                                                               
+
+ 69% (2131 of 3072) |#############       | Elapsed Time: 0:01:16 ETA:   0:00:34
+                                                                               
+
+ 69% (2136 of 3072) |#############       | Elapsed Time: 0:01:16 ETA:   0:00:33
+                                                                               
+
+ 69% (2141 of 3072) |#############       | Elapsed Time: 0:01:16 ETA:   0:00:33
+                                                                               
+
+ 69% (2146 of 3072) |#############       | Elapsed Time: 0:01:16 ETA:   0:00:33
+                                                                               
+
+ 70% (2151 of 3072) |##############      | Elapsed Time: 0:01:16 ETA:   0:00:33
+                                                                               
+
+ 70% (2156 of 3072) |##############      | Elapsed Time: 0:01:16 ETA:   0:00:33
+                                                                               
+
+ 70% (2161 of 3072) |##############      | Elapsed Time: 0:01:16 ETA:   0:00:32
+                                                                               
+
+ 70% (2166 of 3072) |##############      | Elapsed Time: 0:01:17 ETA:   0:00:31
+                                                                               
+
+ 70% (2171 of 3072) |##############      | Elapsed Time: 0:01:17 ETA:   0:00:30
+                                                                               
+
+ 70% (2176 of 3072) |##############      | Elapsed Time: 0:01:17 ETA:   0:00:30
+                                                                               
+
+ 70% (2181 of 3072) |##############      | Elapsed Time: 0:01:17 ETA:   0:00:29LOSSES sum: 12463.925720214844 | avg per batch: 159.7939194899339 | avg per elements: 1.2463925720214843
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.612434
+
+                                                                               
+
+ 71% (2184 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:29
+                                                                               
+
+ 71% (2189 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:29
+                                                                               
+
+ 71% (2194 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:28
+                                                                               
+
+ 71% (2199 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:28
+                                                                               
+
+ 71% (2204 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:28
+                                                                               
+
+ 71% (2209 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:28
+                                                                               
+
+ 72% (2214 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:28
+                                                                               
+
+ 72% (2219 of 3072) |##############      | Elapsed Time: 0:01:18 ETA:   0:00:28
+                                                                               
+
+ 72% (2224 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:27
+                                                                               
+
+ 72% (2229 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:27
+                                                                               
+
+ 72% (2234 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:27
+                                                                               
+
+ 72% (2239 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:27
+                                                                               
+
+ 73% (2244 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:27
+                                                                               
+
+ 73% (2249 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:26
+                                                                               
+
+ 73% (2254 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:25
+                                                                               
+
+ 73% (2259 of 3072) |##############      | Elapsed Time: 0:01:19 ETA:   0:00:25LOSSES sum: 12458.26496887207 | avg per batch: 159.72134575477014 | avg per elements: 1.245826496887207
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.109308
+
+                                                                               
+
+ 73% (2262 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:39
+                                                                               
+
+ 73% (2267 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:39
+                                                                               
+
+ 73% (2272 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:39
+                                                                               
+
+ 74% (2277 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:39
+                                                                               
+
+ 74% (2282 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:38
+                                                                               
+
+ 74% (2287 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:38
+                                                                               
+
+ 74% (2292 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:38
+                                                                               
+
+ 74% (2297 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:38
+                                                                               
+
+ 74% (2302 of 3072) |##############      | Elapsed Time: 0:01:21 ETA:   0:00:37
+                                                                               
+
+ 75% (2307 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:35
+                                                                               
+
+ 75% (2312 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:33
+                                                                               
+
+ 75% (2317 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:31
+                                                                               
+
+ 75% (2322 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:30
+                                                                               
+
+ 75% (2327 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:29
+                                                                               
+
+ 75% (2332 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:28
+                                                                               
+
+ 76% (2337 of 3072) |###############     | Elapsed Time: 0:01:22 ETA:   0:00:27LOSSES sum: 12401.703063964844 | avg per batch: 158.9961931277544 | avg per elements: 1.2401703063964844
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.229605
+
+                                                                               
+
+ 76% (2340 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:40
+                                                                               
+
+ 76% (2345 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:40
+                                                                               
+
+ 76% (2350 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:40
+                                                                               
+
+ 76% (2355 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:39
+                                                                               
+
+ 76% (2360 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:39
+                                                                               
+
+ 76% (2365 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:39
+                                                                               
+
+ 77% (2370 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:39
+                                                                               
+
+ 77% (2375 of 3072) |###############     | Elapsed Time: 0:01:24 ETA:   0:00:38
+                                                                               
+
+ 77% (2380 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:35
+                                                                               
+
+ 77% (2385 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:33
+                                                                               
+
+ 77% (2390 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:31
+                                                                               
+
+ 77% (2395 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:30
+                                                                               
+
+ 78% (2400 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:28
+                                                                               
+
+ 78% (2405 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:27
+                                                                               
+
+ 78% (2410 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:26
+                                                                               
+
+ 78% (2415 of 3072) |###############     | Elapsed Time: 0:01:25 ETA:   0:00:25LOSSES sum: 12292.920959472656 | avg per batch: 157.60155076246994 | avg per elements: 1.2292920959472655
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.230156
+
+                                                                               
+
+ 78% (2418 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:36
+                                                                               
+
+ 78% (2423 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:36
+                                                                               
+
+ 79% (2428 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:35
+                                                                               
+
+ 79% (2433 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:35
+                                                                               
+
+ 79% (2438 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:35
+                                                                               
+
+ 79% (2443 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:34
+                                                                               
+
+ 79% (2448 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:34
+                                                                               
+
+ 79% (2453 of 3072) |###############     | Elapsed Time: 0:01:27 ETA:   0:00:34
+                                                                               
+
+ 80% (2458 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:31
+                                                                               
+
+ 80% (2463 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:29
+                                                                               
+
+ 80% (2468 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:28
+                                                                               
+
+ 80% (2473 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:26
+                                                                               
+
+ 80% (2478 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:25
+                                                                               
+
+ 80% (2483 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:24
+                                                                               
+
+ 80% (2488 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:23
+                                                                               
+
+ 81% (2493 of 3072) |################    | Elapsed Time: 0:01:28 ETA:   0:00:22LOSSES sum: 12302.759017944336 | avg per batch: 157.72767971723508 | avg per elements: 1.2302759017944336
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.984319
+
+                                                                               
+
+ 81% (2496 of 3072) |################    | Elapsed Time: 0:01:29 ETA:   0:00:25
+                                                                               
+
+ 81% (2501 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:24
+                                                                               
+
+ 81% (2506 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:24
+                                                                               
+
+ 81% (2511 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:24
+                                                                               
+
+ 81% (2516 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:24
+                                                                               
+
+ 82% (2521 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:24
+                                                                               
+
+ 82% (2526 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:23
+                                                                               
+
+ 82% (2531 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:23
+                                                                               
+
+ 82% (2536 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:23
+                                                                               
+
+ 82% (2541 of 3072) |################    | Elapsed Time: 0:01:30 ETA:   0:00:23
+                                                                               
+
+ 82% (2546 of 3072) |################    | Elapsed Time: 0:01:31 ETA:   0:00:22
+                                                                               
+
+ 83% (2551 of 3072) |################    | Elapsed Time: 0:01:31 ETA:   0:00:20
+                                                                               
+
+ 83% (2556 of 3072) |################    | Elapsed Time: 0:01:31 ETA:   0:00:20
+                                                                               
+
+ 83% (2560 of 3072) |################    | Elapsed Time: 0:01:31 ETA:   0:00:19
+                                                                               
+
+ 83% (2565 of 3072) |################    | Elapsed Time: 0:01:31 ETA:   0:00:18
+                                                                               
+
+ 83% (2570 of 3072) |################    | Elapsed Time: 0:01:31 ETA:   0:00:18LOSSES sum: 12169.398834228516 | avg per batch: 156.01793377216046 | avg per elements: 1.2169398834228515
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.543907
+
+                                                                               
+
+ 83% (2574 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:45
+                                                                               
+
+ 83% (2579 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:44
+                                                                               
+
+ 84% (2584 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:42
+                                                                               
+
+ 84% (2589 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:42
+                                                                               
+
+ 84% (2594 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:41
+                                                                               
+
+ 84% (2599 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:36
+                                                                               
+
+ 84% (2604 of 3072) |################    | Elapsed Time: 0:01:33 ETA:   0:00:32
+                                                                               
+
+ 84% (2609 of 3072) |################    | Elapsed Time: 0:01:34 ETA:   0:00:29
+                                                                               
+
+ 85% (2614 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:26
+                                                                               
+
+ 85% (2619 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:24
+                                                                               
+
+ 85% (2624 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:23
+                                                                               
+
+ 85% (2629 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:21
+                                                                               
+
+ 85% (2634 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:20
+                                                                               
+
+ 85% (2639 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:19
+                                                                               
+
+ 86% (2644 of 3072) |#################   | Elapsed Time: 0:01:34 ETA:   0:00:18
+                                                                               
+
+ 86% (2649 of 3072) |#################   | Elapsed Time: 0:01:35 ETA:   0:00:18LOSSES sum: 12145.198516845703 | avg per batch: 155.70767329289362 | avg per elements: 1.2145198516845703
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.117354
+
+                                                                               
+
+ 86% (2652 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:22
+                                                                               
+
+ 86% (2657 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:21
+                                                                               
+
+ 86% (2662 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:21
+                                                                               
+
+ 86% (2667 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:21
+                                                                               
+
+ 86% (2672 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:21
+                                                                               
+
+ 87% (2677 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:20
+                                                                               
+
+ 87% (2682 of 3072) |#################   | Elapsed Time: 0:01:36 ETA:   0:00:20
+                                                                               
+
+ 87% (2687 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:20
+                                                                               
+
+ 87% (2692 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:18
+                                                                               
+
+ 87% (2697 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:17
+                                                                               
+
+ 87% (2702 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:16
+                                                                               
+
+ 88% (2707 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:15
+                                                                               
+
+ 88% (2712 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:14
+                                                                               
+
+ 88% (2717 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:14
+                                                                               
+
+ 88% (2722 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:13
+                                                                               
+
+ 88% (2727 of 3072) |#################   | Elapsed Time: 0:01:37 ETA:   0:00:12LOSSES sum: 12080.429733276367 | avg per batch: 154.87730427277393 | avg per elements: 1.2080429733276368
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.219154
+
+                                                                               
+
+ 88% (2730 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:18
+                                                                               
+
+ 89% (2735 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:18
+                                                                               
+
+ 89% (2740 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:18
+                                                                               
+
+ 89% (2745 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:18
+                                                                               
+
+ 89% (2750 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:17
+                                                                               
+
+ 89% (2755 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:17
+                                                                               
+
+ 89% (2760 of 3072) |#################   | Elapsed Time: 0:01:39 ETA:   0:00:17
+                                                                               
+
+ 90% (2765 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:16
+                                                                               
+
+ 90% (2770 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:15
+                                                                               
+
+ 90% (2775 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:14
+                                                                               
+
+ 90% (2780 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:13
+                                                                               
+
+ 90% (2785 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:12
+                                                                               
+
+ 90% (2790 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:12
+                                                                               
+
+ 90% (2795 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:11
+                                                                               
+
+ 91% (2800 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:10
+                                                                               
+
+ 91% (2805 of 3072) |##################  | Elapsed Time: 0:01:40 ETA:   0:00:10LOSSES sum: 12051.123748779297 | avg per batch: 154.5015865228115 | avg per elements: 1.2051123748779298
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.470120
+
+                                                                               
+
+ 91% (2808 of 3072) |##################  | Elapsed Time: 0:01:42 ETA:   0:00:23
+                                                                               
+
+ 91% (2813 of 3072) |##################  | Elapsed Time: 0:01:42 ETA:   0:00:22
+                                                                               
+
+ 91% (2818 of 3072) |##################  | Elapsed Time: 0:01:42 ETA:   0:00:22
+                                                                               
+
+ 91% (2823 of 3072) |##################  | Elapsed Time: 0:01:42 ETA:   0:00:21
+                                                                               
+
+ 92% (2828 of 3072) |##################  | Elapsed Time: 0:01:42 ETA:   0:00:21
+                                                                               
+
+ 92% (2833 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:18
+                                                                               
+
+ 92% (2838 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:15
+                                                                               
+
+ 92% (2843 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:14
+                                                                               
+
+ 92% (2848 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:12
+                                                                               
+
+ 92% (2853 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:11
+                                                                               
+
+ 93% (2858 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:10
+                                                                               
+
+ 93% (2863 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:10
+                                                                               
+
+ 93% (2868 of 3072) |##################  | Elapsed Time: 0:01:43 ETA:   0:00:09
+                                                                               
+
+ 93% (2873 of 3072) |##################  | Elapsed Time: 0:01:44 ETA:   0:00:08
+                                                                               
+
+ 93% (2878 of 3072) |##################  | Elapsed Time: 0:01:44 ETA:   0:00:08
+                                                                               
+
+ 93% (2883 of 3072) |##################  | Elapsed Time: 0:01:44 ETA:   0:00:07LOSSES sum: 12010.34814453125 | avg per batch: 153.97882236578525 | avg per elements: 1.201034814453125
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.334005
+
+                                                                               
+
+ 93% (2886 of 3072) |##################  | Elapsed Time: 0:01:45 ETA:   0:00:11
+                                                                               
+
+ 94% (2891 of 3072) |##################  | Elapsed Time: 0:01:45 ETA:   0:00:11
+                                                                               
+
+ 94% (2896 of 3072) |##################  | Elapsed Time: 0:01:45 ETA:   0:00:11
+                                                                               
+
+ 94% (2901 of 3072) |##################  | Elapsed Time: 0:01:46 ETA:   0:00:10
+                                                                               
+
+ 94% (2906 of 3072) |##################  | Elapsed Time: 0:01:46 ETA:   0:00:10
+                                                                               
+
+ 94% (2911 of 3072) |##################  | Elapsed Time: 0:01:46 ETA:   0:00:10
+                                                                               
+
+ 94% (2916 of 3072) |##################  | Elapsed Time: 0:01:46 ETA:   0:00:09
+                                                                               
+
+ 95% (2921 of 3072) |################### | Elapsed Time: 0:01:46 ETA:   0:00:08
+                                                                               
+
+ 95% (2926 of 3072) |################### | Elapsed Time: 0:01:46 ETA:   0:00:07
+                                                                               
+
+ 95% (2931 of 3072) |################### | Elapsed Time: 0:01:46 ETA:   0:00:07
+                                                                               
+
+ 95% (2936 of 3072) |################### | Elapsed Time: 0:01:46 ETA:   0:00:06
+                                                                               
+
+ 95% (2941 of 3072) |################### | Elapsed Time: 0:01:46 ETA:   0:00:06
+                                                                               
+
+ 95% (2946 of 3072) |################### | Elapsed Time: 0:01:47 ETA:   0:00:05
+                                                                               
+
+ 96% (2951 of 3072) |################### | Elapsed Time: 0:01:47 ETA:   0:00:05
+                                                                               
+
+ 96% (2956 of 3072) |################### | Elapsed Time: 0:01:47 ETA:   0:00:04
+                                                                               
+
+ 96% (2961 of 3072) |################### | Elapsed Time: 0:01:47 ETA:   0:00:04LOSSES sum: 12077.472457885742 | avg per batch: 154.83939048571463 | avg per elements: 1.2077472457885743
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.059536
+
+                                                                               
+
+ 96% (2964 of 3072) |################### | Elapsed Time: 0:01:48 ETA:   0:00:05
+                                                                               
+
+ 96% (2969 of 3072) |################### | Elapsed Time: 0:01:48 ETA:   0:00:04
+                                                                               
+
+ 96% (2974 of 3072) |################### | Elapsed Time: 0:01:48 ETA:   0:00:04
+                                                                               
+
+ 96% (2979 of 3072) |################### | Elapsed Time: 0:01:48 ETA:   0:00:04
+                                                                               
+
+ 97% (2984 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:04
+                                                                               
+
+ 97% (2989 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:03
+                                                                               
+
+ 97% (2994 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:03
+                                                                               
+
+ 97% (2999 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:03
+                                                                               
+
+ 97% (3004 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:03
+                                                                               
+
+ 97% (3009 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:02
+                                                                               
+
+ 98% (3014 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:02
+                                                                               
+
+ 98% (3019 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:02
+                                                                               
+
+ 98% (3024 of 3072) |################### | Elapsed Time: 0:01:49 ETA:   0:00:01
+                                                                               
+
+ 98% (3029 of 3072) |################### | Elapsed Time: 0:01:50 ETA:   0:00:01
+                                                                               
+
+ 98% (3034 of 3072) |################### | Elapsed Time: 0:01:50 ETA:   0:00:01
+                                                                               
+
+ 98% (3039 of 3072) |################### | Elapsed Time: 0:01:50 ETA:   0:00:01LOSSES sum: 11926.59326171875 | avg per batch: 152.90504181690704 | avg per elements: 1.192659326171875
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:00.908321
+
+                                                                               
+
+ 99% (3042 of 3072) |################### | Elapsed Time: 0:01:51 ETA:   0:00:01
+                                                                               
+
+ 99% (3047 of 3072) |################### | Elapsed Time: 0:01:51 ETA:   0:00:01
+                                                                               
+
+ 99% (3052 of 3072) |################### | Elapsed Time: 0:01:51 ETA:   0:00:00
+                                                                               
+
+ 99% (3057 of 3072) |################### | Elapsed Time: 0:01:51 ETA:   0:00:00
+                                                                               
+
+ 99% (3062 of 3072) |################### | Elapsed Time: 0:01:51 ETA:   0:00:00
+                                                                               
+
+ 99% (3067 of 3072) |################### | Elapsed Time: 0:01:51 ETA:   0:00:00
+                                                                               
+
+100% (3072 of 3072) |####################| Elapsed Time: 0:01:51 ETA:  00:00:00LOSSES sum: 11941.080764770508 | avg per batch: 153.09077903551932 | avg per elements: 1.1941080764770509
+
+saving model to: save-auto-07:17:23-Mon-Jan.model...
+    Done. time: 0:00:01.015845
+INFO - run - Completed after 0:01:53

@@ -169,17 +169,32 @@ def dots(vs, ws, metric):
     
 def normalize(vs, metric):
     # vs = [S1 x EMBEDSIZE]
-    # out = [S1 x EMBEDSIZE]
+    # metric = [EMBEDSIZE x EMBEDSIZE]
+    # normvs = [S1 x EMBEDSIZE]
 
-    # vs_dots_vs = [S1 x S1]
-    vs_dots_vs = dots(vs, vs, metric)
-    # norm = S1 x 1
-    norm = torch.sqrt(torch.diag(vs_dots_vs)).view(-1, 1)
-    # normvs = S1 x 1
-    normvs =  vs / norm
+    normvs = torch.zeros(vs.size()).to(DEVICE)
+    LOGGER.start("Setting up normvs (size: %s)..." % (vs.size(), ))
+    with progressbar.ProgressBar(max_value=vs.size()[0]) as bar:
+        for ix in range(vs.size()[0]):
+            v = vs[ix, :]
+            vlen = torch.sqrt(norm(v, v, metric))
+            normvs[ix, :] = v / vlen
+            bar.update(ix)
+    normvs.to(DEVICE)
+    LOGGER.end()
+    # return out
 
+    # # This is way too large for large datasets
+    # # vs_dots_vs = [S1 x S1]
+    # vs_dots_vs = dots(vs, vs, metric)
+    # # norm = S1 x 1
+    # norm = torch.sqrt(torch.diag(vs_dots_vs)).view(-1, 1)
+    # # normvs = S1 x 1
+    # normvs =  vs / norm
+
+    print("normvs device: %s | metric device: %s" % (normvs.device, metric.device))
     ERROR_THRESHOLD = 0.1
-    assert(torch.norm(torch.diag(dots(normvs, normvs, metric)) - torch.ones(len(vs)).to(DEVICE)).item() < ERROR_THRESHOLD)
+    # assert(torch.norm(torch.diag(dots(normvs, normvs, metric)) - torch.ones(len(vs)).to(DEVICE)).item() < ERROR_THRESHOLD)
     return normvs
 
 def cosinesim(v, w, metric):
@@ -210,7 +225,7 @@ class Parameters:
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = None
+        self.NWORDS = 10000
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -246,6 +261,11 @@ class Parameters:
         self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
 
+    def move_to_correct_device(self):
+        """Move the matrices in this to the correct device"""
+        self.METRIC = self.METRIC.to(DEVICE)
+        self.EMBEDM = self.EMBEDM.to(DEVICE)
+
 def mk_word_histogram(ws, vocab):
     """count frequency of words in words, given vocabulary size."""
     w2f = { w : 0 for w in vocab }
@@ -271,16 +291,22 @@ class SkipGramDataset(Dataset):
         LOGGER.end()
 
     def __getitem__(self, idx):
+        idx = idx // (2 * self.WINDOWSIZE) 
         idx = idx + self.WINDOWSIZE
-        wsfocusix = [self.TEXT[idx]]
-        wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
 
-        return torch.stack([hot(wsfocusix, self.W2I, self.VOCABSIZE), hot(wsctxix, self.W2I, self.VOCABSIZE)])
+        deltaix = idx % (2 * self.WINDOWSIZE) - self.WINDOWSIZE
+        wsfocusix = [self.TEXT[idx]]
+        # wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
+
+        return {'focusix': idx, 'ctxix': idx + deltaix}
+
+        # return torch.stack([hot(wsfocusix, self.W2I, self.VOCABSIZE), torch.tensor(idx + deltaix, dtype=torch.float32)])
+                            # hot(wsctxix, self.W2I, self.VOCABSIZE) / (self.WINDOWSIZE * 2))
 
     def __len__(self):
         # we can't query the first or last value.
         # first because it has no left, last because it has no right
-        return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
 
 def hot(ws, W2I, VOCABSIZE):
@@ -318,6 +344,7 @@ def cli_prompt():
         COMPLETER = WordCompleter(PARAMS.DATASET.VOCAB)
 
         ws = session.prompt("type in word>", completer=COMPLETER).split()
+        ws = session.prompt("type in word>", completer=COMPLETER).split()
         for w in ws:
             wordweights = test_find_close_vectors(w, EMBEDNORM)
             for (word, weight) in wordweights[:10]:
@@ -327,7 +354,11 @@ def cli_prompt():
     while True:
         try:
             prompt_word(session)
-        except Exception as e:
+        except KeyboardInterrupt:
+            break
+        except EOFError:
+            break
+        except KeyError as e:
             print_formatted_text("exception:\n%s" % (e, ))
 
 
@@ -341,7 +372,15 @@ DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available(
 LOGGER.end("device: %s" % DEVICE)
 
 
-PARAMS = Parameters(LOGGER, DEVICE)
+if PARSED.loadpath is not None:
+    LOGGER.start("loading model from: %s" % (PARSED.loadpath))
+    PARAMS = torch.load(PARSED.loadpath)
+    PARAMS.move_to_correct_device()
+    LOGGER.end("loaded params from: %s" % PARAMS.create_time)
+else:
+    LOGGER.start("Creating new parameters")
+    PARAMS = Parameters(LOGGER, DEVICE)
+    LOGGER.end()
 
 EXPERIMENT = sacred.Experiment()
 EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
@@ -354,7 +393,7 @@ EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
 
 
 @EXPERIMENT.capture
-def traincli(loadpath, savepath):
+def traincli(savepath):
     global PARAMS
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
@@ -363,14 +402,8 @@ def traincli(loadpath, savepath):
         EXPERIMENT.add_artifact(savepath)
         LOGGER.end()
 
-    if loadpath is not None:
-        LOGGER.start("loading model from: %s" % (loadpath))
-        PARAMS = torch.load(loadpath)
-        LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-
-
     LOGGER.start("creating optimizer and loss function")
-    loss = nn.MSELoss()
+    loss = nn.NLLLoss()
     LOGGER.end()
 
 
@@ -406,6 +439,7 @@ def traincli(loadpath, savepath):
             xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
 
             l = loss(ysopt, xs_dots_embeds)
+            print("* raw loss: %s" % l)
             loss_sum += torch.sum(torch.abs(l)).item()
             l.backward()
             PARAMS.optimizer.step()
@@ -436,23 +470,15 @@ def traincli(loadpath, savepath):
     save()
 
 
-def testcli(loadpath):
-    global PARAMS
-
-    with open(loadpath, "rb") as lf:
-        global PARAMS
-        PARAMS = torch.load(lf)
-
-    cli_prompt()
 
 
 
 @EXPERIMENT.main
 def main():
     if PARSED.command == "train":
-        traincli(PARSED.loadpath, PARSED.savepath)
+        traincli(PARSED.savepath)
     elif PARSED.command == "test":
-        testcli(PARSED.loadpath)
+        cli_prompt()
     else:
         raise RuntimeError("unknown command: %s" % PARSED.command)
 

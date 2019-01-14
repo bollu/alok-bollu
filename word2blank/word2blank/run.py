@@ -208,7 +208,7 @@ class Parameters:
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = 1000
+        self.NWORDS = self.BATCHSIZE * 10000
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -409,7 +409,7 @@ def traincli(loadpath, savepath):
             PRINT_PER_NUM_ELEMENTS = 10000
             PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
             if (ix % PRINT_PER_NUM_BATCHES == 0):
-                print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
+                print("\nLOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
                       (loss_sum,
                        loss_sum / PRINT_PER_NUM_BATCHES,
                        loss_sum / PRINT_PER_NUM_ELEMENTS))

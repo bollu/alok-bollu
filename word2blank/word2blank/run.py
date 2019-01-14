@@ -15,7 +15,6 @@ def parse(s):
         now = datetime.datetime.now()
         return "save-auto-%s.model" % (current_time_str(), )
     p = argparse.ArgumentParser()
-    p.add_argument("--enforce-clean", action='store_true', help="enfore repo to be clean")
 
     sub = p.add_subparsers(dest="command")
     train = sub.add_parser("train", help="train the model")
@@ -98,12 +97,12 @@ def load_corpus(LOGGER, nwords):
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
-    return  """we are about to study the idea of a computational process.
-     computational processes are abstract beings that inhabit computers.
-     as they evolve, processes manipulate other abstract things called data.
-     the evolution of a process is directed by a pattern of rules called a program.
-     people create programs to direct processes.
-     in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
+    # return  """we are about to study the idea of a computational process.
+    #  computational processes are abstract beings that inhabit computers.
+    #  as they evolve, processes manipulate other abstract things called data.
+    #  the evolution of a process is directed by a pattern of rules called a program.
+    #  people create programs to direct processes.
+    #  in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
     CORPUS_NAME = "text8"
     LOGGER.start("loading corpus: %s" % CORPUS_NAME)
     try:
@@ -227,11 +226,11 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 1000
-        self.BATCHSIZE = 2
-        self.EMBEDSIZE = 5
+        self.BATCHSIZE = 512
+        self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
-        self.NWORDS = 10000
+        self.NWORDS = 100000
         self.create_time = current_time_str()
 
         self._init_from_params()

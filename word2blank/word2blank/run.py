@@ -44,6 +44,8 @@ import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
+import sacred
+import sacred.observers
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -203,7 +205,7 @@ class Parameters:
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = 1000 * 5
+        self.NWORDS = 1000
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -333,8 +335,20 @@ LOGGER.start("setting up device")
 DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
 LOGGER.end("device: %s" % DEVICE)
 
+
 PARAMS = Parameters(LOGGER, DEVICE)
 
+EXPERIMENT = sacred.Experiment()
+EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
+                      BATCHSIZE = PARAMS.BATCHSIZE,
+                      EMBEDSIZE = PARAMS.EMBEDSIZE,
+                      LEARNING_RATE = PARAMS.LEARNING_RATE,
+                      WINDOWSIZE = PARAMS.WINDOWSIZE,
+                      NWORDS = PARAMS.NWORDS)
+EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
+
+
+@EXPERIMENT.capture
 def traincli(loadpath, savepath):
     global PARAMS
     def save():
@@ -417,11 +431,16 @@ def testcli(loadpath):
 
 
 
-if __name__ == "__main__":
+@EXPERIMENT.main
+def main():
     if PARSED.command == "train":
         traincli(PARSED.loadpath, PARSED.savepath)
     elif PARSED.command == "test":
         testcli(PARSED.loadpath)
     else:
         raise RuntimeError("unknown command: %s" % PARSED.command)
+
+if __name__ == "__main__":
+    EXPERIMENT.run()
+ 
 

@@ -1,8 +1,8 @@
 gensim
 pudb
-click
 tabulate
 terminalplot
 progressbar2
 prompt_toolkit
-fire
+sacred
+GitPython

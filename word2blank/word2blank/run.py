@@ -15,6 +15,8 @@ def parse(s):
         now = datetime.datetime.now()
         return "save-auto-%s.model" % (current_time_str(), )
     p = argparse.ArgumentParser()
+    p.add_argument("--enforce-clean", action='store_true', help="enfore repo to be clean")
+
     sub = p.add_subparsers(dest="command")
     train = sub.add_parser("train", help="train the model")
     train.add_argument("--loadpath", help="path to model file to load from", default=None)
@@ -46,6 +48,7 @@ from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
 import sacred
 import sacred.observers
+import progressbar
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -355,7 +358,8 @@ def traincli(loadpath, savepath):
         LOGGER.start("saving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             torch.save(PARAMS, sf)
-            LOGGER.end()
+        EXPERIMENT.add_artifact(savepath)
+        LOGGER.end()
 
     if loadpath is not None:
         LOGGER.start("loading model from: %s" % (loadpath))
@@ -375,48 +379,47 @@ def traincli(loadpath, savepath):
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-    with progressbar.SimpleProgress(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
-        loss_sum = 0
-        ix = 0
-        for epoch in range(PARAMS.EPOCHS):
-            for train in PARAMS.DATA:
-                ix += 1
-                # [BATCHSIZE x VOCABSIZE]
-                xs = train[:, 0].to(DEVICE)
-                # [BATCHSIZE x VOCABSIZE]
-                ysopt = train[:, 1].to(DEVICE)
+    bar =  progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA)))
+    loss_sum = 0
+    ix = 0
+    for epoch in range(PARAMS.EPOCHS):
+        for train in PARAMS.DATA:
+            ix += 1
+            # [BATCHSIZE x VOCABSIZE]
+            xs = train[:, 0].to(DEVICE)
+            # [BATCHSIZE x VOCABSIZE]
+            ysopt = train[:, 1].to(DEVICE)
 
-                PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-                # embedded vectors of the batch vectors
-                # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-                xsembeds = torch.mm(xs, PARAMS.EMBEDM)
+            PARAMS.optimizer.zero_grad()   # zero the gradient buffers
+            # embedded vectors of the batch vectors
+            # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+            xsembeds = torch.mm(xs, PARAMS.EMBEDM)
 
-                # dots(BATCHSIZE x EMBEDSIZE], 
-                #     [VOCABSIZE x EMBEDSIZE],
-                #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-                xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
+            # dots(BATCHSIZE x EMBEDSIZE], 
+            #     [VOCABSIZE x EMBEDSIZE],
+            #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+            xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
 
-                l = loss(ysopt, xs_dots_embeds)
-                loss_sum += torch.sum(torch.abs(l)).item()
-                l.backward()
-                PARAMS.optimizer.step()
-                bar.update(bar.value + 1)
+            l = loss(ysopt, xs_dots_embeds)
+            loss_sum += torch.sum(torch.abs(l)).item()
+            l.backward()
+            PARAMS.optimizer.step()
+            bar.update(bar.value + 1)
 
-                PRINT_PER_NUM_ELEMENTS = 10000
-                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
-                if (ix % PRINT_PER_NUM_BATCHES == 0):
-                    print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
-                          (loss_sum,
-                           loss_sum / PRINT_PER_NUM_BATCHES,
-                           loss_sum / PRINT_PER_NUM_ELEMENTS))
-                    loss_sum = 0
+            PRINT_PER_NUM_ELEMENTS = 10000
+            PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
+            if (ix % PRINT_PER_NUM_BATCHES == 0):
+                print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
+                      (loss_sum,
+                       loss_sum / PRINT_PER_NUM_BATCHES,
+                       loss_sum / PRINT_PER_NUM_ELEMENTS))
+                loss_sum = 0
 
-                SAVE_PER_NUM_ELEMENTS = 20000
-                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
+            SAVE_PER_NUM_ELEMENTS = 20000
+            SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
 
-                if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
-                    save()
-        print("FINAL BAR VALUE: %s" % bar.value) 
+            if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
+                save()
     save()
 
 
@@ -442,5 +445,4 @@ def main():
 
 if __name__ == "__main__":
     EXPERIMENT.run()
- 
 

@@ -355,7 +355,7 @@ EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
 def traincli(loadpath, savepath):
     global PARAMS
     def save():
-        LOGGER.start("\nsaving model to: %s" % (savepath))
+        LOGGER.start("saving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             torch.save(PARAMS, sf)
         EXPERIMENT.add_artifact(savepath)

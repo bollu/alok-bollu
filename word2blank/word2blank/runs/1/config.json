@@ -1,0 +1,9 @@
+{
+  "BATCHSIZE": 128,
+  "EMBEDSIZE": 200,
+  "EPOCHS": 3,
+  "LEARNING_RATE": 0.025,
+  "NWORDS": 1000,
+  "WINDOWSIZE": 2,
+  "seed": 755098511
+}

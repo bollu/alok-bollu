@@ -210,7 +210,7 @@ class Parameters:
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = 100000
+        self.NWORDS = None
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)

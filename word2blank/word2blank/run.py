@@ -40,7 +40,6 @@ import gensim.downloader as api
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import numpy as np
 import math
-import progressbar
 import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit import prompt, PromptSession
@@ -362,7 +361,7 @@ def traincli(loadpath, savepath):
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-    with progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
+    with progressbar.SimpleProgress(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
         loss_sum = 0
         ix = 0
         for epoch in range(PARAMS.EPOCHS):
@@ -405,7 +404,6 @@ def traincli(loadpath, savepath):
                     save()
         print("FINAL BAR VALUE: %s" % bar.value) 
     save()
-    cli_prompt()
 
 
 def testcli(loadpath):

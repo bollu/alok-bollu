@@ -208,6 +208,22 @@ def cosinesim(v, w, metric):
 
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
+def normalize(vs, metric):
+    # vs = [S1 x EMBEDSIZE]
+    # metric = [EMBEDSIZE x EMBEDSIZE]
+    # normvs = [S1 x EMBEDSIZE]
+    normvs = torch.zeros(vs.size()).to(DEVICE)
+    BATCHSIZE = 512
+    with prompt_toolkit.shortcuts.ProgressBar() as pb:
+        for i in pb(range(math.ceil(vs.size()[0] / BATCHSIZE))):
+            vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
+            vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
+            vslen = vslen.view(-1, 1) # have one element per column which is the length
+            normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
+    normvs.to(DEVICE)
+    ERROR_THRESHOLD = 0.1
+    return normvs
+
 
 class Word2Man(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
@@ -249,12 +265,12 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 1
+        self.EPOCHS = 500
         self.BATCHSIZE = 512
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
-        self.NWORDS = None
+        self.NWORDS = 10000
         self.create_time = current_time_str()
 
         self._init_from_params()
@@ -402,9 +418,9 @@ def cli_prompt():
     """Call to launch prompt interface."""
 
     LOGGER.start("normalizing EMBEDM...")
-    PARAMS.EMBEDM = PARAMS.EMBEDM.to(DEVICE)
-    PARAMS.METRIC = PARAMS.METRIC.to(DEVICE)
-    EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
+    PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
+    PARAMS.WORD2MAN.METRIC = PARAMS.WORD2MAN.METRIC.to(DEVICE)
+    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC).to(DEVICE)
     LOGGER.end("done.")
 
 
@@ -416,46 +432,13 @@ def cli_prompt():
         # [1 x VOCABSIZE] 
         whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        return normalize(torch.mm(whot.view(1, -1), PARAMS.EMBEDM), PARAMS.METRIC)
+        return normalize(torch.mm(whot.view(1, -1), PARAMS.WORD2MAN.EMBEDM), 
+                         PARAMS.WORD2MAN.METRIC)
 
-    def test_find_close_vectors(v, normalized_embed):
+    def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
-
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(v, normalized_embed, PARAMS.METRIC)
-
-    def normalize(vs, metric):
-        # vs = [S1 x EMBEDSIZE]
-        # metric = [EMBEDSIZE x EMBEDSIZE]
-        # normvs = [S1 x EMBEDSIZE]
-
-        normvs = torch.zeros(vs.size()).to(DEVICE)
-        BATCHSIZE = 512
-        with prompt_toolkit.shortcuts.ProgressBar() as pb:
-            for i in pb(range(math.ceil(vs.size()[0] / BATCHSIZE))):
-                vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
-
-                vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
-                vslen = vslen.view(-1, 1) # have one element per column which is the length
-
-                normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
-            normvs.to(DEVICE)
-            ERROR_THRESHOLD = 0.1
-            return normvs
-
-    PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
-    PARAMS.WORD2MAN.METRIC = PARAMS.WORD2MAN.METRIC.to(DEVICE)
-    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC).to(DEVICE)
-
-    def test_find_close_vectors(w):
-        """ Find vectors close to w in the normalized embedding"""
-        # [1 x VOCABSIZE] 
-        whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
-        # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.WORD2MAN.EMBEDM), PARAMS.WORD2MAN.METRIC)
-
-        # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(wembed, EMBEDNORM, PARAMS.WORD2MAN.METRIC)
+        wix2sim = dots(v, EMBEDNORM, PARAMS.WORD2MAN.METRIC)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
@@ -479,7 +462,7 @@ def cli_prompt():
             if len(raw) != 2:
                 print("error: expected near <w>")
                 return
-            wordweights = test_find_close_vectors(word_to_embed_vector(raw[1]), EMBEDNORM)
+            wordweights = test_find_close_vectors(word_to_embed_vector(raw[1]))
             for (word, weight) in wordweights[:10]:
                 print_formatted_text("\t%s: %s" % (word, weight))
         elif raw[0] == "sim":
@@ -489,9 +472,9 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC) 
+            vsim = normalize(v2 - v1 + v3, PARAMS.WORD2MAN.METRIC) 
 
-            wordweights = test_find_close_vectors(vsim, EMBEDNORM)
+            wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:10]:
                 print_formatted_text("\t%s: %s" % (word, weight))
 
@@ -501,9 +484,9 @@ def cli_prompt():
                 print("error: expected dot <w1> <w2>")
                 return
 
-            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC)
-            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC)
-            print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.METRIC), ))
+            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.WORD2MAN.METRIC)
+            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.WORD2MAN.METRIC)
+            print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.WORD2MAN.METRIC), ))
         else:
             print_formatted_text("invalid command, type ? for help")
 
@@ -599,8 +582,8 @@ def traincli(savepath):
             now = datetime.datetime.now()
 
             # printing
-            TARGET_PRINT_TIME_IN_S = 3 # print progress every 20 seconds
-            if (now - time_last_print).seconds > TARGET_PRINT_TIME_IN_S:
+            TARGET_PRINT_TIME_IN_S = 1
+            if (now - time_last_print).seconds >= TARGET_PRINT_TIME_IN_S:
                 nbatches = ix - last_print_ix
                 print("\nLOSSES sum: %s | avg per batch(#batch=%s): %s | avg per elements(#elems=%s): %s" % 
                       (loss_sum,

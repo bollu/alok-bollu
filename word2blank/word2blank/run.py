@@ -88,8 +88,8 @@ class TimeLogger:
         if (toprint): print("--")
         sys.stdout.flush()
 
-def load_corpus(LOGGER):
-
+def load_corpus(LOGGER, nwords):
+    """load the corpus, and pull nwords from the corpus"""
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
@@ -112,12 +112,15 @@ def load_corpus(LOGGER):
         print("Done.")
 
     corpus = list(corpus)
-    print("number of documents in corpus: %s" % (len(corpus), ))
-    DOCS_TO_TAKE = 1 
-    print("taking first N(%s) documents in corpus: %s" % (DOCS_TO_TAKE, DOCS_TO_TAKE))
-    corpus = corpus[:DOCS_TO_TAKE]
     corpus = flatten(corpus)
-    print("number of words in corpus: %s" % (len(corpus), ))
+    print("number of words in corpus (original): %s" % (len(corpus), ))
+
+    LOGGER.start("filtering stopwords")
+    corpus = list(filter(lambda w: w not in STOPWORDS, corpus))
+    LOGGER.end()
+    print("number of words in corpus (after filtering: %s" % (len(corpus), ))
+    print("taking N(%s) words form the corpus: " % (nwords, ))
+    corpus = corpus[:nwords]
     LOGGER.end()
     return corpus
 
@@ -196,17 +199,15 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 5
-        self.BATCHSIZE = 4
-        self.EMBEDSIZE = 100
-        self.LEARNING_RATE = 0.1
+        self.EPOCHS = 3
+        self.BATCHSIZE = 128
+        self.EMBEDSIZE = 200
+        self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
+        self.NWORDS = 1000 * 5
         self.create_time = current_time_str()
 
-        TEXT = load_corpus(LOGGER)
-        LOGGER.start("filtering stopwords")
-        TEXT = list(filter(lambda w: w not in STOPWORDS, TEXT))
-        LOGGER.end()
+        TEXT = load_corpus(LOGGER, self.NWORDS)
 
 
         LOGGER.start("building vocabulary")
@@ -334,7 +335,6 @@ DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available(
 LOGGER.end("device: %s" % DEVICE)
 
 PARAMS = Parameters(LOGGER, DEVICE)
-
 
 def traincli(loadpath, savepath):
     global PARAMS

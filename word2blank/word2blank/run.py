@@ -93,7 +93,7 @@ class TimeLogger:
         sys.stdout.flush()
 
 def load_corpus(LOGGER, nwords):
-    """load the corpus, and pull nwords from the corpus"""
+    """load the corpus, and pull nwords from the corpus if it's not None"""
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
@@ -124,7 +124,9 @@ def load_corpus(LOGGER, nwords):
     LOGGER.end()
     print("number of words in corpus (after filtering: %s" % (len(corpus), ))
     print("taking N(%s) words form the corpus: " % (nwords, ))
-    corpus = corpus[:nwords]
+
+    if nwords is not None:
+        corpus = corpus[:nwords]
     LOGGER.end()
     return corpus
 
@@ -208,7 +210,7 @@ class Parameters:
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = self.BATCHSIZE * 10000
+        self.NWORDS = None
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)

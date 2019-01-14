@@ -44,6 +44,7 @@ import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
+import progressbar
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -92,12 +93,21 @@ def load_corpus(LOGGER, nwords):
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
-    # return  """we are about to study the idea of a computational process.
-    #  computational processes are abstract beings that inhabit computers.
-    #  as they evolve, processes manipulate other abstract things called data.
-    #  the evolution of a process is directed by a pattern of rules called a program.
-    #  people create programs to direct processes.
-    #  in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
+    def get_freq_cutoff(freqs, cutoff):
+        """Get the frequency below which the data accounts for < cutoff
+        freqs: list of frequencies
+        0 <= cutoff <= 1
+        """
+        freqs = list(freqs)
+        TOTFREQ = sum(freqs)
+        freqs.sort()
+
+        tot = 0
+        i = 0
+        # accumulate till where we reach cutoff
+        while tot < TOTFREQ * cutoff and i < len(freqs): i += 1; tot += freqs[i]
+        return freqs[i]
+
     CORPUS_NAME = "text8"
     LOGGER.start("loading corpus: %s" % CORPUS_NAME)
     try:
@@ -116,10 +126,27 @@ def load_corpus(LOGGER, nwords):
 
     LOGGER.start("filtering stopwords")
     corpus = list(filter(lambda w: w not in STOPWORDS, corpus))
+    LOGGER.end("#words in corpus after filtering: %s" % (len(corpus), ))
+
+    LOGGER.start("counting frequencies to filter...")
+    w2f = mk_word_histogram(corpus, set(corpus))
     LOGGER.end()
-    print("number of words in corpus (after filtering: %s" % (len(corpus), ))
-    print("taking N(%s) words form the corpus: " % (nwords, ))
-    corpus = corpus[:nwords]
+
+    LOGGER.start("filtering low frequency words... (all frequencies that account for < 20% of the dataset)")
+    origlen = len(corpus)
+    cutoff_freq = get_freq_cutoff(w2f.values(), 0.2)
+    corpus = list(filter(lambda w: w2f[w] > cutoff_freq, corpus))
+    filtlen = len(corpus)
+    LOGGER.end("filtered #%s (%s percent) words. New corpus size: %s (%s percent of original)" % 
+               (origlen - filtlen,
+                float(origlen - filtlen) / float(origlen) * 100.0,
+                filtlen,
+                filtlen / float(origlen) * 100.0
+               ))
+
+    if nwords is not None:
+        print("taking N(%s) words form the corpus: " % (nwords, ))
+        corpus = corpus[:nwords]
     LOGGER.end()
     return corpus
 
@@ -198,12 +225,12 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 3
-        self.BATCHSIZE = 128
+        self.EPOCHS = 1
+        self.BATCHSIZE = 1024
         self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.025
         self.WINDOWSIZE = 2
-        self.NWORDS = 1000 * 5
+        self.NWORDS = None
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -288,15 +315,28 @@ def hot(ws, W2I, VOCABSIZE):
 def cli_prompt():
     """Call to launch prompt interface."""
 
-    def test_find_close_vectors(w, normalized_embed):
-        """ Find vectors close to w in the normalized embedding"""
+    print_formatted_text("normalizing EMBEDM...")
+    PARAMS.EMBEDM = PARAMS.EMBEDM.to(DEVICE)
+    PARAMS.METRIC = PARAMS.METRIC.to(DEVICE)
+    EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
+    print_formatted_text("done.")
+
+
+    def word_to_embed_vector(w):
+        """
+        find the embedded vector of word w
+        returns: [1 x EMBEDSIZE]
+        """
         # [1 x VOCABSIZE] 
         whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.EMBEDM), PARAMS.METRIC)
+        return normalize(torch.mm(whot.view(1, -1), PARAMS.EMBEDM), PARAMS.METRIC)
+
+    def test_find_close_vectors(v, normalized_embed):
+        """ Find vectors close to w in the normalized embedding"""
 
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(wembed, normalized_embed, PARAMS.METRIC)
+        wix2sim = dots(v, normalized_embed, PARAMS.METRIC)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
@@ -307,14 +347,46 @@ def cli_prompt():
     def prompt_word(session):
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
-        EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
-        COMPLETER = WordCompleter(PARAMS.DATASET.VOCAB)
+        # COMPLETER = ThreadedCompleter(WordCompleter(PARAMS.DATASET.VOCAB))
 
-        ws = session.prompt("type in word>", completer=COMPLETER).split()
-        for w in ws:
-            wordweights = test_find_close_vectors(w, EMBEDNORM)
+        raw = session.prompt("type in command>").split() 
+        # raw = session.prompt("type in command>", completer=COMPLETER).split()
+        if len(raw) == 0:
+            return
+        if raw[0] == "help" or raw[0] == "?":
+            print_formatted_text("near <word> | sim <w1> <w2> <w3> | dot <w1> <w2>")
+            return
+        elif raw[0] == "near" or raw[0] == "neighbour":
+            if len(raw) != 2:
+                print("error: expected near <w>")
+                return
+            wordweights = test_find_close_vectors(word_to_embed_vector(raw[1]), EMBEDNORM)
             for (word, weight) in wordweights[:10]:
                 print_formatted_text("\t%s: %s" % (word, weight))
+        elif raw[0] == "sim":
+            if len(raw) != 4:
+                print("error: expected sim <w1> <w2> <w3>")
+                return
+            v1 = word_to_embed_vector(raw[1])
+            v2 = word_to_embed_vector(raw[2])
+            v3 = word_to_embed_vector(raw[3])
+            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC) 
+
+            wordweights = test_find_close_vectors(vsim, EMBEDNORM)
+            for (word, weight) in wordweights[:10]:
+                print_formatted_text("\t%s: %s" % (word, weight))
+
+            print_formatted_text("\t%s: %s" % (word, weight))
+        elif raw[0] == "dot":
+            if len(raw) != 3:
+                print("error: expected dot <w1> <w2>")
+                return
+
+            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC)
+            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC)
+            print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.METRIC), ))
+        else:
+            print_formatted_text("invalid command, type ? for help")
 
     session = PromptSession()
     while True:
@@ -361,7 +433,7 @@ def traincli(loadpath, savepath):
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
 
-    with progressbar.SimpleProgress(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
+    with progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
         loss_sum = 0
         ix = 0
         for epoch in range(PARAMS.EPOCHS):

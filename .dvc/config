@@ -1,4 +1,0 @@
-['remote "local"']
-url = /home/bollu/dvc-word2blank
-[core]
-remote = local

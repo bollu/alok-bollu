@@ -97,12 +97,12 @@ def load_corpus(LOGGER, nwords):
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
-    # return  """we are about to study the idea of a computational process.
-    #  computational processes are abstract beings that inhabit computers.
-    #  as they evolve, processes manipulate other abstract things called data.
-    #  the evolution of a process is directed by a pattern of rules called a program.
-    #  people create programs to direct processes.
-    #  in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
+    return  """we are about to study the idea of a computational process.
+     computational processes are abstract beings that inhabit computers.
+     as they evolve, processes manipulate other abstract things called data.
+     the evolution of a process is directed by a pattern of rules called a program.
+     people create programs to direct processes.
+     in effect, we conjure the spirits of the computer with our spells.""".split()                                                                
     CORPUS_NAME = "text8"
     LOGGER.start("loading corpus: %s" % CORPUS_NAME)
     try:
@@ -220,12 +220,12 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 3
-        self.BATCHSIZE = 128
-        self.EMBEDSIZE = 200
-        self.LEARNING_RATE = 0.025
+        self.EPOCHS = 1000
+        self.BATCHSIZE = 2
+        self.EMBEDSIZE = 5
+        self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
-        self.NWORDS = 10000
+        self.NWORDS = 10
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -252,7 +252,7 @@ class Parameters:
 
 
         LOGGER.start("creating dataset...")
-        self.DATASET = SkipGramDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        self.DATASET = SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
@@ -273,7 +273,7 @@ def mk_word_histogram(ws, vocab):
         w2f[w] += 1
     return w2f
 
-class SkipGramDataset(Dataset):
+class SkipGramNHotDataset(Dataset):
     def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
         self.TEXT = TEXT
 
@@ -290,32 +290,57 @@ class SkipGramDataset(Dataset):
         self.W2F = mk_word_histogram(TEXT, VOCAB)
         LOGGER.end()
 
-    def __getitem__(self, idx):
-        idx = idx // (2 * self.WINDOWSIZE) 
-        idx = idx + self.WINDOWSIZE
+    def __getitem__(self, ix):
+        ix += self.WINDOWSIZE
+        focusix = [self.TEXT[ix]]
+        ctxixs = [self.TEXT[ix + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
 
-        deltaix = idx % (2 * self.WINDOWSIZE) - self.WINDOWSIZE
-        wsfocusix = [self.TEXT[idx]]
-        # wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
+        return {'focusix': hot(focusix, self.W2I, self.VOCABSIZE),
+                'ctxixs': hot(ctxixs, self.W2I, self.VOCABSIZE)}
 
-        return {'focusix': idx, 'ctxix': idx + deltaix}
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
 
-        # return torch.stack([hot(wsfocusix, self.W2I, self.VOCABSIZE), torch.tensor(idx + deltaix, dtype=torch.float32)])
-                            # hot(wsctxix, self.W2I, self.VOCABSIZE) / (self.WINDOWSIZE * 2))
+class SkipGramOneHotDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, ix):
+        focusix = ix // (2 * self.WINDOWSIZE)
+        focusix += self.WINDOWSIZE
+        deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+
+        return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] # Variable(torch.tensor([self.W2I[self.TEXT[focusix + deltaix]]])).long()
+                }
 
     def __len__(self):
         # we can't query the first or last value.
         # first because it has no left, last because it has no right
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
-
 def hot(ws, W2I, VOCABSIZE):
     """
-    hot vector for each word in ws
+    hot *normalized* vector for each word in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
     for w in ws: v[W2I[w]] = 1.0
-    return v
+    return v / float(len(ws))
 
 
 def cli_prompt():
@@ -392,19 +417,15 @@ EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
 EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
 
 
-@EXPERIMENT.capture
+# @EXPERIMENT.capture
 def traincli(savepath):
     global PARAMS
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             torch.save(PARAMS, sf)
-        EXPERIMENT.add_artifact(savepath)
+        # EXPERIMENT.add_artifact(savepath)
         LOGGER.end()
-
-    LOGGER.start("creating optimizer and loss function")
-    loss = nn.NLLLoss()
-    LOGGER.end()
 
 
     # Notice that we do not normalize the vectors in the hidden layer
@@ -422,11 +443,12 @@ def traincli(savepath):
     last_print_ix = 0
     for epoch in range(PARAMS.EPOCHS):
         for train in PARAMS.DATA:
+            print(train)
             ix += 1
             # [BATCHSIZE x VOCABSIZE]
-            xs = train[:, 0].to(DEVICE)
+            xs = train['focusonehot'].to(DEVICE)
             # [BATCHSIZE x VOCABSIZE]
-            ysopt = train[:, 1].to(DEVICE)
+            targets = train['ctxtruelabel'].to(DEVICE)
 
             PARAMS.optimizer.zero_grad()   # zero the gradient buffers
             # embedded vectors of the batch vectors
@@ -437,8 +459,9 @@ def traincli(savepath):
             #     [VOCABSIZE x EMBEDSIZE],
             #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
             xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
+            xs_dots_embeds = F.log_softmax(xs_dots_embeds, dim=0)
 
-            l = loss(ysopt, xs_dots_embeds)
+            l = F.nll_loss(xs_dots_embeds, targets)
             print("* raw loss: %s" % l)
             loss_sum += torch.sum(torch.abs(l)).item()
             l.backward()
@@ -473,7 +496,7 @@ def traincli(savepath):
 
 
 
-@EXPERIMENT.main
+# @EXPERIMENT.main
 def main():
     if PARSED.command == "train":
         traincli(PARSED.savepath)
@@ -483,5 +506,6 @@ def main():
         raise RuntimeError("unknown command: %s" % PARSED.command)
 
 if __name__ == "__main__":
-    EXPERIMENT.run()
+    main()
+    # EXPERIMENT.run()
 

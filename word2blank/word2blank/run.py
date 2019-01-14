@@ -397,7 +397,9 @@ def cli_prompt():
             ERROR_THRESHOLD = 0.1
             return normvs
 
-    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC)
+    PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
+    PARAMS.WORD2MAN.METRIC = PARAMS.WORD2MAN.METRIC.to(DEVICE)
+    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC).to(DEVICE)
 
     def test_find_close_vectors(w):
         """ Find vectors close to w in the normalized embedding"""

@@ -46,6 +46,7 @@ import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
+import prompt_toolkit.shortcuts
 import sacred
 import sacred.observers
 import progressbar
@@ -139,10 +140,6 @@ def batch(xs, BATCHSIZE):
         yield data
 
 
-def norm(v, w, metric):
-    dot = torch.mm(torch.mm(v.view(1, -1), metric), w.view(-1, 1))
-    return dot
-
 
 def dots(vs, ws, metric):
     """Take the dot product of each element in vs with elements in ws"""
@@ -166,37 +163,12 @@ def dots(vs, ws, metric):
     #         # [1 x EMBEDSIZE] x [EMBEDSIZE x EMBEDSIZE] x [EMBEDSIZE x 1] = [1x1]
     #         outs[vix][wix] = cosinesim(v, w, metric)
     # return outs
+
+
+def dot(v, w, metric):
+    return dots(v.view(1, -1), w.view(-1, 1), metric)
+
     
-def normalize(vs, metric):
-    # vs = [S1 x EMBEDSIZE]
-    # metric = [EMBEDSIZE x EMBEDSIZE]
-    # normvs = [S1 x EMBEDSIZE]
-
-    normvs = torch.zeros(vs.size()).to(DEVICE)
-    LOGGER.start("Setting up normvs (size: %s)..." % (vs.size(), ))
-    with progressbar.ProgressBar(max_value=vs.size()[0]) as bar:
-        for ix in range(vs.size()[0]):
-            v = vs[ix, :]
-            vlen = torch.sqrt(norm(v, v, metric))
-            normvs[ix, :] = v / vlen
-            bar.update(ix)
-    normvs.to(DEVICE)
-    LOGGER.end()
-    # return out
-
-    # # This is way too large for large datasets
-    # # vs_dots_vs = [S1 x S1]
-    # vs_dots_vs = dots(vs, vs, metric)
-    # # norm = S1 x 1
-    # norm = torch.sqrt(torch.diag(vs_dots_vs)).view(-1, 1)
-    # # normvs = S1 x 1
-    # normvs =  vs / norm
-
-    print("normvs device: %s | metric device: %s" % (normvs.device, metric.device))
-    ERROR_THRESHOLD = 0.1
-    # assert(torch.norm(torch.diag(dots(normvs, normvs, metric)) - torch.ones(len(vs)).to(DEVICE)).item() < ERROR_THRESHOLD)
-    return normvs
-
 def cosinesim(v, w, metric):
     # vs = [1 x EMBEDSIZE]
     # ws = [1 x EMBEDSIZE]
@@ -215,6 +187,40 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 
+class Word2Man(nn.Module):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
+        super(Word2Man, self).__init__()
+        LOGGER.start("creating EMBEDM")
+        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        LOGGER.end()
+
+        LOGGER.start("creating METRIC")
+        self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
+        LOGGER.end()
+
+    def forward(self, xs):
+        """
+        xs are one hot vectors of the focus word. What we will return is
+        [embed(xs) . embed(y) for y in ys].
+
+        That is, the dot product of the embedding of the word with every
+        other word
+
+        xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
+        """
+        # embedded vectors of the batch vectors
+        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+        xsembeds = torch.mm(xs, self.EMBEDM)
+
+        # dots(BATCHSIZE x EMBEDSIZE], 
+        #     [VOCABSIZE x EMBEDSIZE],
+        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
+        # TODO: why is this correct? I don't geddit.
+        # what in the fuck does it mean to log softmax cosine?
+        xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=0)
+
+        return xsembeds_dots_embeds
 
 class Parameters:
     """God object containing everything the model has"""
@@ -225,29 +231,26 @@ class Parameters:
         self.EMBEDSIZE = 5
         self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
-        self.NWORDS = 10
+        self.NWORDS = 10000
         self.create_time = current_time_str()
 
-        TEXT = load_corpus(LOGGER, self.NWORDS)
+        self._init_from_params()
 
+
+    def _init_from_params(self):
+        TEXT = load_corpus(LOGGER, self.NWORDS)
 
         LOGGER.start("building vocabulary")
         VOCAB = set(TEXT)
         VOCABSIZE = len(VOCAB)
         LOGGER.end()
 
-
-        LOGGER.start("creating EMBEDM")
-        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, self.EMBEDSIZE).to(DEVICE), requires_grad=True))
-        LOGGER.end()
-
-        # metric, currently identity matrix
-        LOGGER.start("creating metric")
-        self.METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
+        LOGGER.start("creating word2man")
+        self.WORD2MAN = Word2Man(VOCABSIZE, self.EMBEDSIZE, DEVICE)
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
-        self.optimizer = optim.SGD([self.EMBEDM], lr=self.LEARNING_RATE)
+        self.optimizer = optim.SGD(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
         LOGGER.end()
 
 
@@ -261,10 +264,39 @@ class Parameters:
         self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
 
-    def move_to_correct_device(self):
-        """Move the matrices in this to the correct device"""
-        self.METRIC = self.METRIC.to(DEVICE)
-        self.EMBEDM = self.EMBEDM.to(DEVICE)
+    # does not work :(
+    # def __getstate__(self):
+    #     return {
+    #         "EPOCHS": self.EPOCHS,
+    #         "BATCHSIZE": self.BATCHSIZE,
+    #         "EMBEDSIZE": self.EMBEDSIZE,
+    #         "LEARNINGRATE": self.LEARNING_RATE,
+    #         "WINDOWSIZE": self.WINDOWSIZE,
+    #         "NWORDS": self.NWORDS,
+    #         "CREATE_TIME": self.create_time,
+    #         "WORD2MAN": self.WORD2MAN.state_dict(),
+    #         "OPTIMIZER": self.optimizer.state_dict()
+    #     }
+    # 
+    # def __setstate__(self, state):
+    #     self.EPOCHS = state["EPOCHS"]
+    #     self.BATCHSIZE = state["BATCHSIZE"]
+    #     self.EMBEDSIZE = state["EMBEDSIZE"]
+    #     self.LEARNING_RATE = state["LEARNINGRATE"]
+    #     self.WINDOWSIZE = state["WINDOWSIZE"]
+    #     self.NWORDS = state["NWORDS"]
+    #     self.create_time = state["CREATE_TIME"]
+
+    #     self._init_from_params()
+    #     self.WORD2MAN.load_state_dict(state["WORD2MAN"])
+    #     self.WORD2MAN.eval()
+    #     self.optimizer.load_state_dict(state["OPTIMIZER"])
+
+    #     print("on loading:")
+    #     print("METRIC:\n%s" % (self.WORD2MAN.METRIC, ))
+    #     print("EMBEDM:\n%s" % (self.WORD2MAN.EMBEDM, ))
+
+
 
 def mk_word_histogram(ws, vocab):
     """count frequency of words in words, given vocabulary size."""
@@ -326,7 +358,7 @@ class SkipGramOneHotDataset(Dataset):
         deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
 
         return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
-                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] # Variable(torch.tensor([self.W2I[self.TEXT[focusix + deltaix]]])).long()
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
                 }
 
     def __len__(self):
@@ -346,15 +378,37 @@ def hot(ws, W2I, VOCABSIZE):
 def cli_prompt():
     """Call to launch prompt interface."""
 
-    def test_find_close_vectors(w, normalized_embed):
+
+    def normalize(vs, metric):
+        # vs = [S1 x EMBEDSIZE]
+        # metric = [EMBEDSIZE x EMBEDSIZE]
+        # normvs = [S1 x EMBEDSIZE]
+
+        normvs = torch.zeros(vs.size()).to(DEVICE)
+        BATCHSIZE = 512
+        with prompt_toolkit.shortcuts.ProgressBar() as pb:
+            for i in pb(range(math.ceil(vs.size()[0] / BATCHSIZE))):
+                vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
+
+                vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
+                vslen = vslen.view(-1, 1) # have one element per column which is the length
+
+                normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
+            normvs.to(DEVICE)
+            ERROR_THRESHOLD = 0.1
+            return normvs
+
+    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC)
+
+    def test_find_close_vectors(w):
         """ Find vectors close to w in the normalized embedding"""
         # [1 x VOCABSIZE] 
         whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
         # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.EMBEDM), PARAMS.METRIC)
+        wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.WORD2MAN.EMBEDM), PARAMS.WORD2MAN.METRIC)
 
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(wembed, normalized_embed, PARAMS.METRIC)
+        wix2sim = dots(wembed, EMBEDNORM, PARAMS.WORD2MAN.METRIC)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
@@ -365,13 +419,11 @@ def cli_prompt():
     def prompt_word(session):
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
-        EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
         COMPLETER = WordCompleter(PARAMS.DATASET.VOCAB)
 
-        ws = session.prompt("type in word>", completer=COMPLETER).split()
-        ws = session.prompt("type in word>", completer=COMPLETER).split()
+        ws = session.prompt("type in word>>", completer=COMPLETER).split()
         for w in ws:
-            wordweights = test_find_close_vectors(w, EMBEDNORM)
+            wordweights = test_find_close_vectors(w)
             for (word, weight) in wordweights[:10]:
                 print_formatted_text("\t%s: %s" % (word, weight))
 
@@ -399,8 +451,9 @@ LOGGER.end("device: %s" % DEVICE)
 
 if PARSED.loadpath is not None:
     LOGGER.start("loading model from: %s" % (PARSED.loadpath))
-    PARAMS = torch.load(PARSED.loadpath)
-    PARAMS.move_to_correct_device()
+    # pass the device so that the tensors live on the correct device.
+    # this might be stale since we were on a different device before.
+    PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
     LOGGER.end("loaded params from: %s" % PARAMS.create_time)
 else:
     LOGGER.start("Creating new parameters")
@@ -443,30 +496,25 @@ def traincli(savepath):
     last_print_ix = 0
     for epoch in range(PARAMS.EPOCHS):
         for train in PARAMS.DATA:
-            print(train)
             ix += 1
             # [BATCHSIZE x VOCABSIZE]
             xs = train['focusonehot'].to(DEVICE)
-            # [BATCHSIZE x VOCABSIZE]
-            targets = train['ctxtruelabel'].to(DEVICE)
+            # [BATCHSIZE], contains target label per batch
+            target_labels = train['ctxtruelabel'].to(DEVICE)
 
             PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-            # embedded vectors of the batch vectors
-            # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-            xsembeds = torch.mm(xs, PARAMS.EMBEDM)
 
-            # dots(BATCHSIZE x EMBEDSIZE], 
-            #     [VOCABSIZE x EMBEDSIZE],
-            #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-            xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
-            xs_dots_embeds = F.log_softmax(xs_dots_embeds, dim=0)
+            # dot product of the embedding of the hidden xs vector with 
+            # every other hidden vector
+            # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
+            xs_dots_embeds = PARAMS.WORD2MAN(xs)
 
-            l = F.nll_loss(xs_dots_embeds, targets)
-            print("* raw loss: %s" % l)
+            l = F.nll_loss(xs_dots_embeds, target_labels)
             loss_sum += torch.sum(torch.abs(l)).item()
             l.backward()
             PARAMS.optimizer.step()
             bar.update(bar.value + 1)
+
 
             # updating data
             now = datetime.datetime.now()
@@ -486,7 +534,8 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 60 * 15 # save every 15 minutes
+            # TARGET_SAVE_TIME_IN_S = 60 * 15 # save every 15 minutes
+            TARGET_SAVE_TIME_IN_S = 6
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now

@@ -512,13 +512,18 @@ DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available(
 LOGGER.end("device: %s" % DEVICE)
 
 
+PARAMS = None
 if PARSED.loadpath is not None:
     LOGGER.start("loading model from: %s" % (PARSED.loadpath))
     # pass the device so that the tensors live on the correct device.
     # this might be stale since we were on a different device before.
-    PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
-    LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-else:
+    try:
+        PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+        LOGGER.end("loaded params from: %s" % PARAMS.create_time)
+    except FileNotFoundError as e:
+        LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
+        
+if PARAMS is None:
     LOGGER.start("Creating new parameters")
     PARAMS = Parameters(LOGGER, DEVICE)
     LOGGER.end()

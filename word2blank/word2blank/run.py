@@ -15,6 +15,7 @@ def parse(s):
         now = datetime.datetime.now()
         return "save-auto-%s.model" % (current_time_str(), )
     p = argparse.ArgumentParser()
+
     sub = p.add_subparsers(dest="command")
     train = sub.add_parser("train", help="train the model")
     train.add_argument("--loadpath", help="path to model file to load from", default=None)
@@ -44,6 +45,9 @@ import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
+import prompt_toolkit.shortcuts
+import sacred
+import sacred.observers
 import progressbar
 
 
@@ -89,7 +93,7 @@ class TimeLogger:
         sys.stdout.flush()
 
 def load_corpus(LOGGER, nwords):
-    """load the corpus, and pull nwords from the corpus"""
+    """load the corpus, and pull nwords from the corpus if it's not None"""
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
@@ -128,11 +132,10 @@ def load_corpus(LOGGER, nwords):
     corpus = list(filter(lambda w: w not in STOPWORDS, corpus))
     LOGGER.end("#words in corpus after filtering: %s" % (len(corpus), ))
 
-    LOGGER.start("counting frequencies to filter...")
-    w2f = mk_word_histogram(corpus, set(corpus))
-    LOGGER.end()
+
 
     LOGGER.start("filtering low frequency words... (all frequencies that account for < 20% of the dataset)")
+    w2f = mk_word_histogram(corpus, set(corpus))
     origlen = len(corpus)
     cutoff_freq = get_freq_cutoff(w2f.values(), 0.2)
     corpus = list(filter(lambda w: w2f[w] > cutoff_freq, corpus))
@@ -159,10 +162,6 @@ def batch(xs, BATCHSIZE):
         yield data
 
 
-def norm(v, w, metric):
-    dot = torch.mm(torch.mm(v.view(1, -1), metric), w.view(-1, 1))
-    return dot
-
 
 def dots(vs, ws, metric):
     """Take the dot product of each element in vs with elements in ws"""
@@ -186,22 +185,12 @@ def dots(vs, ws, metric):
     #         # [1 x EMBEDSIZE] x [EMBEDSIZE x EMBEDSIZE] x [EMBEDSIZE x 1] = [1x1]
     #         outs[vix][wix] = cosinesim(v, w, metric)
     # return outs
+
+
+def dot(v, w, metric):
+    return dots(v.view(1, -1), w.view(-1, 1), metric)
+
     
-def normalize(vs, metric):
-    # vs = [S1 x EMBEDSIZE]
-    # out = [S1 x EMBEDSIZE]
-
-    # vs_dots_vs = [S1 x S1]
-    vs_dots_vs = dots(vs, vs, metric)
-    # norm = S1 x 1
-    norm = torch.sqrt(torch.diag(vs_dots_vs)).view(-1, 1)
-    # normvs = S1 x 1
-    normvs =  vs / norm
-
-    ERROR_THRESHOLD = 0.1
-    assert(torch.norm(torch.diag(dots(normvs, normvs, metric)) - torch.ones(len(vs)).to(DEVICE)).item() < ERROR_THRESHOLD)
-    return normvs
-
 def cosinesim(v, w, metric):
     # vs = [1 x EMBEDSIZE]
     # ws = [1 x EMBEDSIZE]
@@ -220,44 +209,76 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 
+class Word2Man(nn.Module):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
+        super(Word2Man, self).__init__()
+        LOGGER.start("creating EMBEDM")
+        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        LOGGER.end()
+
+        LOGGER.start("creating METRIC")
+        self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
+        LOGGER.end()
+
+    def forward(self, xs):
+        """
+        xs are one hot vectors of the focus word. What we will return is
+        [embed(xs) . embed(y) for y in ys].
+
+        That is, the dot product of the embedding of the word with every
+        other word
+
+        xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
+        """
+        # embedded vectors of the batch vectors
+        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+        xsembeds = torch.mm(xs, self.EMBEDM)
+
+        # dots(BATCHSIZE x EMBEDSIZE], 
+        #     [VOCABSIZE x EMBEDSIZE],
+        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
+        # TODO: why is this correct? I don't geddit.
+        # what in the fuck does it mean to log softmax cosine?
+        # [BATCHSIZE x VOCABSIZE]
+        xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=1)
+
+        return xsembeds_dots_embeds
 
 class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 1
-        self.BATCHSIZE = 1024
-        self.EMBEDSIZE = 200
-        self.LEARNING_RATE = 0.025
+        self.BATCHSIZE = 512
+        self.EMBEDSIZE = 300
+        self.LEARNING_RATE = 0.1
         self.WINDOWSIZE = 2
         self.NWORDS = None
         self.create_time = current_time_str()
 
-        TEXT = load_corpus(LOGGER, self.NWORDS)
+        self._init_from_params()
 
+
+    def _init_from_params(self):
+        TEXT = load_corpus(LOGGER, self.NWORDS)
 
         LOGGER.start("building vocabulary")
         VOCAB = set(TEXT)
         VOCABSIZE = len(VOCAB)
         LOGGER.end()
 
-
-        LOGGER.start("creating EMBEDM")
-        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, self.EMBEDSIZE).to(DEVICE), requires_grad=True))
-        LOGGER.end()
-
-        # metric, currently identity matrix
-        LOGGER.start("creating metric")
-        self.METRIC = torch.eye(self.EMBEDSIZE).to(DEVICE)
+        LOGGER.start("creating word2man")
+        self.WORD2MAN = Word2Man(VOCABSIZE, self.EMBEDSIZE, DEVICE)
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
-        self.optimizer = optim.SGD([self.EMBEDM], lr=self.LEARNING_RATE)
+        self.optimizer = optim.SGD(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
         LOGGER.end()
 
 
         LOGGER.start("creating dataset...")
-        self.DATASET = SkipGramDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        self.DATASET = SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
@@ -266,6 +287,40 @@ class Parameters:
         self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
 
+    # does not work :(
+    # def __getstate__(self):
+    #     return {
+    #         "EPOCHS": self.EPOCHS,
+    #         "BATCHSIZE": self.BATCHSIZE,
+    #         "EMBEDSIZE": self.EMBEDSIZE,
+    #         "LEARNINGRATE": self.LEARNING_RATE,
+    #         "WINDOWSIZE": self.WINDOWSIZE,
+    #         "NWORDS": self.NWORDS,
+    #         "CREATE_TIME": self.create_time,
+    #         "WORD2MAN": self.WORD2MAN.state_dict(),
+    #         "OPTIMIZER": self.optimizer.state_dict()
+    #     }
+    # 
+    # def __setstate__(self, state):
+    #     self.EPOCHS = state["EPOCHS"]
+    #     self.BATCHSIZE = state["BATCHSIZE"]
+    #     self.EMBEDSIZE = state["EMBEDSIZE"]
+    #     self.LEARNING_RATE = state["LEARNINGRATE"]
+    #     self.WINDOWSIZE = state["WINDOWSIZE"]
+    #     self.NWORDS = state["NWORDS"]
+    #     self.create_time = state["CREATE_TIME"]
+
+    #     self._init_from_params()
+    #     self.WORD2MAN.load_state_dict(state["WORD2MAN"])
+    #     self.WORD2MAN.eval()
+    #     self.optimizer.load_state_dict(state["OPTIMIZER"])
+
+    #     print("on loading:")
+    #     print("METRIC:\n%s" % (self.WORD2MAN.METRIC, ))
+    #     print("EMBEDM:\n%s" % (self.WORD2MAN.EMBEDM, ))
+
+
+
 def mk_word_histogram(ws, vocab):
     """count frequency of words in words, given vocabulary size."""
     w2f = { w : 0 for w in vocab }
@@ -273,7 +328,7 @@ def mk_word_histogram(ws, vocab):
         w2f[w] += 1
     return w2f
 
-class SkipGramDataset(Dataset):
+class SkipGramNHotDataset(Dataset):
     def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
         self.TEXT = TEXT
 
@@ -290,36 +345,67 @@ class SkipGramDataset(Dataset):
         self.W2F = mk_word_histogram(TEXT, VOCAB)
         LOGGER.end()
 
-    def __getitem__(self, idx):
-        idx = idx + self.WINDOWSIZE
-        wsfocusix = [self.TEXT[idx]]
-        wsctxix = [self.TEXT[idx + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
+    def __getitem__(self, ix):
+        ix += self.WINDOWSIZE
+        focusix = [self.TEXT[ix]]
+        ctxixs = [self.TEXT[ix + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
 
-        return torch.stack([hot(wsfocusix, self.W2I, self.VOCABSIZE), hot(wsctxix, self.W2I, self.VOCABSIZE)])
+        return {'focusix': hot(focusix, self.W2I, self.VOCABSIZE),
+                'ctxixs': hot(ctxixs, self.W2I, self.VOCABSIZE)}
 
     def __len__(self):
         # we can't query the first or last value.
         # first because it has no left, last because it has no right
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
 
+class SkipGramOneHotDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, ix):
+        focusix = ix // (2 * self.WINDOWSIZE)
+        focusix += self.WINDOWSIZE
+        deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+
+        return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                }
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
 def hot(ws, W2I, VOCABSIZE):
     """
-    hot vector for each word in ws
+    hot *normalized* vector for each word in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
     for w in ws: v[W2I[w]] = 1.0
-    return v
+    return v / float(len(ws))
 
 
 def cli_prompt():
     """Call to launch prompt interface."""
 
-    print_formatted_text("normalizing EMBEDM...")
+    LOGGER.start("normalizing EMBEDM...")
     PARAMS.EMBEDM = PARAMS.EMBEDM.to(DEVICE)
     PARAMS.METRIC = PARAMS.METRIC.to(DEVICE)
     EMBEDNORM = normalize(PARAMS.EMBEDM, PARAMS.METRIC)
-    print_formatted_text("done.")
+    LOGGER.end("done.")
 
 
     def word_to_embed_vector(w):
@@ -337,6 +423,39 @@ def cli_prompt():
 
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
         wix2sim = dots(v, normalized_embed, PARAMS.METRIC)
+
+    def normalize(vs, metric):
+        # vs = [S1 x EMBEDSIZE]
+        # metric = [EMBEDSIZE x EMBEDSIZE]
+        # normvs = [S1 x EMBEDSIZE]
+
+        normvs = torch.zeros(vs.size()).to(DEVICE)
+        BATCHSIZE = 512
+        with prompt_toolkit.shortcuts.ProgressBar() as pb:
+            for i in pb(range(math.ceil(vs.size()[0] / BATCHSIZE))):
+                vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
+
+                vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
+                vslen = vslen.view(-1, 1) # have one element per column which is the length
+
+                normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
+            normvs.to(DEVICE)
+            ERROR_THRESHOLD = 0.1
+            return normvs
+
+    PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
+    PARAMS.WORD2MAN.METRIC = PARAMS.WORD2MAN.METRIC.to(DEVICE)
+    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC).to(DEVICE)
+
+    def test_find_close_vectors(w):
+        """ Find vectors close to w in the normalized embedding"""
+        # [1 x VOCABSIZE] 
+        whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
+        # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
+        wembed = normalize(torch.mm(whot.view(1, -1), PARAMS.WORD2MAN.EMBEDM), PARAMS.WORD2MAN.METRIC)
+
+        # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
+        wix2sim = dots(wembed, EMBEDNORM, PARAMS.WORD2MAN.METRIC)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
@@ -392,7 +511,11 @@ def cli_prompt():
     while True:
         try:
             prompt_word(session)
-        except Exception as e:
+        except KeyboardInterrupt:
+            break
+        except EOFError:
+            break
+        except KeyError as e:
             print_formatted_text("exception:\n%s" % (e, ))
 
 
@@ -405,25 +528,37 @@ LOGGER.start("setting up device")
 DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
 LOGGER.end("device: %s" % DEVICE)
 
-PARAMS = Parameters(LOGGER, DEVICE)
 
-def traincli(loadpath, savepath):
+if PARSED.loadpath is not None:
+    LOGGER.start("loading model from: %s" % (PARSED.loadpath))
+    # pass the device so that the tensors live on the correct device.
+    # this might be stale since we were on a different device before.
+    PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+    LOGGER.end("loaded params from: %s" % PARAMS.create_time)
+else:
+    LOGGER.start("Creating new parameters")
+    PARAMS = Parameters(LOGGER, DEVICE)
+    LOGGER.end()
+
+EXPERIMENT = sacred.Experiment()
+EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
+                      BATCHSIZE = PARAMS.BATCHSIZE,
+                      EMBEDSIZE = PARAMS.EMBEDSIZE,
+                      LEARNING_RATE = PARAMS.LEARNING_RATE,
+                      WINDOWSIZE = PARAMS.WINDOWSIZE,
+                      NWORDS = PARAMS.NWORDS)
+EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
+
+
+# @EXPERIMENT.capture
+def traincli(savepath):
     global PARAMS
     def save():
-        LOGGER.start("saving model to: %s" % (savepath))
+        LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             torch.save(PARAMS, sf)
-            LOGGER.end()
-
-    if loadpath is not None:
-        LOGGER.start("loading model from: %s" % (loadpath))
-        PARAMS = torch.load(loadpath)
-        LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-
-
-    LOGGER.start("creating optimizer and loss function")
-    loss = nn.MSELoss()
-    LOGGER.end()
+        # EXPERIMENT.add_artifact(savepath)
+        LOGGER.end()
 
 
     # Notice that we do not normalize the vectors in the hidden layer
@@ -432,68 +567,72 @@ def traincli(loadpath, savepath):
     # normalize them. 
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
+    bar =  progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA)))
+    loss_sum = 0
+    ix = 0
+    time_last_save = datetime.datetime.now()
+    time_last_print = datetime.datetime.now()
+    last_print_ix = 0
+    for epoch in range(PARAMS.EPOCHS):
+        for train in PARAMS.DATA:
+            ix += 1
+            # [BATCHSIZE x VOCABSIZE]
+            xs = train['focusonehot'].to(DEVICE)
+            # [BATCHSIZE], contains target label per batch
+            target_labels = train['ctxtruelabel'].to(DEVICE)
 
-    with progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA))) as bar:
-        loss_sum = 0
-        ix = 0
-        for epoch in range(PARAMS.EPOCHS):
-            for train in PARAMS.DATA:
-                ix += 1
-                # [BATCHSIZE x VOCABSIZE]
-                xs = train[:, 0].to(DEVICE)
-                # [BATCHSIZE x VOCABSIZE]
-                ysopt = train[:, 1].to(DEVICE)
+            PARAMS.optimizer.zero_grad()   # zero the gradient buffers
 
-                PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-                # embedded vectors of the batch vectors
-                # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
-                xsembeds = torch.mm(xs, PARAMS.EMBEDM)
+            # dot product of the embedding of the hidden xs vector with 
+            # every other hidden vector
+            # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
+            xs_dots_embeds = PARAMS.WORD2MAN(xs)
 
-                # dots(BATCHSIZE x EMBEDSIZE], 
-                #     [VOCABSIZE x EMBEDSIZE],
-                #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-                xs_dots_embeds = dots(xsembeds, PARAMS.EMBEDM, PARAMS.METRIC)
+            l = F.nll_loss(xs_dots_embeds, target_labels)
+            loss_sum += l.item()
+            l.backward()
+            PARAMS.optimizer.step()
+            bar.update(bar.value + 1)
 
-                l = loss(ysopt, xs_dots_embeds)
-                loss_sum += torch.sum(torch.abs(l)).item()
-                l.backward()
-                PARAMS.optimizer.step()
-                bar.update(bar.value + 1)
 
-                PRINT_PER_NUM_ELEMENTS = 10000
-                PRINT_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
-                if (ix % PRINT_PER_NUM_BATCHES == 0):
-                    print("LOSSES sum: %s | avg per batch: %s | avg per elements: %s" % 
-                          (loss_sum,
-                           loss_sum / PRINT_PER_NUM_BATCHES,
-                           loss_sum / PRINT_PER_NUM_ELEMENTS))
-                    loss_sum = 0
+            # updating data
+            now = datetime.datetime.now()
 
-                SAVE_PER_NUM_ELEMENTS = 20000
-                SAVE_PER_NUM_BATCHES = PRINT_PER_NUM_ELEMENTS // PARAMS.BATCHSIZE
+            # printing
+            TARGET_PRINT_TIME_IN_S = 3 # print progress every 20 seconds
+            if (now - time_last_print).seconds > TARGET_PRINT_TIME_IN_S:
+                nbatches = ix - last_print_ix
+                print("\nLOSSES sum: %s | avg per batch(#batch=%s): %s | avg per elements(#elems=%s): %s" % 
+                      (loss_sum,
+                       nbatches,
+                       loss_sum / nbatches,
+                       nbatches * PARAMS.BATCHSIZE,
+                       loss_sum / (nbatches * PARAMS.BATCHSIZE)))
+                loss_sum = 0
+                time_last_print = now
+                last_print_ix = ix
 
-                if ix % SAVE_PER_NUM_BATCHES == SAVE_PER_NUM_BATCHES - 1:
-                    save()
-        print("FINAL BAR VALUE: %s" % bar.value) 
+            # saving
+            TARGET_SAVE_TIME_IN_S = 60 * 15 # save every 15 minutes
+            if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
+                save()
+                time_last_save = now
     save()
 
 
-def testcli(loadpath):
-    global PARAMS
-
-    with open(loadpath, "rb") as lf:
-        global PARAMS
-        PARAMS = torch.load(lf)
-
-    cli_prompt()
 
 
 
-if __name__ == "__main__":
+# @EXPERIMENT.main
+def main():
     if PARSED.command == "train":
-        traincli(PARSED.loadpath, PARSED.savepath)
+        traincli(PARSED.savepath)
     elif PARSED.command == "test":
-        testcli(PARSED.loadpath)
+        cli_prompt()
     else:
         raise RuntimeError("unknown command: %s" % PARSED.command)
+
+if __name__ == "__main__":
+    main()
+    # EXPERIMENT.run()
 

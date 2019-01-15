@@ -238,6 +238,12 @@ def normalize(vs, metric):
 def mk_parameter_symmetric_mat(n):
     """make a symmetric matrix of size (NxN) which can be gradient descended on"""
 
+    # upper triangular matrix with entires one off the diagonal
+    triu = torch.triu(nn.Parameter(torch.randn(n, n).to(DEVICE), requires_grad=True), diagonal=1)
+    # diagonal matrix
+    diag = torch.diag(nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True))
+    return triu + diag + triu.t()
+
     # make an upper triangle, copy it to lower triangle, and then make a 
     # random diagonal as well.
     tri = nn.Parameter(torch.randn((n*(n - 1)) // 2).to(DEVICE), requires_grad=True)
@@ -259,8 +265,8 @@ class Word2Man(nn.Module):
         # TODO: change this so we can have any nonzero symmetric matrix.
         # add loss so that we don't allow zero matrix. That should be
         # nondegenrate quadratic form.
-        if self.metrictype == "euclidian":
-            self.METRIC = nn.Parameter(torch.eye([EMBESIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
+        if self.metrictype == "euclid":
+            self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
         elif self.metrictype =="reimann":
             self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
             self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())

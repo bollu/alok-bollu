@@ -241,11 +241,12 @@ class Word2Man(nn.Module):
         LOGGER.end()
 
         LOGGER.start("creating METRIC")
+        # TODO: change this so we can have any nonzero symmetric matrix.
+        # add loss so that we don't allow zero matrix. That should be
+        # nondegenrate quadratic form.
         self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
-        self.METRIC = self.METRIC_SQRT * self.METRIC_SQRT.t()
+        self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
         LOGGER.end()
-
-        import pudb; pudb.set_trace()
 
     def forward(self, xs):
         """
@@ -264,6 +265,9 @@ class Word2Man(nn.Module):
         # dots(BATCHSIZE x EMBEDSIZE], 
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+        # recompute metric again
+        self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+
         xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
         # TODO: why is this correct? I don't geddit.
         # what in the fuck does it mean to log softmax cosine?
@@ -276,10 +280,10 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 500
+        self.EPOCHS = 100
         self.BATCHSIZE = 512
         self.EMBEDSIZE = 300
-        self.LEARNING_RATE = 0.1
+        self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 2
         self.NWORDS = 10000
         self.create_time = current_time_str()
@@ -300,7 +304,7 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
-        self.optimizer = optim.SGD(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
+        self.optimizer = optim.Adam(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
         LOGGER.end()
 
 
@@ -597,7 +601,8 @@ def traincli(savepath):
 
             l = F.nll_loss(xs_dots_embeds, target_labels)
             loss_sum += l.item()
-            l.backward(retain_graph=True)
+            # l.backward(retain_graph=True)
+            l.backward()
             PARAMS.optimizer.step()
             bar.update(bar.value + 1)
 

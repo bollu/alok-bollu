@@ -308,12 +308,12 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE, metrictype):
         """default values"""
-        self.EPOCHS = 100
+        self.EPOCHS = 10
         self.BATCHSIZE = 512
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 2
-        self.NWORDS = 10000
+        self.NWORDS = None
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)

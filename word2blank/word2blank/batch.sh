@@ -20,4 +20,4 @@ FOLDERNAME=$(git rev-parse HEAD)
 mkdir -p models/$FOLDERNAME
 TYPE=${TYPES[$SLURM_ARRAY_TASK_ID]}
 
-./run.py train  --savepath models/$FOLDERNAME/$TYPE.model $TYPE
+./run.py train  --savepath models/$FOLDERNAME/$TYPE.model --loadpath models/$FOLDERNAME/$TYPE.model $TYPE | tee models/$FOLDERNAME/$TYPE.log

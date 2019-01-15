@@ -42,13 +42,14 @@ from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import numpy as np
 import math
 import prompt_toolkit
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import WordCompleter, ThreadedCompleter
 from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit import print_formatted_text
 import prompt_toolkit.shortcuts
 import sacred
 import sacred.observers
 import progressbar
+import pudb
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -188,7 +189,7 @@ def dots(vs, ws, metric):
 
 
 def dot(v, w, metric):
-    return dots(v.view(1, -1), w.view(-1, 1), metric)
+    return dots(v.view(1, -1), w.view(1, -1), metric)
 
     
 def cosinesim(v, w, metric):
@@ -220,6 +221,13 @@ def normalize(vs, metric):
             vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
             vslen = vslen.view(-1, 1) # have one element per column which is the length
             normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
+
+    # with prompt_toolkit.shortcuts.ProgressBar() as pb:
+    #     for i in pb(range(math.ceil(vs.size()[0]))):
+    #         vscur = vs[i, :]
+    #         vslen = torch.sqrt(dot(vscur, vscur, metric))
+    #         vslen = vslen.view(-1, 1) # have one element per column which is the length
+    #         normvs[i, :] = vscur / vslen
     normvs.to(DEVICE)
     ERROR_THRESHOLD = 0.1
     return normvs
@@ -233,8 +241,11 @@ class Word2Man(nn.Module):
         LOGGER.end()
 
         LOGGER.start("creating METRIC")
-        self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
+        self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
+        self.METRIC = self.METRIC_SQRT * self.METRIC_SQRT.t()
         LOGGER.end()
+
+        import pudb; pudb.set_trace()
 
     def forward(self, xs):
         """
@@ -429,11 +440,8 @@ def cli_prompt():
         find the embedded vector of word w
         returns: [1 x EMBEDSIZE]
         """
-        # [1 x VOCABSIZE] 
-        whot = hot([w], PARAMS.DATASET.W2I, PARAMS.DATASET.VOCABSIZE).to(DEVICE)
-        # [1 x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [1 x EMBEDSIZE]
-        return normalize(torch.mm(whot.view(1, -1), PARAMS.WORD2MAN.EMBEDM), 
-                         PARAMS.WORD2MAN.METRIC)
+        v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
+        return normalize(v.view(1, -1), PARAMS.WORD2MAN.METRIC)
 
     def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
@@ -441,6 +449,11 @@ def cli_prompt():
         wix2sim = dots(v, EMBEDNORM, PARAMS.WORD2MAN.METRIC)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
+        # The story of floats which cannot be ordered. I found
+        # out I need this filter once I found this entry in the
+        # table: ('classified', nan)
+        wordweights = list(filter(lambda ww: not math.isnan(ww[1]), wordweights))
+        # sort AFTER removing NaNs
         wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
 
         return wordweights
@@ -449,21 +462,23 @@ def cli_prompt():
     def prompt_word(session):
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
-        # COMPLETER = ThreadedCompleter(WordCompleter(PARAMS.DATASET.VOCAB))
+        COMPLETER = ThreadedCompleter(WordCompleter(PARAMS.DATASET.VOCAB))
 
-        raw = session.prompt("type in command>").split() 
+        raw = session.prompt("type in command>", completer=COMPLETER).split() 
         # raw = session.prompt("type in command>", completer=COMPLETER).split()
         if len(raw) == 0:
             return
         if raw[0] == "help" or raw[0] == "?":
-            print_formatted_text("near <word> | sim <w1> <w2> <w3> | dot <w1> <w2>")
+            print_formatted_text("near <word> | sim <w1> <w2> <w3> | dot <w1> <w2> | metric | debug")
             return
+        elif raw[0] == "debug":
+            pudb.set_trace()
         elif raw[0] == "near" or raw[0] == "neighbour":
             if len(raw) != 2:
                 print("error: expected near <w>")
                 return
             wordweights = test_find_close_vectors(word_to_embed_vector(raw[1]))
-            for (word, weight) in wordweights[:10]:
+            for (word, weight) in wordweights[:15]:
                 print_formatted_text("\t%s: %s" % (word, weight))
         elif raw[0] == "sim":
             if len(raw) != 4:
@@ -473,12 +488,9 @@ def cli_prompt():
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
             vsim = normalize(v2 - v1 + v3, PARAMS.WORD2MAN.METRIC) 
-
             wordweights = test_find_close_vectors(vsim)
-            for (word, weight) in wordweights[:10]:
+            for (word, weight) in wordweights[:15]:
                 print_formatted_text("\t%s: %s" % (word, weight))
-
-            print_formatted_text("\t%s: %s" % (word, weight))
         elif raw[0] == "dot":
             if len(raw) != 3:
                 print("error: expected dot <w1> <w2>")
@@ -487,6 +499,13 @@ def cli_prompt():
             v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.WORD2MAN.METRIC)
             v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.WORD2MAN.METRIC)
             print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.WORD2MAN.METRIC), ))
+        elif raw[0] == "metric":
+            print(PARAMS.WORD2MAN.METRIC)
+            w,v = torch.eig(PARAMS.WORD2MAN.METRIC,eigenvectors=True)
+            print_formatted_text("eigenvalues:\n%s" % (w, ))
+            print_formatted_text("eigenvectors:\n%s" % (v, ))
+            (s, v, d) = torch.svd(PARAMS.WORD2MAN.METRIC)
+            print("SVD :=\n%s\n%s\n%s" % (s, v, d))
         else:
             print_formatted_text("invalid command, type ? for help")
 
@@ -578,7 +597,7 @@ def traincli(savepath):
 
             l = F.nll_loss(xs_dots_embeds, target_labels)
             loss_sum += l.item()
-            l.backward()
+            l.backward(retain_graph=True)
             PARAMS.optimizer.step()
             bar.update(bar.value + 1)
 

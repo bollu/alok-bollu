@@ -20,6 +20,7 @@ def parse(s):
     train = sub.add_parser("train", help="train the model")
     train.add_argument("--loadpath", help="path to model file to load from", default=None)
     train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
+    train.add_argument("metrictype", help="type of metric to use", choices=["euclid", "reimann", "pseudoreimann"])
 
     test = sub.add_parser("test", help="test the model")
     test.add_argument("loadpath",  help="path to model file")
@@ -50,6 +51,7 @@ import sacred
 import sacred.observers
 import progressbar
 import pudb
+import numpy as np
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
@@ -233,19 +235,38 @@ def normalize(vs, metric):
     return normvs
 
 
+def mk_parameter_symmetric_mat(n):
+    """make a symmetric matrix of size (NxN) which can be gradient descended on"""
+
+    # make an upper triangle, copy it to lower triangle, and then make a 
+    # random diagonal as well.
+    tri = nn.Parameter(torch.randn((n*(n - 1)) // 2).to(DEVICE), requires_grad=True)
+    mat = torch.zeros(n, n).to(DEVICE)
+    mat[np.tril_indices(n, -1)] = tri
+    mat[np.triu_indices(n, 1)] = tri
+    mat[np.diag_indices(n)] = nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True)
+    return mat
+
 class Word2Man(nn.Module):
-    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
         super(Word2Man, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
         LOGGER.end()
+        self.metrictype = metrictype
 
         LOGGER.start("creating METRIC")
         # TODO: change this so we can have any nonzero symmetric matrix.
         # add loss so that we don't allow zero matrix. That should be
         # nondegenrate quadratic form.
-        self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
-        self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+        if self.metrictype == "euclidian":
+            self.METRIC = nn.Parameter(torch.eye([EMBESIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
+        elif self.metrictype =="reimann":
+            self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+        else:
+            assert(self.metrictype == "pseudoreimann")
+            self.METRIC = mk_parameter_symmetric_mat(EMBEDSIZE)
         LOGGER.end()
 
     def forward(self, xs):
@@ -266,7 +287,8 @@ class Word2Man(nn.Module):
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
         # recompute metric again
-        self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+        if self.metrictype == "reimann":
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
 
         xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
         # TODO: why is this correct? I don't geddit.
@@ -278,7 +300,7 @@ class Word2Man(nn.Module):
 
 class Parameters:
     """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE):
+    def __init__(self, LOGGER, DEVICE, metrictype):
         """default values"""
         self.EPOCHS = 100
         self.BATCHSIZE = 512
@@ -288,10 +310,6 @@ class Parameters:
         self.NWORDS = 10000
         self.create_time = current_time_str()
 
-        self._init_from_params()
-
-
-    def _init_from_params(self):
         TEXT = load_corpus(LOGGER, self.NWORDS)
 
         LOGGER.start("building vocabulary")
@@ -300,7 +318,7 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating word2man")
-        self.WORD2MAN = Word2Man(VOCABSIZE, self.EMBEDSIZE, DEVICE)
+        self.WORD2MAN = Word2Man(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
@@ -548,7 +566,7 @@ if PARSED.loadpath is not None:
         
 if PARAMS is None:
     LOGGER.start("Creating new parameters")
-    PARAMS = Parameters(LOGGER, DEVICE)
+    PARAMS = Parameters(LOGGER, DEVICE, PARSED.metrictype)
     LOGGER.end()
 
 EXPERIMENT = sacred.Experiment()

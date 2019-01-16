@@ -376,7 +376,7 @@ class Word2ManSkipGramOneHot(nn.Module):
                 focusix += self.WINDOWSIZE
                 deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
 
-                return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                return {'focusonehot': bow_vec([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
                         'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
                         }
 
@@ -422,7 +422,9 @@ class Word2ManCBOW(nn.Module):
         xsembeds = torch.mm(xs, self.EMBEDM)
 
         # [BATCHSIZE x EMBEDSIZE] --sum(dim=1)--> [BATCHSIZE x 1] --view--> [1 x BATCHSIZE]
-        xscounts = torch.sum(xsembeds, dim=1).view(-1, 1)
+        # TODO: epsilon
+        EPSILON = 0.0
+        xscounts = torch.sum(xs, dim=1).view(-1, 1) + EPSILON
         # take mean of vectors
         # [BATCHSIZE x EMBEDSIZE]
         xsembeds = xsembeds / xscounts
@@ -484,7 +486,7 @@ class Word2ManCBOW(nn.Module):
                 ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) if d != 0 and 0 <= focusix + d < len(self.TEXT)]
 
                 # given context, produce word at focus
-                return {'ctxhot': hot(ctxws, self.W2I, self.VOCABSIZE),
+                return {'ctxhot': bow_vec(ctxws, self.W2I, self.VOCABSIZE),
                         'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]])
                         }
 
@@ -547,7 +549,7 @@ class Parameters:
             self.WORD2MAN = Word2ManSkipGramOneHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         elif traintype == "skipgramnhot":
             raise RuntimeError("unimplemented n-hot skipgram")
-        # self.WORD2MAN = Word2ManSkipGramNHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+        # self.WORD2MAN = Word2ManSkipGramHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         else:
             assert(traintype == "cbow")
             self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, self.WINDOWSIZE)
@@ -620,43 +622,12 @@ def mk_word_histogram(ws, vocab):
         w2f[w] += 1
     return w2f
 
-class SkipGramNHotDataset(Dataset):
-    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
-        self.TEXT = TEXT
-
-        self.VOCAB = VOCAB
-        self.VOCABSIZE = VOCABSIZE
-        self.WINDOWSIZE = WINDOWSIZE
-
-        LOGGER.start("creating I2W, W2I")
-        self.I2W = dict(enumerate(VOCAB))
-        self.W2I = { v: k for (k, v) in self.I2W.items() }
-        LOGGER.end()
-
-        LOGGER.start("counting frequency of words")
-        self.W2F = mk_word_histogram(TEXT, VOCAB)
-        LOGGER.end()
-
-    def __getitem__(self, ix):
-        ix += self.WINDOWSIZE
-        focusix = [self.TEXT[ix]]
-        ctxixs = [self.TEXT[ix + deltaix] for deltaix in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
-
-        return {'focusix': hot(focusix, self.W2I, self.VOCABSIZE),
-                'ctxixs': hot(ctxixs, self.W2I, self.VOCABSIZE)}
-
-    def __len__(self):
-        # we can't query the first or last value.
-        # first because it has no left, last because it has no right
-        return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
-
-
-def hot(ws, W2I, VOCABSIZE):
+def bow_vec(ws, W2I, VOCABSIZE):
     """
-    hot  vector for each word in ws
+    bag of words vector corresponding to words in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
-    for w in ws: v[W2I[w]] = 1.0
+    for w in ws: v[W2I[w]] += 1.0
     return v
 
 

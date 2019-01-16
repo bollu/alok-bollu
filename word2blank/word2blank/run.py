@@ -87,15 +87,19 @@ class TimeLogger:
         print(" " * 4 * depth + str(toprint) + "...")
         sys.stdout.flush()
 
-    def end(self, toprint=None):
+    def log(self, toprint):
         depth = len(self.ts)
+        l = "\n".join(map(lambda s: " " * 4 * depth + s, toprint.split("\n")))
+        print(l)
 
+    def end(self, toprint=None):
+        if toprint is not None:
+            self.log(toprint)
+
+        depth = len(self.ts)
         start = self.ts.pop()
         now = datetime.datetime.now()
-
-        if(toprint): print(toprint)
-        print(" " * 4 * depth + "Done. time: %s" % (now - start))
-        if (toprint): print("--")
+        print(" " * (4 * (depth - 1)) + "====Done. time: %s" % (now - start))
         sys.stdout.flush()
 
 def load_corpus(LOGGER, nwords):
@@ -125,14 +129,14 @@ def load_corpus(LOGGER, nwords):
         module = __import__(CORPUS_NAME)
         corpus = module.load_data()
     except Exception as e:
-        print("unable to find text8 locally.\nERROR: %s" % (e, ))
-        print("Downloading using gensim-data...")
+        LOGGER.log("unable to find text8 locally.\nERROR: %s" % (e, ))
+        LOGGER.start("Downloading using gensim-data...")
         corpus = api.load(CORPUS_NAME)
-        print("Done.")
+        LOGGER.end()
 
     corpus = list(corpus)
     corpus = flatten(corpus)
-    print("number of words in corpus (original): %s" % (len(corpus), ))
+    LOGGER.log("number of words in corpus (original): %s" % (len(corpus), ))
 
     LOGGER.start("filtering stopwords")
     corpus = list(filter(lambda w: w not in STOPWORDS, corpus))
@@ -154,7 +158,7 @@ def load_corpus(LOGGER, nwords):
                ))
 
     if nwords is not None:
-        print("taking N(%s) words form the corpus: " % (nwords, ))
+        LOGGER.log("taking N(%s) words form the corpus: " % (nwords, ))
         corpus = corpus[:nwords]
     LOGGER.end()
     return corpus
@@ -461,7 +465,7 @@ class Word2ManCBOW(nn.Module):
 
                 # given context, produce word at focus
                 return {'ctxhot': hot(ctxws, self.W2I, self.VOCABSIZE),
-                        'focustruelabel': self.W2I[self.TEXT[focusix]] 
+                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]] )
                         }
 
             def __len__(self):
@@ -476,14 +480,13 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 10
-        self.BATCHSIZE = 2
+        self.BATCHSIZE = 512
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
-        self.WINDOWSIZE = 2
+        self.WINDOWSIZE = 4
         self.NWORDS = 10000
 
         self.create_time = current_time_str()
-
 
 
     def init_model(self, metrictype, traintype, 
@@ -517,6 +520,7 @@ class Parameters:
         # TODO: check that metric is a subclass
         if metric_state_dict is not None:
             self.METRIC.load_state_dict(metric_state_dict, strict=True)
+        LOGGER.end()
 
         LOGGER.start("creating word2man")
         if traintype == "skipgramonehot":
@@ -530,7 +534,7 @@ class Parameters:
 
         if word2man_state_dict is not None:
             self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
-            # TODO: how to reset weights?
+        LOGGER.end()
 
 
         LOGGER.start("creating OPTIMISER")
@@ -540,13 +544,13 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating dataset...")
-        self.DATASET = self.WORD2MAN.make_dataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        DATASET = self.WORD2MAN.make_dataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
         # make a version that does save state.
-        LOGGER.start("creating DATA\n")
-        self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
+        LOGGER.start("creating DATA")
+        self.DATA = DataLoader(DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
 
     def get_model_state_dict(self):
@@ -741,14 +745,14 @@ def cli_prompt():
             pudb.set_trace()
         elif raw[0] == "near" or raw[0] == "neighbour":
             if len(raw) != 2:
-                print("error: expected near <w>")
+                print_formatted_text("error: expected near <w>")
                 return
             wordweights = test_find_close_vectors(word_to_embed_vector(raw[1]))
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\t%s: %s" % (word, weight))
         elif raw[0] == "sim":
             if len(raw) != 4:
-                print("error: expected sim <w1> <w2> <w3>")
+                print_formatted_text("error: expected sim <w1> <w2> <w3>")
                 return
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
@@ -770,19 +774,19 @@ def cli_prompt():
 
         elif raw[0] == "dot":
             if len(raw) != 3:
-                print("error: expected dot <w1> <w2>")
+                print_formatted_text("error: expected dot <w1> <w2>")
                 return
 
             v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
             v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
             print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.METRIC.mat), ))
         elif raw[0] == "metric":
-            print(PARAMS.METRIC.mat)
+            print_formatted_text(PARAMS.METRIC.mat)
             w,v = torch.eig(PARAMS.METRIC.mat,eigenvectors=True)
             print_formatted_text("eigenvalues:\n%s" % (w, ))
             print_formatted_text("eigenvectors:\n%s" % (v, ))
             (s, v, d) = torch.svd(PARAMS.METRIC.mat)
-            print("SVD :=\n%s\n%s\n%s" % (s, v, d))
+            print_formatted_text("SVD :=\n%s\n%s\n%s" % (s, v, d))
         else:
             print_formatted_text("invalid command, type ? for help")
 
@@ -808,7 +812,6 @@ DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available(
 LOGGER.end("device: %s" % DEVICE)
 
 
-LOGGER.start("Creating new parameters")
 PARAMS = Parameters(LOGGER, DEVICE)
 if PARSED.loadpath is not None:
     LOGGER.start("loading model from: %s" % (PARSED.loadpath))
@@ -820,7 +823,10 @@ if PARSED.loadpath is not None:
     except FileNotFoundError as e:
         PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
         LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
-LOGGER.end()
+else:
+    LOGGER.start("no loadpath given. Creating fresh parameters...")
+    PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
+    LOGGER.end()
 
 EXPERIMENT = sacred.Experiment()
 EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
@@ -874,7 +880,7 @@ def traincli(savepath):
     # normalize them. 
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
-    bar =  progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA)))
+    bar = progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA)))
     loss_sum = 0
     ix = 0
     time_last_save = datetime.datetime.now()
@@ -909,7 +915,7 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 2 # save every 15 minutes
+            TARGET_SAVE_TIME_IN_S = 15 * 60 # save every 15 minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now

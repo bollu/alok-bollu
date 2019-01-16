@@ -21,6 +21,7 @@ def parse(s):
     train.add_argument("--loadpath", help="path to model file to load from", default=None)
     train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
     train.add_argument("metrictype", help="type of metric to use", choices=["euclid", "reimann", "pseudoreimann"])
+    train.add_argument("traintype", help="type of training to use", choices=["cbow", "skipgram"], default="cbow")
 
     test = sub.add_parser("test", help="test the model")
     test.add_argument("loadpath",  help="path to model file")
@@ -253,7 +254,59 @@ def mk_parameter_symmetric_mat(n):
     mat[np.diag_indices(n)] = nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True)
     return mat
 
-class Word2Man(nn.Module):
+class Word2ManSkipGram(nn.Module):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
+        super(Word2Man, self).__init__()
+        LOGGER.start("creating EMBEDM")
+        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        LOGGER.end()
+        self.metrictype = metrictype
+
+        LOGGER.start("creating METRIC")
+        # TODO: change this so we can have any nonzero symmetric matrix.
+        # add loss so that we don't allow zero matrix. That should be
+        # nondegenrate quadratic form.
+        if self.metrictype == "euclid":
+            self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
+        elif self.metrictype =="reimann":
+            self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+        else:
+            assert(self.metrictype == "pseudoreimann")
+            self.METRIC = mk_parameter_symmetric_mat(EMBEDSIZE)
+        LOGGER.end()
+
+    def forward(self, xs):
+        """
+        xs are one hot vectors of the focus word. What we will return is
+        [embed(xs) . embed(y) for y in ys].
+
+        That is, the dot product of the embedding of the word with every
+        other word
+
+        xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
+        """
+        # embedded vectors of the batch vectors
+        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+        xsembeds = torch.mm(xs, self.EMBEDM)
+
+        # dots(BATCHSIZE x EMBEDSIZE], 
+        #     [VOCABSIZE x EMBEDSIZE],
+        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+        # recompute metric again
+        if self.metrictype == "reimann":
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+
+        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
+        # TODO: why is this correct? I don't geddit.
+        # what in the fuck does it mean to log softmax cosine?
+        # [BATCHSIZE x VOCABSIZE]
+        xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=1)
+        return xsembeds_dots_embeds
+
+
+
+class Word2ManCBOW(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
         super(Word2Man, self).__init__()
         LOGGER.start("creating EMBEDM")
@@ -302,18 +355,21 @@ class Word2Man(nn.Module):
         # [BATCHSIZE x VOCABSIZE]
         xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=1)
 
+        print("in model")
+
         return xsembeds_dots_embeds
 
 class Parameters:
     """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE, metrictype):
+    def __init__(self, LOGGER, DEVICE, metrictype, TRAINTYPE):
         """default values"""
         self.EPOCHS = 10
-        self.BATCHSIZE = 512
+        self.BATCHSIZE = 2
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 2
-        self.NWORDS = None
+        self.NWORDS = 10000
+        self.TRAINTYPE = TRAINTYPE
         self.create_time = current_time_str()
 
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -324,8 +380,12 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating word2man")
-        self.WORD2MAN = Word2Man(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+        if TRAINTYPE == "skipgram": 
+            self.WORD2MAN = Word2ManSkipGram(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+        else:
+            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         LOGGER.end()
+
 
         LOGGER.start("creating OPTIMISER")
         self.optimizer = optim.Adam(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
@@ -333,7 +393,10 @@ class Parameters:
 
 
         LOGGER.start("creating dataset...")
-        self.DATASET = SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        if TRAINTYPE == "skipgram":
+            self.DATASET = SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        else:
+            self.DATASET = CBOWDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
@@ -444,6 +507,36 @@ class SkipGramOneHotDataset(Dataset):
         # first because it has no left, last because it has no right
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
+
+class CBOWDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, ix):
+        focusix += self.WINDOWSIZE
+
+        return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                }
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE)
+
 def hot(ws, W2I, VOCABSIZE):
     """
     hot *normalized* vector for each word in ws
@@ -469,7 +562,7 @@ def cli_prompt():
         returns: [1 x EMBEDSIZE]
         """
         v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
-        return normalize(v.view(1, -1), PARAMS.WORD2MAN.METRIC)
+        return v.view(1, -1)
 
     def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
@@ -515,10 +608,22 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
+
+            vsim = normalize(v1 - v2 + v3, PARAMS.WORD2MAN.METRIC) 
+            wordweights = test_find_close_vectors(vsim)
+            for (word, weight) in wordweights[:15]:
+                print_formatted_text("\ta - b + c %s: %s" % (word, weight))
+
+
+            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.WORD2MAN.METRIC)
+            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.WORD2MAN.METRIC)
+            v3 = normalize(word_to_embed_vector(raw[3]), PARAMS.WORD2MAN.METRIC)
+
             vsim = normalize(v2 - v1 + v3, PARAMS.WORD2MAN.METRIC) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
-                print_formatted_text("\t%s: %s" % (word, weight))
+                print_formatted_text("\tnormal(king) - normal(man) + normal(woman): %s: %s" % (word, weight))
+
         elif raw[0] == "dot":
             if len(raw) != 3:
                 print("error: expected dot <w1> <w2>")
@@ -585,6 +690,31 @@ EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
 EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
 
 
+# TODO: consolidate skipgram training dataset, skipgram data feeder
+# and skipgram NN into one
+def train_skipgram(train):
+    """contains skipgram training data"""
+    # [BATCHSIZE x VOCABSIZE]
+    xs = train['focusonehot'].to(DEVICE)
+    # [BATCHSIZE], contains target label per batch
+    target_labels = train['ctxtruelabel'].to(DEVICE)
+
+    PARAMS.optimizer.zero_grad()   # zero the gradient buffers
+
+    # dot product of the embedding of the hidden xs vector with 
+    # every other hidden vector
+    # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
+    xs_dots_embeds = PARAMS.WORD2MAN(xs)
+
+    l = F.nll_loss(xs_dots_embeds, target_labels)
+    loss_sum += l.item()
+    # l.backward(retain_graph=True)
+    l.backward()
+    PARAMS.optimizer.step()
+
+def train_cbow(train):
+    pass
+
 # @EXPERIMENT.capture
 def traincli(savepath):
     global PARAMS
@@ -611,25 +741,12 @@ def traincli(savepath):
     for epoch in range(PARAMS.EPOCHS):
         for train in PARAMS.DATA:
             ix += 1
-            # [BATCHSIZE x VOCABSIZE]
-            xs = train['focusonehot'].to(DEVICE)
-            # [BATCHSIZE], contains target label per batch
-            target_labels = train['ctxtruelabel'].to(DEVICE)
+            if PARAMS.TRAINTYPE == "skipgram":
+                train_skip_gram(train)
+            else:
+                train_cbow(train)
 
-            PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-
-            # dot product of the embedding of the hidden xs vector with 
-            # every other hidden vector
-            # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
-            xs_dots_embeds = PARAMS.WORD2MAN(xs)
-
-            l = F.nll_loss(xs_dots_embeds, target_labels)
-            loss_sum += l.item()
-            # l.backward(retain_graph=True)
-            l.backward()
-            PARAMS.optimizer.step()
             bar.update(bar.value + 1)
-
 
             # updating data
             now = datetime.datetime.now()
@@ -654,10 +771,6 @@ def traincli(savepath):
                 save()
                 time_last_save = now
     save()
-
-
-
-
 
 # @EXPERIMENT.main
 def main():

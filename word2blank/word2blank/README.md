@@ -19,3 +19,6 @@ $ tail -f slurm-<number>.out # to view file as it's written to
 # To investigate:
 - [sacred](https://sacred.readthedocs.io/en/latest/experiment.html)
 - [DVC](https://dvc.org/doc/get-started)
+
+# References
+- [ipynb with sample implementation](-# https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb)

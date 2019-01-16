@@ -99,7 +99,7 @@ class TimeLogger:
         depth = len(self.ts)
         start = self.ts.pop()
         now = datetime.datetime.now()
-        print(" " * (4 * (depth - 1)) + "====Done. time: %s" % (now - start))
+        print(" " * (4 * (depth - 1)) + "====time: %s" % (now - start))
         sys.stdout.flush()
 
 def load_corpus(LOGGER, nwords):
@@ -461,7 +461,9 @@ class Word2ManCBOW(nn.Module):
 
             def __getitem__(self, focusix):
                 focusix += self.WINDOWSIZE
-                ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
+                ctxws = []
+                ctxws += [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, 0)]
+                ctxws += [self.TEXT[focusix + d] for d in range(1, self.WINDOWSIZE + 1)]
 
                 # given context, produce word at focus
                 return {'ctxhot': hot(ctxws, self.W2I, self.VOCABSIZE),
@@ -480,11 +482,11 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 10
-        self.BATCHSIZE = 512
+        self.BATCHSIZE = 1024
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 4
-        self.NWORDS = 10000
+        self.NWORDS = None
 
         self.create_time = current_time_str()
 
@@ -544,13 +546,19 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating dataset...")
-        DATASET = self.WORD2MAN.make_dataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        self.DATASET = self.WORD2MAN.make_dataset(LOGGER, 
+                                                  TEXT, 
+                                                  VOCAB, 
+                                                  VOCABSIZE, 
+                                                  self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
         # make a version that does save state.
         LOGGER.start("creating DATA")
-        self.DATA = DataLoader(DATASET, batch_size=self.BATCHSIZE, shuffle=True)
+        self.DATALOADER = DataLoader(self.DATASET, 
+                                     batch_size=self.BATCHSIZE, 
+                                     shuffle=True)
         LOGGER.end()
 
     def get_model_state_dict(self):
@@ -757,17 +765,17 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v1 - v2 + v3, PARAMS.WORD2MAN.METRIC) 
+            vsim = normalize(v1 - v2 + v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\tnormal(a - b + c) %s: %s" % (word, weight))
 
 
-            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.WORD2MAN.METRIC)
-            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.WORD2MAN.METRIC)
-            v3 = normalize(word_to_embed_vector(raw[3]), PARAMS.WORD2MAN.METRIC)
+            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
+            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
+            v3 = normalize(word_to_embed_vector(raw[3]), PARAMS.METRIC.mat)
 
-            vsim = normalize(v2 - v1 + v3, PARAMS.WORD2MAN.METRIC) 
+            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\tnormal(normal(king) - normal(man) + normal(woman)): %s: %s" % (word, weight))
@@ -880,14 +888,14 @@ def traincli(savepath):
     # normalize them. 
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
-    bar = progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATA)))
+    bar = progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATALOADER)))
     loss_sum = 0
     ix = 0
     time_last_save = datetime.datetime.now()
     time_last_print = datetime.datetime.now()
     last_print_ix = 0
     for epoch in range(PARAMS.EPOCHS):
-        for traindata in PARAMS.DATA:
+        for traindata in PARAMS.DATALOADER:
             ix += 1
             l = PARAMS.WORD2MAN.train(traindata, PARAMS.METRIC.mat)
             loss_sum += l.item()
@@ -915,7 +923,7 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 15 * 60 # save every 15 minutes
+            TARGET_SAVE_TIME_IN_S = 1 * 60 # save every 15 minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now

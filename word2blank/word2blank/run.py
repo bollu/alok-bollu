@@ -415,7 +415,7 @@ class Word2ManCBOW(nn.Module):
 
         xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
         """
-        # Step 1. find average hidden vector
+        # Step 0. find average hidden vector
         # embedded vectors of the batch vectors. Will provide linear
         # combination of context vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
@@ -650,66 +650,6 @@ class SkipGramNHotDataset(Dataset):
         # first because it has no left, last because it has no right
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
 
-class SkipGramOneHotDataset(Dataset):
-    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
-        self.TEXT = TEXT
-
-        self.VOCAB = VOCAB
-        self.VOCABSIZE = VOCABSIZE
-        self.WINDOWSIZE = WINDOWSIZE
-
-        LOGGER.start("creating I2W, W2I")
-        self.I2W = dict(enumerate(VOCAB))
-        self.W2I = { v: k for (k, v) in self.I2W.items() }
-        LOGGER.end()
-
-        LOGGER.start("counting frequency of words")
-        self.W2F = mk_word_histogram(TEXT, VOCAB)
-        LOGGER.end()
-
-    def __getitem__(self, ix):
-        focusix = ix // (2 * self.WINDOWSIZE)
-        focusix += self.WINDOWSIZE
-        deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
-
-        return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
-                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
-                }
-
-    def __len__(self):
-        # we can't query the first or last value.
-        # first because it has no left, last because it has no right
-        return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
-
-
-class CBOWDataset(Dataset):
-    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
-        self.TEXT = TEXT
-
-        self.VOCAB = VOCAB
-        self.VOCABSIZE = VOCABSIZE
-        self.WINDOWSIZE = WINDOWSIZE
-
-        LOGGER.start("creating I2W, W2I")
-        self.I2W = dict(enumerate(VOCAB))
-        self.W2I = { v: k for (k, v) in self.I2W.items() }
-        LOGGER.end()
-
-        LOGGER.start("counting frequency of words")
-        self.W2F = mk_word_histogram(TEXT, VOCAB)
-        LOGGER.end()
-
-    def __getitem__(self, ix):
-        focusix += self.WINDOWSIZE
-
-        return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
-                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
-                }
-
-    def __len__(self):
-        # we can't query the first or last value.
-        # first because it has no left, last because it has no right
-        return (len(self.TEXT) - 2 * self.WINDOWSIZE)
 
 def hot(ws, W2I, VOCABSIZE):
     """

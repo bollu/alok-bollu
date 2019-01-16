@@ -500,7 +500,7 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 50
-        self.BATCHSIZE = 128
+        self.BATCHSIZE = 32
         self.EMBEDSIZE = 100
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 5

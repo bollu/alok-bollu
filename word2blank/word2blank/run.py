@@ -260,7 +260,7 @@ def mk_symmetric_mat(n):
 
 class Metric(nn.Module):
     def __init__(self):
-        raise NotImplementedError()
+        super(Metric, self).__init__()
 
     @property
     def mat(self):
@@ -269,7 +269,7 @@ class Metric(nn.Module):
 
 class EuclidMetric(Metric):
     def __init__(self, embedsize):
-        super(Metric, self).__init__()
+        super(EuclidMetric, self).__init__()
         self.mat_ = nn.Parameter(torch.eye(embedsize).to(DEVICE), requires_grad=False)
     @property
     def mat(self):
@@ -412,7 +412,6 @@ class Word2ManCBOW(nn.Module):
         # what in the fuck does it mean to log softmax cosine?
         # [BATCHSIZE x VOCABSIZE]
         xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=1)
-
         return xsembeds_dots_embeds
 
     def train(self, traindata, metric):
@@ -474,20 +473,20 @@ class Word2ManCBOW(nn.Module):
 
 class Parameters:
     """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE, metrictype, traintype):
+    def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 10
-        self.BATCHSIZE = 512
+        self.BATCHSIZE = 2
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 2
-        self.NWORDS = 5000
-        self.create_time = current_time_str()
-        self.metrictype = metrictype
-        self.traintype = traintype
-        self._init_from_config(metrictype, traintype)
+        self.NWORDS = 10000
 
-    def _init_from_config(self, metrictype, traintype, 
+        self.create_time = current_time_str()
+
+
+
+    def init_model(self, metrictype, traintype, 
                           metric_state_dict=None, 
                           word2man_state_dict=None,
                           optimizer_state_dict=None):
@@ -497,12 +496,15 @@ class Parameters:
                 (metric_state_dict is not None and word2man_state_dict is not None
                  and optimizer_state_dict is not None))
 
+        self.metrictype = metrictype
+        self.traintype = traintype
+
         LOGGER.start("building vocabulary")
         VOCAB = set(TEXT)
         VOCABSIZE = len(VOCAB)
         LOGGER.end()
-
         LOGGER.start("creating metric")
+
         if metrictype == "euclid":
             self.METRIC = EuclidMetric(self.EMBEDSIZE)
         elif metrictype == "reimann":
@@ -530,6 +532,7 @@ class Parameters:
             self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
             # TODO: how to reset weights?
 
+
         LOGGER.start("creating OPTIMISER")
         self.optimizer = optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
         if optimizer_state_dict is not None:
@@ -546,8 +549,7 @@ class Parameters:
         self.DATA = DataLoader(self.DATASET, batch_size=self.BATCHSIZE, shuffle=True)
         LOGGER.end()
 
-    # does not work :(
-    def __getstate__(self):
+    def get_model_state_dict(self):
         st =  {
             "EPOCHS": self.EPOCHS,
             "BATCHSIZE": self.BATCHSIZE,
@@ -564,7 +566,7 @@ class Parameters:
         }
         return st
     
-    def __setstate__(self, state):
+    def load_model_state_dict(self, state):
         self.EPOCHS = state["EPOCHS"]
         self.BATCHSIZE = state["BATCHSIZE"]
         self.EMBEDSIZE = state["EMBEDSIZE"]
@@ -575,13 +577,11 @@ class Parameters:
         self.metrictype = state["METRICTYPE"]
         self.traintype = state["TRAINTYPE"]
 
-        self._init_from_config(metrictype=self.metrictype,
+        self.init_model(metrictype=self.metrictype,
                                traintype=self.traintype,
                                metric_state_dict=state["METRIC"], 
                                word2man_state_dict=state["WORD2MAN"],
                                optimizer_state_dict=state["OPTIMIZER"])
-
-        print("metric:\n%s" % (self.METRIC.mat))
 
 
 def mk_word_histogram(ws, vocab):
@@ -652,6 +652,36 @@ class SkipGramOneHotDataset(Dataset):
         # first because it has no left, last because it has no right
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
+
+class CBOWDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, ix):
+        focusix += self.WINDOWSIZE
+
+        return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                }
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE)
+
 def hot(ws, W2I, VOCABSIZE):
     """
     hot *normalized* vector for each word in ws
@@ -677,7 +707,7 @@ def cli_prompt():
         returns: [1 x EMBEDSIZE]
         """
         v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
-        return normalize(v.view(1, -1), PARAMS.METRIC.mat)
+        return v.view(1, -1)
 
     def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
@@ -723,10 +753,21 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat) 
+            vsim = normalize(v1 - v2 + v3, PARAMS.WORD2MAN.METRIC) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
-                print_formatted_text("\t%s: %s" % (word, weight))
+                print_formatted_text("\tnormal(a - b + c) %s: %s" % (word, weight))
+
+
+            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.WORD2MAN.METRIC)
+            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.WORD2MAN.METRIC)
+            v3 = normalize(word_to_embed_vector(raw[3]), PARAMS.WORD2MAN.METRIC)
+
+            vsim = normalize(v2 - v1 + v3, PARAMS.WORD2MAN.METRIC) 
+            wordweights = test_find_close_vectors(vsim)
+            for (word, weight) in wordweights[:15]:
+                print_formatted_text("\tnormal(normal(king) - normal(man) + normal(woman)): %s: %s" % (word, weight))
+
         elif raw[0] == "dot":
             if len(raw) != 3:
                 print("error: expected dot <w1> <w2>")
@@ -767,21 +808,19 @@ DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available(
 LOGGER.end("device: %s" % DEVICE)
 
 
-PARAMS = None
+LOGGER.start("Creating new parameters")
+PARAMS = Parameters(LOGGER, DEVICE)
 if PARSED.loadpath is not None:
     LOGGER.start("loading model from: %s" % (PARSED.loadpath))
     # pass the device so that the tensors live on the correct device.
     # this might be stale since we were on a different device before.
     try:
-        PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+        PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
         LOGGER.end("loaded params from: %s" % PARAMS.create_time)
     except FileNotFoundError as e:
+        PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
         LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
-        
-if PARAMS is None:
-    LOGGER.start("Creating new parameters")
-    PARAMS = Parameters(LOGGER, DEVICE, PARSED.metrictype, PARSED.traintype)
-    LOGGER.end()
+LOGGER.end()
 
 EXPERIMENT = sacred.Experiment()
 EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
@@ -793,14 +832,38 @@ EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
 EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
 
 
+# TODO: consolidate skipgram training dataset, skipgram data feeder
+# and skipgram NN into one
+def train_skipgram(train):
+    """contains skipgram training data"""
+    # [BATCHSIZE x VOCABSIZE]
+    xs = train['focusonehot'].to(DEVICE)
+    # [BATCHSIZE], contains target label per batch
+    target_labels = train['ctxtruelabel'].to(DEVICE)
+
+    PARAMS.optimizer.zero_grad()   # zero the gradient buffers
+
+    # dot product of the embedding of the hidden xs vector with 
+    # every other hidden vector
+    # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
+    xs_dots_embeds = PARAMS.WORD2MAN(xs)
+
+    l = F.nll_loss(xs_dots_embeds, target_labels)
+    loss_sum += l.item()
+    # l.backward(retain_graph=True)
+    l.backward()
+    PARAMS.optimizer.step()
+
+def train_cbow(train):
+    pass
+
 # @EXPERIMENT.capture
 def traincli(savepath):
     global PARAMS
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
-            print("metric:\n%s" % PARAMS.METRIC.mat)
-            torch.save(PARAMS, sf)
+            torch.save(PARAMS.get_model_state_dict(), sf)
         # EXPERIMENT.add_artifact(savepath)
         LOGGER.end()
 
@@ -851,10 +914,6 @@ def traincli(savepath):
                 save()
                 time_last_save = now
     save()
-
-
-
-
 
 # @EXPERIMENT.main
 def main():

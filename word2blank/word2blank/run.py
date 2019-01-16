@@ -724,6 +724,7 @@ def cli_prompt():
     def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
+        v = normalize(v, PARAMS.METRIC.mat)
         wix2sim = dots(v, EMBEDNORM, PARAMS.METRIC.mat)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
@@ -747,7 +748,7 @@ def cli_prompt():
         if len(raw) == 0:
             return
         if raw[0] == "help" or raw[0] == "?":
-            print_formatted_text("near <word> | sim <w1> <w2> <w3> | dot <w1> <w2> | metric | debug")
+            print_formatted_text("near <word> | sim <w-1> <w2> <w3> | dot <w1> <w2> | metric | debug")
             return
         elif raw[0] == "debug":
             pudb.set_trace()

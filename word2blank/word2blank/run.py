@@ -288,7 +288,7 @@ class ReimannMetric(Metric):
         return torch.mm(self.sqrt_, self.sqrt_)
 
 class PseudoReimannMetric(Metric):
-    def __init_(self, embedsize):
+    def __init__(self, embedsize):
         super(PseudoReimannMetric, self).__init__()
         self.mat_ = mk_symmetric_mat(embedsize)
 

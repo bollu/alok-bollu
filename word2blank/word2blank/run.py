@@ -20,7 +20,10 @@ def parse(s):
     train = sub.add_parser("train", help="train the model")
     train.add_argument("--loadpath", help="path to model file to load from", default=None)
     train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
-    train.add_argument("metrictype", help="type of metric to use", choices=["euclid", "reimann", "pseudoreimann"])
+    train.add_argument("--metrictype", help="type of metric to use",
+                       choices=["euclid", "reimann", "pseudoreimann"])
+    train.add_argument("--traintype", help="training method to use",
+                       choices=["cbow", "skipgramonehot", "skipgramnhot"])
 
     test = sub.add_parser("test", help="test the model")
     test.add_argument("loadpath",  help="path to model file")
@@ -253,14 +256,120 @@ def mk_parameter_symmetric_mat(n):
     mat[np.diag_indices(n)] = nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True)
     return mat
 
-class Word2Man(nn.Module):
+
+class Word2ManSkipGramOneHot(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
-        super(Word2Man, self).__init__()
+        super(Word2ManSkipGramOneHot, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
         LOGGER.end()
         self.metrictype = metrictype
 
+        LOGGER.start("creating METRIC")
+
+        if self.metrictype == "euclid":
+            self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
+        elif self.metrictype =="reimann":
+            self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+        else:
+            assert(self.metrictype == "pseudoreimann")
+            self.METRIC = mk_parameter_symmetric_mat(EMBEDSIZE)
+        LOGGER.end()
+
+    def forward(self, xs):
+        """
+        xs are one hot vectors of the focus word. What we will return is
+        [embed(xs) . embed(y) for y in ys].
+
+        That is, the dot product of the embedding of the word with every
+        other word
+
+        xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
+        """
+        # recompute metric again
+        if self.metrictype == "reimann":
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+            
+        # embedded vectors of the batch vectors
+        # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+        xsembeds = torch.mm(xs, self.EMBEDM)
+
+        # dots(BATCHSIZE x EMBEDSIZE], 
+        #     [VOCABSIZE x EMBEDSIZE],
+        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
+        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
+        # TODO: why is this correct? I don't geddit.
+        # what in the fuck does it mean to log softmax cosine?
+        # [BATCHSIZE x VOCABSIZE]
+        xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=1)
+
+        return xsembeds_dots_embeds
+
+    def train(self, traindata):
+        """
+        run a training on a batch using the given optimizer
+        """
+        # [BATCHSIZE x VOCABSIZE]
+        xs = traindata['focusonehot'].to(DEVICE)
+        # [BATCHSIZE], contains target label per batch
+        target_labels = traindata['ctxtruelabel'].to(DEVICE)
+
+        # dot product of the embedding of the hidden xs vector with 
+        # every other hidden vector
+        # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
+        xs_dots_embeds = self(xs)
+
+        l = F.nll_loss(xs_dots_embeds, target_labels)
+        return l
+
+    @classmethod
+    def make_dataset(cls, LOGGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        """
+        create a dataset from the given text
+        """
+        class SkipGramOneHotDataset(Dataset):
+            def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+                self.TEXT = TEXT
+
+                self.VOCAB = VOCAB
+                self.VOCABSIZE = VOCABSIZE
+                self.WINDOWSIZE = WINDOWSIZE
+
+                LOGGER.start("creating I2W, W2I")
+                self.I2W = dict(enumerate(VOCAB))
+                self.W2I = { v: k for (k, v) in self.I2W.items() }
+                LOGGER.end()
+
+                LOGGER.start("counting frequency of words")
+                self.W2F = mk_word_histogram(TEXT, VOCAB)
+                LOGGER.end()
+
+            def __getitem__(self, ix):
+                focusix = ix // (2 * self.WINDOWSIZE)
+                focusix += self.WINDOWSIZE
+                deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+
+                return {'focusonehot': hot([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                        'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                        }
+
+            def __len__(self):
+                # we can't query the first or last value.
+                # first because it has no left, last because it has no right
+                return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
+        return SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
+
+
+class Word2ManCBOW(nn.Module):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
+        super(Word2ManCBOW, self).__init__()
+        LOGGER.start("creating EMBEDM")
+        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        LOGGER.end()
+        self.metrictype = metrictype
+
+        # TODO: prevent code repetition between this and skip gram
         LOGGER.start("creating METRIC")
         # TODO: change this so we can have any nonzero symmetric matrix.
         # add loss so that we don't allow zero matrix. That should be
@@ -285,6 +394,10 @@ class Word2Man(nn.Module):
 
         xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
         """
+        # recompute metric again
+        if self.metrictype == "reimann":
+            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
+            
         # embedded vectors of the batch vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
         xsembeds = torch.mm(xs, self.EMBEDM)
@@ -292,10 +405,6 @@ class Word2Man(nn.Module):
         # dots(BATCHSIZE x EMBEDSIZE], 
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-        # recompute metric again
-        if self.metrictype == "reimann":
-            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
-
         xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
         # TODO: why is this correct? I don't geddit.
         # what in the fuck does it mean to log softmax cosine?
@@ -304,9 +413,63 @@ class Word2Man(nn.Module):
 
         return xsembeds_dots_embeds
 
+    def train(self, traindata):
+        """
+        run a training on a batch using the given optimizer
+        """
+        # [BATCHSIZE x VOCABSIZE]
+        xs = traindata['ctxhot'].to(DEVICE)
+        # [BATCHSIZE], contains target label per batch
+        focustruelabel = traindata['focustruelabel'].to(DEVICE)
+
+        # dot product of the embedding of the hidden xs vector with 
+        # every other hidden vector
+        # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
+        xs_dots_embeds = self(xs)
+
+        l = F.nll_loss(xs_dots_embeds, focustruelabel)
+        return l
+
+    @classmethod
+    def make_dataset(cls, LOGGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        """
+        create a dataset from the given text
+        """
+        class CBOWDataset(Dataset):
+            def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+                self.TEXT = TEXT
+
+                self.VOCAB = VOCAB
+                self.VOCABSIZE = VOCABSIZE
+                self.WINDOWSIZE = WINDOWSIZE
+
+                LOGGER.start("creating I2W, W2I")
+                self.I2W = dict(enumerate(VOCAB))
+                self.W2I = { v: k for (k, v) in self.I2W.items() }
+                LOGGER.end()
+
+                LOGGER.start("counting frequency of words")
+                self.W2F = mk_word_histogram(TEXT, VOCAB)
+                LOGGER.end()
+
+            def __getitem__(self, focusix):
+                focusix += self.WINDOWSIZE
+                ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)]
+
+                # given context, produce word at focus
+                return {'ctxhot': hot(ctxws, self.W2I, self.VOCABSIZE),
+                        'focustruelabel': self.W2I[self.TEXT[focusix]] 
+                        }
+
+            def __len__(self):
+                # we can't query the first or last value.
+                # first because it has no left, last because it has no right
+                return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
+        return CBOWDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
+
 class Parameters:
     """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE, metrictype):
+    def __init__(self, LOGGER, DEVICE, metrictype, traintype):
         """default values"""
         self.EPOCHS = 10
         self.BATCHSIZE = 512
@@ -324,8 +487,14 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating word2man")
-        self.WORD2MAN = Word2Man(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
-        LOGGER.end()
+        if traintype == "skipgramonehot":
+            self.WORD2MAN = Word2ManSkipGramOneHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+        elif traintype == "skipgramnhot":
+            raise RuntimeError("unimplemented n-hot skipgram")
+            # self.WORD2MAN = Word2ManSkipGramNHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+        else:
+            assert(traintype == "cbow")
+            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
 
         LOGGER.start("creating OPTIMISER")
         self.optimizer = optim.Adam(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
@@ -333,7 +502,7 @@ class Parameters:
 
 
         LOGGER.start("creating dataset...")
-        self.DATASET = SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
+        self.DATASET = self.WORD2MAN.make_dataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
@@ -572,7 +741,7 @@ if PARSED.loadpath is not None:
         
 if PARAMS is None:
     LOGGER.start("Creating new parameters")
-    PARAMS = Parameters(LOGGER, DEVICE, PARSED.metrictype)
+    PARAMS = Parameters(LOGGER, DEVICE, PARSED.metrictype, PARSED.traintype)
     LOGGER.end()
 
 EXPERIMENT = sacred.Experiment()
@@ -609,28 +778,16 @@ def traincli(savepath):
     time_last_print = datetime.datetime.now()
     last_print_ix = 0
     for epoch in range(PARAMS.EPOCHS):
-        for train in PARAMS.DATA:
+        for traindata in PARAMS.DATA:
             ix += 1
-            # [BATCHSIZE x VOCABSIZE]
-            xs = train['focusonehot'].to(DEVICE)
-            # [BATCHSIZE], contains target label per batch
-            target_labels = train['ctxtruelabel'].to(DEVICE)
+            l = PARAMS.WORD2MAN.train(traindata)
+            loss_sum += l.item()
 
             PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-
-            # dot product of the embedding of the hidden xs vector with 
-            # every other hidden vector
-            # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
-            xs_dots_embeds = PARAMS.WORD2MAN(xs)
-
-            l = F.nll_loss(xs_dots_embeds, target_labels)
-            loss_sum += l.item()
             # l.backward(retain_graph=True)
             l.backward()
             PARAMS.optimizer.step()
             bar.update(bar.value + 1)
-
-
             # updating data
             now = datetime.datetime.now()
 

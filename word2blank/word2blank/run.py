@@ -388,11 +388,22 @@ class Word2ManSkipGramOneHot(nn.Module):
 
 
 class Word2ManCBOW(nn.Module):
-    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, WINDOWSIZE):
         super(Word2ManCBOW, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        # TODO: I have so. many. questions
+        # 1. Why linear?
+        self.embed2vocab = nn.Parameter(Variable(torch.randn(EMBEDSIZE, VOCABSIZE).to(DEVICE), requires_grad=True))
+        # self.embed2vocab = nn.Linear(EMBEDSIZE, VOCABSIZE).to(DEVICE)
+        # need window size to mean
+        self.window_size = WINDOWSIZE 
         LOGGER.end()
+
+        for p in self.parameters():
+            print("PARAMETER dim: %s" % (p.size(), ))
+        print(self)
+
 
     def forward(self, xs, metric):
         """
@@ -404,19 +415,31 @@ class Word2ManCBOW(nn.Module):
 
         xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
         """
-        # embedded vectors of the batch vectors
+        # Step 1. find average hidden vector
+        # embedded vectors of the batch vectors. Will provide linear
+        # combination of context vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
         xsembeds = torch.mm(xs, self.EMBEDM)
 
-        # dots(BATCHSIZE x EMBEDSIZE], 
-        #     [VOCABSIZE x EMBEDSIZE],
-        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, metric)
+        # [BATCHSIZE x EMBEDSIZE] --sum(dim=1)--> [BATCHSIZE x 1] --view--> [1 x BATCHSIZE]
+        xscounts = torch.sum(xsembeds, dim=1).view(-1, 1)
+        # take mean of vectors
+        # [BATCHSIZE x EMBEDSIZE]
+        xsembeds = xsembeds / xscounts
+
+        # This is to insert some non linearity I guess?
+        # xsembeds = F.relu(xsembeds)
+
+        # [BATCHSIZE x EMBEDSIZE] x [EMBEDSIZE x VOCABSIZE] = [BATCHSIZE x VOCABSIZE]
+        xsouts = torch.mm(xsembeds, self.embed2vocab)
+
+        # Step 3. softmax to convert to probability distribution
         # TODO: why is this correct? I don't geddit.
-        # what in the fuck does it mean to log softmax cosine?
+        # what in the fuck does it mean to log softmax the mean of hidden vectors 
+        # sent out to an output dimension?
         # [BATCHSIZE x VOCABSIZE]
-        xsembeds_dots_embeds = F.log_softmax(xsembeds_dots_embeds, dim=1)
-        return xsembeds_dots_embeds
+        xsouts = F.log_softmax(xsouts, dim=1)
+        return xsouts
 
     def train(self, traindata, metric):
         """
@@ -429,12 +452,10 @@ class Word2ManCBOW(nn.Module):
         # [BATCHSIZE], contains target label per batch
         focustruelabel = traindata['focustruelabel'].to(DEVICE)
 
-        # dot product of the embedding of the hidden xs vector with 
-        # every other hidden vector
-        # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
-        xs_dots_embeds = self(xs, metric)
+        # outs: [BATCSIZE x VOCABSIZE]
+        outs = self(xs, metric)
 
-        l = F.nll_loss(xs_dots_embeds, focustruelabel)
+        l = F.nll_loss(outs, focustruelabel)
         return l
 
     @classmethod
@@ -460,20 +481,17 @@ class Word2ManCBOW(nn.Module):
                 LOGGER.end()
 
             def __getitem__(self, focusix):
-                focusix += self.WINDOWSIZE
-                ctxws = []
-                ctxws += [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, 0)]
-                ctxws += [self.TEXT[focusix + d] for d in range(1, self.WINDOWSIZE + 1)]
+                ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) if d != 0 and 0 <= focusix + d < len(self.TEXT)]
 
                 # given context, produce word at focus
                 return {'ctxhot': hot(ctxws, self.W2I, self.VOCABSIZE),
-                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]] )
+                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]])
                         }
 
             def __len__(self):
                 # we can't query the first or last value.
                 # first because it has no left, last because it has no right
-                return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
+                return len(self.TEXT)
         return CBOWDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
 
 
@@ -481,11 +499,11 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 10
+        self.EPOCHS = 50
         self.BATCHSIZE = 1024
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
-        self.WINDOWSIZE = 4
+        self.WINDOWSIZE = 5
         self.NWORDS = None
 
         self.create_time = current_time_str()
@@ -532,12 +550,11 @@ class Parameters:
         # self.WORD2MAN = Word2ManSkipGramNHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         else:
             assert(traintype == "cbow")
-            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, self.WINDOWSIZE)
 
         if word2man_state_dict is not None:
             self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
         LOGGER.end()
-
 
         LOGGER.start("creating OPTIMISER")
         self.optimizer = optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
@@ -879,7 +896,6 @@ def traincli(savepath):
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             torch.save(PARAMS.get_model_state_dict(), sf)
-        # EXPERIMENT.add_artifact(savepath)
         LOGGER.end()
 
 
@@ -924,7 +940,7 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 1 * 60 # save every 15 minutes
+            TARGET_SAVE_TIME_IN_S = 15 * 60 # save every 15 minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now

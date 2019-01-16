@@ -258,8 +258,8 @@ def mk_symmetric_mat(n):
     mat[np.diag_indices(n)] = nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True)
     return mat
 
-class Metric:
-    def __init__(self, embedsize):
+class Metric(nn.Module):
+    def __init__(self):
         raise NotImplementedError()
 
     @property
@@ -267,8 +267,9 @@ class Metric:
         """return metric matrix of size EMBEDSIZE x EMBEDSIZE"""
         raise NotImplementedError()
 
-class EuclidMetric:
+class EuclidMetric(Metric):
     def __init__(self, embedsize):
+        super(Metric, self).__init__()
         self.mat_ = nn.Parameter(torch.eye(embedsize).to(DEVICE), requires_grad=False)
     @property
     def mat(self):
@@ -276,18 +277,21 @@ class EuclidMetric:
 
 class ReimannMetric(Metric):
     def __init__(self, embedsize):
-            self.sqrt_ = nn.Parameter(torch.randn([embedsize, embedsize]).to(DEVICE), requires_grad=True)
+        super(ReimannMetric, self).__init__()
+        self.sqrt_ = nn.Parameter(torch.randn([embedsize, embedsize]).to(DEVICE), requires_grad=True)
     @property
     def mat(self):
         return torch.mm(self.sqrt_, self.sqrt_)
 
 class PseudoReimannMetric(Metric):
     def __init_(self, embedsize):
+        super(PseudoReimannMetric, self).__init__()
         self.mat_ = mk_symmetric_mat(embedsize)
 
     @property
     def mat(self):
         return self.mat_
+
 
 class Word2ManSkipGramOneHot(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
@@ -467,6 +471,7 @@ class Word2ManCBOW(nn.Module):
                 return (len(self.TEXT) - 2 * self.WINDOWSIZE) 
         return CBOWDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
 
+
 class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE, metrictype, traintype):
@@ -476,10 +481,21 @@ class Parameters:
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 2
-        self.NWORDS = None
+        self.NWORDS = 5000
         self.create_time = current_time_str()
+        self.metrictype = metrictype
+        self.traintype = traintype
+        self._init_from_config(metrictype, traintype)
 
+    def _init_from_config(self, metrictype, traintype, 
+                          metric_state_dict=None, 
+                          word2man_state_dict=None,
+                          optimizer_state_dict=None):
         TEXT = load_corpus(LOGGER, self.NWORDS)
+        assert ((metric_state_dict is None and word2man_state_dict is None
+                and optimizer_state_dict is None) or
+                (metric_state_dict is not None and word2man_state_dict is not None
+                 and optimizer_state_dict is not None))
 
         LOGGER.start("building vocabulary")
         VOCAB = set(TEXT)
@@ -497,21 +513,28 @@ class Parameters:
         # check that metric is subclass of Metric
         assert(self.METRIC is not None)
         # TODO: check that metric is a subclass
+        if metric_state_dict is not None:
+            self.METRIC.load_state_dict(metric_state_dict, strict=True)
 
         LOGGER.start("creating word2man")
         if traintype == "skipgramonehot":
             self.WORD2MAN = Word2ManSkipGramOneHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         elif traintype == "skipgramnhot":
             raise RuntimeError("unimplemented n-hot skipgram")
-            # self.WORD2MAN = Word2ManSkipGramNHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+        # self.WORD2MAN = Word2ManSkipGramNHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         else:
             assert(traintype == "cbow")
             self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
 
-        LOGGER.start("creating OPTIMISER")
-        self.optimizer = optim.Adam(self.WORD2MAN.parameters(), lr=self.LEARNING_RATE)
-        LOGGER.end()
+        if word2man_state_dict is not None:
+            self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
+            # TODO: how to reset weights?
 
+        LOGGER.start("creating OPTIMISER")
+        self.optimizer = optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
+        if optimizer_state_dict is not None:
+            self.optimizer.load_state_dict(optimizer_state_dict)
+        LOGGER.end()
 
         LOGGER.start("creating dataset...")
         self.DATASET = self.WORD2MAN.make_dataset(LOGGER, TEXT, VOCAB, VOCABSIZE, self.WINDOWSIZE)
@@ -524,37 +547,41 @@ class Parameters:
         LOGGER.end()
 
     # does not work :(
-    # def __getstate__(self):
-    #     return {
-    #         "EPOCHS": self.EPOCHS,
-    #         "BATCHSIZE": self.BATCHSIZE,
-    #         "EMBEDSIZE": self.EMBEDSIZE,
-    #         "LEARNINGRATE": self.LEARNING_RATE,
-    #         "WINDOWSIZE": self.WINDOWSIZE,
-    #         "NWORDS": self.NWORDS,
-    #         "CREATE_TIME": self.create_time,
-    #         "WORD2MAN": self.WORD2MAN.state_dict(),
-    #         "OPTIMIZER": self.optimizer.state_dict()
-    #     }
-    # 
-    # def __setstate__(self, state):
-    #     self.EPOCHS = state["EPOCHS"]
-    #     self.BATCHSIZE = state["BATCHSIZE"]
-    #     self.EMBEDSIZE = state["EMBEDSIZE"]
-    #     self.LEARNING_RATE = state["LEARNINGRATE"]
-    #     self.WINDOWSIZE = state["WINDOWSIZE"]
-    #     self.NWORDS = state["NWORDS"]
-    #     self.create_time = state["CREATE_TIME"]
+    def __getstate__(self):
+        st =  {
+            "EPOCHS": self.EPOCHS,
+            "BATCHSIZE": self.BATCHSIZE,
+            "EMBEDSIZE": self.EMBEDSIZE,
+            "LEARNINGRATE": self.LEARNING_RATE,
+            "WINDOWSIZE": self.WINDOWSIZE,
+            "NWORDS": self.NWORDS,
+            "CREATE_TIME": self.create_time,
+            "METRICTYPE": self.metrictype,
+            "TRAINTYPE": self.traintype,
+            "WORD2MAN": self.WORD2MAN.state_dict(),
+            "METRIC": self.METRIC.state_dict(),
+            "OPTIMIZER": self.optimizer.state_dict()
+        }
+        return st
+    
+    def __setstate__(self, state):
+        self.EPOCHS = state["EPOCHS"]
+        self.BATCHSIZE = state["BATCHSIZE"]
+        self.EMBEDSIZE = state["EMBEDSIZE"]
+        self.LEARNING_RATE = state["LEARNINGRATE"]
+        self.WINDOWSIZE = state["WINDOWSIZE"]
+        self.NWORDS = state["NWORDS"]
+        self.create_time = state["CREATE_TIME"]
+        self.metrictype = state["METRICTYPE"]
+        self.traintype = state["TRAINTYPE"]
 
-    #     self._init_from_params()
-    #     self.WORD2MAN.load_state_dict(state["WORD2MAN"])
-    #     self.WORD2MAN.eval()
-    #     self.optimizer.load_state_dict(state["OPTIMIZER"])
+        self._init_from_config(metrictype=self.metrictype,
+                               traintype=self.traintype,
+                               metric_state_dict=state["METRIC"], 
+                               word2man_state_dict=state["WORD2MAN"],
+                               optimizer_state_dict=state["OPTIMIZER"])
 
-    #     print("on loading:")
-    #     print("METRIC:\n%s" % (self.WORD2MAN.METRIC, ))
-    #     print("EMBEDM:\n%s" % (self.WORD2MAN.EMBEDM, ))
-
+        print("metric:\n%s" % (self.METRIC.mat))
 
 
 def mk_word_histogram(ws, vocab):
@@ -772,6 +799,7 @@ def traincli(savepath):
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
+            print("metric:\n%s" % PARAMS.METRIC.mat)
             torch.save(PARAMS, sf)
         # EXPERIMENT.add_artifact(savepath)
         LOGGER.end()
@@ -818,7 +846,7 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 60 * 15 # save every 15 minutes
+            TARGET_SAVE_TIME_IN_S = 2 # save every 15 minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now
@@ -839,5 +867,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # EXPERIMENT.run()
 

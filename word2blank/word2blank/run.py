@@ -500,8 +500,8 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 50
-        self.BATCHSIZE = 1024
-        self.EMBEDSIZE = 300
+        self.BATCHSIZE = 128
+        self.EMBEDSIZE = 100
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 5
         self.NWORDS = None
@@ -713,11 +713,11 @@ class CBOWDataset(Dataset):
 
 def hot(ws, W2I, VOCABSIZE):
     """
-    hot *normalized* vector for each word in ws
+    hot  vector for each word in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
     for w in ws: v[W2I[w]] = 1.0
-    return v / float(len(ws))
+    return v
 
 
 def cli_prompt():

@@ -167,8 +167,7 @@ def batch(xs, BATCHSIZE):
         ix += BATCHSIZE
         yield data
 
-
-
+# TODO: extract into a method of metric
 def dots(vs, ws, metric):
     """Take the dot product of each element in vs with elements in ws"""
     # vs = [S1 x EMBEDSIZE]
@@ -193,10 +192,12 @@ def dots(vs, ws, metric):
     # return outs
 
 
+# TODO: extract into method of metric
 def dot(v, w, metric):
     return dots(v.view(1, -1), w.view(1, -1), metric)
 
     
+# TODO: extract into method of metric
 def cosinesim(v, w, metric):
     # vs = [1 x EMBEDSIZE]
     # ws = [1 x EMBEDSIZE]
@@ -214,6 +215,7 @@ def cosinesim(v, w, metric):
 
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
+# TODO: extract into method of metric
 def normalize(vs, metric):
     # vs = [S1 x EMBEDSIZE]
     # metric = [EMBEDSIZE x EMBEDSIZE]

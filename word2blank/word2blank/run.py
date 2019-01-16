@@ -238,7 +238,7 @@ def normalize(vs, metric):
     return normvs
 
 
-def mk_parameter_symmetric_mat(n):
+def mk_symmetric_mat(n):
     """make a symmetric matrix of size (NxN) which can be gradient descended on"""
 
     # upper triangular matrix with entires one off the diagonal
@@ -256,6 +256,36 @@ def mk_parameter_symmetric_mat(n):
     mat[np.diag_indices(n)] = nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True)
     return mat
 
+class Metric:
+    def __init__(self, embedsize):
+        raise NotImplementedError()
+
+    @property
+    def mat(self):
+        """return metric matrix of size EMBEDSIZE x EMBEDSIZE"""
+        raise NotImplementedError()
+
+class EuclidMetric:
+    def __init__(self, embedsize):
+        self.mat_ = nn.Parameter(torch.eye(embedsize).to(DEVICE), requires_grad=False)
+    @property
+    def mat(self):
+        return self.mat_
+
+class ReimannMetric(Metric):
+    def __init__(self, embedsize):
+            self.sqrt_ = nn.Parameter(torch.randn([embedsize, embedsize]).to(DEVICE), requires_grad=True)
+    @property
+    def mat(self):
+        return torch.mm(self.sqrt_, self.sqrt_)
+
+class PseudoReimannMetric(Metric):
+    def __init_(self, embedsize):
+        self.mat_ = mk_symmetric_mat(embedsize)
+
+    @property
+    def mat(self):
+        return self.mat_
 
 class Word2ManSkipGramOneHot(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
@@ -263,21 +293,8 @@ class Word2ManSkipGramOneHot(nn.Module):
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
         LOGGER.end()
-        self.metrictype = metrictype
 
-        LOGGER.start("creating METRIC")
-
-        if self.metrictype == "euclid":
-            self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
-        elif self.metrictype =="reimann":
-            self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
-            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
-        else:
-            assert(self.metrictype == "pseudoreimann")
-            self.METRIC = mk_parameter_symmetric_mat(EMBEDSIZE)
-        LOGGER.end()
-
-    def forward(self, xs):
+    def forward(self, xs, metric):
         """
         xs are one hot vectors of the focus word. What we will return is
         [embed(xs) . embed(y) for y in ys].
@@ -287,9 +304,6 @@ class Word2ManSkipGramOneHot(nn.Module):
 
         xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
         """
-        # recompute metric again
-        if self.metrictype == "reimann":
-            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
             
         # embedded vectors of the batch vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
@@ -298,7 +312,7 @@ class Word2ManSkipGramOneHot(nn.Module):
         # dots(BATCHSIZE x EMBEDSIZE], 
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
+        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, metric)
         # TODO: why is this correct? I don't geddit.
         # what in the fuck does it mean to log softmax cosine?
         # [BATCHSIZE x VOCABSIZE]
@@ -306,9 +320,11 @@ class Word2ManSkipGramOneHot(nn.Module):
 
         return xsembeds_dots_embeds
 
-    def train(self, traindata):
+    def train(self, traindata, metric):
         """
-        run a training on a batch using the given optimizer
+        run a training on a batch using the given optimizer.
+        traindata: [BATCHSIZE x <data from self.dataset>]
+        metric: torch.mat of dimension [EMBEDSIZE x EMBEDSIZE]
         """
         # [BATCHSIZE x VOCABSIZE]
         xs = traindata['focusonehot'].to(DEVICE)
@@ -318,7 +334,7 @@ class Word2ManSkipGramOneHot(nn.Module):
         # dot product of the embedding of the hidden xs vector with 
         # every other hidden vector
         # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
-        xs_dots_embeds = self(xs)
+        xs_dots_embeds = self(xs, metric)
 
         l = F.nll_loss(xs_dots_embeds, target_labels)
         return l
@@ -367,24 +383,8 @@ class Word2ManCBOW(nn.Module):
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
         LOGGER.end()
-        self.metrictype = metrictype
 
-        # TODO: prevent code repetition between this and skip gram
-        LOGGER.start("creating METRIC")
-        # TODO: change this so we can have any nonzero symmetric matrix.
-        # add loss so that we don't allow zero matrix. That should be
-        # nondegenrate quadratic form.
-        if self.metrictype == "euclid":
-            self.METRIC = nn.Parameter(torch.eye(EMBEDSIZE).to(DEVICE), requires_grad=False)
-        elif self.metrictype =="reimann":
-            self.METRIC_SQRT = nn.Parameter(torch.randn([EMBEDSIZE, EMBEDSIZE]).to(DEVICE), requires_grad=True)
-            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
-        else:
-            assert(self.metrictype == "pseudoreimann")
-            self.METRIC = mk_parameter_symmetric_mat(EMBEDSIZE)
-        LOGGER.end()
-
-    def forward(self, xs):
+    def forward(self, xs, metric):
         """
         xs are one hot vectors of the focus word. What we will return is
         [embed(xs) . embed(y) for y in ys].
@@ -394,10 +394,6 @@ class Word2ManCBOW(nn.Module):
 
         xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
         """
-        # recompute metric again
-        if self.metrictype == "reimann":
-            self.METRIC = torch.mm(self.METRIC_SQRT, self.METRIC_SQRT.t())
-            
         # embedded vectors of the batch vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
         xsembeds = torch.mm(xs, self.EMBEDM)
@@ -405,7 +401,7 @@ class Word2ManCBOW(nn.Module):
         # dots(BATCHSIZE x EMBEDSIZE], 
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, self.METRIC)
+        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, metric)
         # TODO: why is this correct? I don't geddit.
         # what in the fuck does it mean to log softmax cosine?
         # [BATCHSIZE x VOCABSIZE]
@@ -413,9 +409,11 @@ class Word2ManCBOW(nn.Module):
 
         return xsembeds_dots_embeds
 
-    def train(self, traindata):
+    def train(self, traindata, metric):
         """
-        run a training on a batch using the given optimizer
+        run a training on a batch using the given optimizer.
+        traindata: [BATCHSIZE x <data from self.dataset>]
+        metric: torch.mat of dimension [EMBEDSIZE x EMBEDSIZE]
         """
         # [BATCHSIZE x VOCABSIZE]
         xs = traindata['ctxhot'].to(DEVICE)
@@ -425,7 +423,7 @@ class Word2ManCBOW(nn.Module):
         # dot product of the embedding of the hidden xs vector with 
         # every other hidden vector
         # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
-        xs_dots_embeds = self(xs)
+        xs_dots_embeds = self(xs, metric)
 
         l = F.nll_loss(xs_dots_embeds, focustruelabel)
         return l
@@ -485,6 +483,18 @@ class Parameters:
         VOCAB = set(TEXT)
         VOCABSIZE = len(VOCAB)
         LOGGER.end()
+
+        LOGGER.start("creating metric")
+        if metrictype == "euclid":
+            self.METRIC = EuclidMetric(self.EMBEDSIZE)
+        elif metrictype == "reimann":
+            self.METRIC = ReimannMetric(self.EMBEDSIZE)
+        else:
+            assert(metrictype == "pseudoreimann")
+            self.METRIC = PseudoReimannMetric(self.EMBEDSIZE)
+        # check that metric is subclass of Metric
+        assert(self.METRIC is not None)
+        # TODO: check that metric is a subclass
 
         LOGGER.start("creating word2man")
         if traintype == "skipgramonehot":
@@ -627,8 +637,8 @@ def cli_prompt():
 
     LOGGER.start("normalizing EMBEDM...")
     PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
-    PARAMS.WORD2MAN.METRIC = PARAMS.WORD2MAN.METRIC.to(DEVICE)
-    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.WORD2MAN.METRIC).to(DEVICE)
+    # PARAMS.METRIC.mat = PARAMS.METRIC.mat.to(DEVICE)
+    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.METRIC.mat).to(DEVICE)
     LOGGER.end("done.")
 
 
@@ -638,12 +648,12 @@ def cli_prompt():
         returns: [1 x EMBEDSIZE]
         """
         v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
-        return normalize(v.view(1, -1), PARAMS.WORD2MAN.METRIC)
+        return normalize(v.view(1, -1), PARAMS.METRIC.mat)
 
     def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        wix2sim = dots(v, EMBEDNORM, PARAMS.WORD2MAN.METRIC)
+        wix2sim = dots(v, EMBEDNORM, PARAMS.METRIC.mat)
 
         wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
         # The story of floats which cannot be ordered. I found
@@ -684,7 +694,7 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v2 - v1 + v3, PARAMS.WORD2MAN.METRIC) 
+            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\t%s: %s" % (word, weight))
@@ -693,15 +703,15 @@ def cli_prompt():
                 print("error: expected dot <w1> <w2>")
                 return
 
-            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.WORD2MAN.METRIC)
-            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.WORD2MAN.METRIC)
-            print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.WORD2MAN.METRIC), ))
+            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
+            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
+            print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.METRIC.mat), ))
         elif raw[0] == "metric":
-            print(PARAMS.WORD2MAN.METRIC)
-            w,v = torch.eig(PARAMS.WORD2MAN.METRIC,eigenvectors=True)
+            print(PARAMS.METRIC.mat)
+            w,v = torch.eig(PARAMS.METRIC.mat,eigenvectors=True)
             print_formatted_text("eigenvalues:\n%s" % (w, ))
             print_formatted_text("eigenvectors:\n%s" % (v, ))
-            (s, v, d) = torch.svd(PARAMS.WORD2MAN.METRIC)
+            (s, v, d) = torch.svd(PARAMS.METRIC.mat)
             print("SVD :=\n%s\n%s\n%s" % (s, v, d))
         else:
             print_formatted_text("invalid command, type ? for help")
@@ -780,7 +790,7 @@ def traincli(savepath):
     for epoch in range(PARAMS.EPOCHS):
         for traindata in PARAMS.DATA:
             ix += 1
-            l = PARAMS.WORD2MAN.train(traindata)
+            l = PARAMS.WORD2MAN.train(traindata, PARAMS.METRIC.mat)
             loss_sum += l.item()
 
             PARAMS.optimizer.zero_grad()   # zero the gradient buffers

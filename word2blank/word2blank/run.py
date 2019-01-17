@@ -37,6 +37,7 @@ if __name__ == "__main__":
 
 import itertools
 import torch
+import torch.autograd
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -388,7 +389,7 @@ class Word2ManSkipGramOneHot(nn.Module):
 
 
 class Word2ManCBOW(nn.Module):
-    def __init__(self, VOCABSIZE, EMBEDSIZE, WINDOWSIZE):
+    def __init__(self, VOCABSIZE, EMBEDSIZE):
         super(Word2ManCBOW, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
@@ -397,7 +398,6 @@ class Word2ManCBOW(nn.Module):
         self.embed2vocab = nn.Parameter(Variable(torch.randn(EMBEDSIZE, VOCABSIZE).to(DEVICE), requires_grad=True))
         # self.embed2vocab = nn.Linear(EMBEDSIZE, VOCABSIZE).to(DEVICE)
         # need window size to mean
-        self.window_size = WINDOWSIZE 
         LOGGER.end()
 
         for p in self.parameters():
@@ -405,32 +405,28 @@ class Word2ManCBOW(nn.Module):
         print(self)
 
 
-    def forward(self, xs, metric):
+    def forward(self, xs, xscounts, metric):
         """
         xs are one hot vectors of the focus word. What we will return is
         [embed(xs) . embed(y) for y in ys].
 
+        xscounts are the counts of the number of context words for each x
+
         That is, the dot product of the embedding of the word with every
         other word
 
-        xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
+        xs = [BATCHSIZE x VOCABSIZE], n-hot in the VOCABSIZE dimension
+        xscounts = [BATCHSIZE x 1], the n each n-hot vector to find the mean with
         """
         # Step 0. find average hidden vector
         # embedded vectors of the batch vectors. Will provide linear
         # combination of context vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
+        # [1 0 1, 0 1 0] -> [e1 + e3, e2]
         xsembeds = torch.mm(xs, self.EMBEDM)
 
-        # [BATCHSIZE x EMBEDSIZE] --sum(dim=1)--> [BATCHSIZE x 1] --view--> [1 x BATCHSIZE]
-        # TODO: epsilon
-        EPSILON = 0.0
-        xscounts = torch.sum(xs, dim=1).view(-1, 1) + EPSILON
-        # take mean of vectors
-        # [BATCHSIZE x EMBEDSIZE]
+        # [BATCHSIZE x EMBEDSIZE] / [BATCHSIZE x 1] -> [BATCHSIZE x EMBEDSIZE]
         xsembeds = xsembeds / xscounts
-
-        # This is to insert some non linearity I guess?
-        # xsembeds = F.relu(xsembeds)
 
         # [BATCHSIZE x EMBEDSIZE] x [EMBEDSIZE x VOCABSIZE] = [BATCHSIZE x VOCABSIZE]
         xsouts = torch.mm(xsembeds, self.embed2vocab)
@@ -451,11 +447,13 @@ class Word2ManCBOW(nn.Module):
         """
         # [BATCHSIZE x VOCABSIZE]
         xs = traindata['ctxhot'].to(DEVICE)
-        # [BATCHSIZE], contains target label per batch
+        # [BATCHSIZE x 1] contains number of words in window per training sample
+        xscounts = traindata['ctxcount'].to(DEVICE)
+        # [BATCHSIZE], contains target label per training sample in batch
         focustruelabel = traindata['focustruelabel'].to(DEVICE)
 
-        # outs: [BATCSIZE x VOCABSIZE]
-        outs = self(xs, metric)
+        # outs: [BATCHSIZE x VOCABSIZE]
+        outs = self(xs, xscounts, metric)
 
         l = F.nll_loss(outs, focustruelabel)
         return l
@@ -483,11 +481,13 @@ class Word2ManCBOW(nn.Module):
                 LOGGER.end()
 
             def __getitem__(self, focusix):
-                ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) if d != 0 and 0 <= focusix + d < len(self.TEXT)]
+                ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) 
+                         if d != 0 and 0 <= focusix + d < len(self.TEXT)]
 
-                # given context, produce word at focus
-                return {'ctxhot': bow_vec(ctxws, self.W2I, self.VOCABSIZE),
-                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]])
+                # given context, number of words in context, produce word at focus
+                return {'ctxhot': bow_vec(ctxws, self.W2I, self.VOCABSIZE), #1xVOCAB
+                        'ctxcount': torch.tensor([len(ctxws)], dtype=torch.float), #1x1
+                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]]) # 1
                         }
 
             def __len__(self):
@@ -501,9 +501,9 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 50
-        self.BATCHSIZE = 32
-        self.EMBEDSIZE = 100
+        self.EPOCHS = 15
+        self.BATCHSIZE = 128
+        self.EMBEDSIZE = 200
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 5
         self.NWORDS = None
@@ -552,7 +552,7 @@ class Parameters:
         # self.WORD2MAN = Word2ManSkipGramHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         else:
             assert(traintype == "cbow")
-            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, self.WINDOWSIZE)
+            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE)
 
         if word2man_state_dict is not None:
             self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
@@ -627,7 +627,7 @@ def bow_vec(ws, W2I, VOCABSIZE):
     bag of words vector corresponding to words in ws
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
-    for w in ws: v[W2I[w]] += 1.0
+    for w in ws: v[W2I[w]] = 1.0
     return v
 
 
@@ -757,7 +757,7 @@ if PARSED.loadpath is not None:
     try:
         PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
         LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
         LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
 else:
@@ -775,34 +775,9 @@ EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
 EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
 
 
-# TODO: consolidate skipgram training dataset, skipgram data feeder
-# and skipgram NN into one
-def train_skipgram(train):
-    """contains skipgram training data"""
-    # [BATCHSIZE x VOCABSIZE]
-    xs = train['focusonehot'].to(DEVICE)
-    # [BATCHSIZE], contains target label per batch
-    target_labels = train['ctxtruelabel'].to(DEVICE)
-
-    PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-
-    # dot product of the embedding of the hidden xs vector with 
-    # every other hidden vector
-    # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
-    xs_dots_embeds = PARAMS.WORD2MAN(xs)
-
-    l = F.nll_loss(xs_dots_embeds, target_labels)
-    loss_sum += l.item()
-    # l.backward(retain_graph=True)
-    l.backward()
-    PARAMS.optimizer.step()
-
-def train_cbow(train):
-    pass
 
 # @EXPERIMENT.capture
 def traincli(savepath):
-    global PARAMS
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:

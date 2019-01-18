@@ -396,8 +396,6 @@ class Word2ManCBOW(nn.Module):
         # TODO: I have so. many. questions
         # 1. Why linear?
         self.embed2vocab = nn.Parameter(Variable(torch.randn(EMBEDSIZE, VOCABSIZE).to(DEVICE), requires_grad=True))
-        # self.embed2vocab = nn.Linear(EMBEDSIZE, VOCABSIZE).to(DEVICE)
-        # need window size to mean
         LOGGER.end()
 
         for p in self.parameters():
@@ -405,31 +403,21 @@ class Word2ManCBOW(nn.Module):
         print(self)
 
 
-    def forward(self, xs, xscounts, metric):
+    def forward(self, xs, metric):
         """
-        xs are one hot vectors of the focus word. What we will return is
-        [embed(xs) . embed(y) for y in ys].
-
-        xscounts are the counts of the number of context words for each x
-
-        That is, the dot product of the embedding of the word with every
-        other word
-
-        xs = [BATCHSIZE x VOCABSIZE], n-hot in the VOCABSIZE dimension
-        xscounts = [BATCHSIZE x 1], the n each n-hot vector to find the mean with
+        xs = [BATCHSIZE x VOCABSIZE], **average n-hot** in the VOCABSIZE dimension
         """
-        # Step 0. find average hidden vector
+        # Step 0. find average hidden vector, from input *average* n-hot
+        # vector.
         # embedded vectors of the batch vectors. Will provide linear
         # combination of context vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
         # [1 0 1, 0 1 0] -> [e1 + e3, e2]
         xsembeds = torch.mm(xs, self.EMBEDM)
 
-        # [BATCHSIZE x EMBEDSIZE] / [BATCHSIZE x 1] -> [BATCHSIZE x EMBEDSIZE]
-        xsembeds = xsembeds / xscounts
 
         # [BATCHSIZE x EMBEDSIZE] x [EMBEDSIZE x VOCABSIZE] = [BATCHSIZE x VOCABSIZE]
-        xsouts = torch.mm(xsembeds, self.embed2vocab)
+        xsouts = torch.mm(xsembeds, self.embed2vocab) 
 
         # Step 3. softmax to convert to probability distribution
         # TODO: why is this correct? I don't geddit.
@@ -447,13 +435,11 @@ class Word2ManCBOW(nn.Module):
         """
         # [BATCHSIZE x VOCABSIZE]
         xs = traindata['ctxhot'].to(DEVICE)
-        # [BATCHSIZE x 1] contains number of words in window per training sample
-        xscounts = traindata['ctxcount'].to(DEVICE)
         # [BATCHSIZE], contains target label per training sample in batch
         focustruelabel = traindata['focustruelabel'].to(DEVICE)
 
         # outs: [BATCHSIZE x VOCABSIZE]
-        outs = self(xs, xscounts, metric)
+        outs = self(xs, metric)
 
         l = F.nll_loss(outs, focustruelabel)
         return l
@@ -485,9 +471,8 @@ class Word2ManCBOW(nn.Module):
                          if d != 0 and 0 <= focusix + d < len(self.TEXT)]
 
                 # given context, number of words in context, produce word at focus
-                return {'ctxhot': bow_vec(ctxws, self.W2I, self.VOCABSIZE), #1xVOCAB
-                        'ctxcount': torch.tensor([len(ctxws)], dtype=torch.float), #1x1
-                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]]) # 1
+                return {'ctxhot': bow_avg_vec(ctxws, self.W2I, self.VOCABSIZE), #[1xVOCAB]
+                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]]) # [1]
                         }
 
             def __len__(self):
@@ -502,9 +487,9 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 15
-        self.BATCHSIZE = 128
-        self.EMBEDSIZE = 200
-        self.LEARNING_RATE = 0.001
+        self.BATCHSIZE = 256
+        self.EMBEDSIZE = 300
+        self.LEARNING_RATE = 0.0001
         self.WINDOWSIZE = 5
         self.NWORDS = None
 
@@ -628,6 +613,17 @@ def bow_vec(ws, W2I, VOCABSIZE):
     """
     v = Variable(torch.zeros(VOCABSIZE).float())
     for w in ws: v[W2I[w]] = 1.0
+    return v
+
+
+def bow_avg_vec(ws, W2I, VOCABSIZE):
+    """
+    bag of words *average* vector corresponding to words in ws.
+    That is, total sum of weights is 1
+    """
+    N = float(len(ws))
+    v = Variable(torch.zeros(VOCABSIZE).float())
+    for w in ws: v[W2I[w]] += 1.0 / N
     return v
 
 

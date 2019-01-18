@@ -6,18 +6,22 @@
 #SBATCH --mem-per-cpu=8046
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END
-#SBATCH --array=0-2
+#SBATCH --array=0-5
 
 set -e 
 set -o xtrace
 
-TYPES=(euclid reimann pseudoreimann)
+METRICTYPES=(euclid reimann pseudoreimann)
+TRAINTYPES=(cbow skipgram)
 
 module add cuda/9.0
 rm cur.model || true
 
-FOLDERNAME=$(git rev-parse HEAD)
+FOLDERNAME=$(git rev-parse HEAD)/cbow
 mkdir -p models/$FOLDERNAME
-TYPE=${TYPES[$SLURM_ARRAY_TASK_ID]}
+METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 3))]}
+TRAINTYPE=${TRAINTYPES[$(($SLURM_ARRAY_TASK_ID / 3))]}
 
-./run.py train  --savepath models/$FOLDERNAME/$TYPE.model --loadpath models/$FOLDERNAME/$TYPE.model --metrictype $TYPE --traintype cbow | tee models/$FOLDERNAME/$TYPE.log
+NAME=$TRAINTYPE-$METRICTYPE
+
+./run.py train  --savepath models/$FOLDERNAME/$NAME.model --loadpath models/$FOLDERNAME/$NAME.model --metrictype $METRICTYPE --traintype $TRAINTYPE | tee models/$FOLDERNAME/$NAME.log

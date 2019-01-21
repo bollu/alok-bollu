@@ -27,6 +27,13 @@ $ tail -f slurm-<number>.out # to view file as it's written to
 - Run manifold reduction and see what pops up.
 - Read about classification of pseudo reimannian manifolds.
 
+# Code improvements
+- use `with autograd.detect_anomaly():` to error on NaN
+- Use [gensim keyed vectors](https://radimrehurek.com/gensim/models/keyedvectors.html#gensim.models.keyedvectors.WordEmbeddingsKeyedVectors)
+  for our code
+- Use [vecto](https://vecto.readthedocs.io/en/docs/tutorial/index.html) for vector 
+space embeddings.
+
 # To investigate for data handling:
 - [sacred](https://sacred.readthedocs.io/en/latest/experiment.html)
 - [DVC](https://dvc.org/doc/get-started)
@@ -34,3 +41,4 @@ $ tail -f slurm-<number>.out # to view file as it's written to
 # References
 - [ipynb with sample implementation of skip gram](https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb)
 - [CBOW implementation](https://github.com/bastings/nn4nlp2017-code-pytorch/blob/master/01-intro/cbow-pytorch.py)
+- [Well written blog post about choices of losses](https://lilianweng.github.io/lil-log/2017/10/15/learning-word-embedding.html#full-softmax)

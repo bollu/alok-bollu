@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Plot average loss.
 from bokeh.plotting import figure, output_file, show, save
 import os, errno
 import socket

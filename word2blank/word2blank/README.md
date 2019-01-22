@@ -42,3 +42,6 @@ space embeddings.
 - [ipynb with sample implementation of skip gram](https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb)
 - [CBOW implementation](https://github.com/bastings/nn4nlp2017-code-pytorch/blob/master/01-intro/cbow-pytorch.py)
 - [Well written blog post about choices of losses](https://lilianweng.github.io/lil-log/2017/10/15/learning-word-embedding.html#full-softmax)
+
+# Evaluation
+- Use [BATS dataset](http://vecto.space/projects/BATS/)

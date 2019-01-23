@@ -6,7 +6,7 @@
 #SBATCH --mem-per-cpu=8046
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END
-#SBATCH --array=0-5
+#SBATCH --array=0-1
 
 set -e 
 set -o xtrace
@@ -16,10 +16,10 @@ METRICTYPES=(pseudoreimann euclid)
 module add cuda/9.0
 rm cur.model || true
 
-mkdir -p models/$FOLDERNAME
 METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 2))]}
 TRAINTYPE=skipgramonehot
 FOLDERNAME=$(git rev-parse HEAD)
+mkdir -p models/$FOLDERNAME
 
 NAME=$TRAINTYPE-$METRICTYPE
 

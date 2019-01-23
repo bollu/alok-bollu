@@ -11,15 +11,14 @@
 set -e 
 set -o xtrace
 
-METRICTYPES=(euclid pseudoreimann)
-TRAINTYPES=(skipgram cbow)
+METRICTYPES=(pseudoreimann euclid)
 
 module add cuda/9.0
 rm cur.model || true
 
 mkdir -p models/$FOLDERNAME
-METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 3))]}
-TRAINTYPE=${TRAINTYPES[$(($SLURM_ARRAY_TASK_ID / 3))]}
+METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 2))]}
+TRAINTYPE=skipgramonehot
 FOLDERNAME=$(git rev-parse HEAD)
 
 NAME=$TRAINTYPE-$METRICTYPE

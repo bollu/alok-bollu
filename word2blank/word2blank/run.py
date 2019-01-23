@@ -488,7 +488,7 @@ class Parameters:
         """default values"""
         self.EPOCHS = 15
         self.BATCHSIZE = 256
-        self.EMBEDSIZE = 300
+        self.EMBEDSIZE = 30
         self.LEARNING_RATE = 0.0001
         self.WINDOWSIZE = 5
         self.NWORDS = None

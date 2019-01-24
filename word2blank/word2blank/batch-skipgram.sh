@@ -12,17 +12,17 @@ set -e
 set -o xtrace
 
 METRICTYPES=(pseudoreimann euclid)
-DATE=`date '+%Y-%m-%d %H:%M:%S'`
+DATE=`date '+%Y-%m-%d--%H:%M:%S'`
 
 module add cuda/9.0
 rm cur.model || true
 
 METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 2))]}
 TRAINTYPE=skipgramonehot
-FOLDERNAME=$SLURM_ARRAY_JOB_ID-$(git rev-parse HEAD)
+FOLDERNAME=$SLURM_ARRAY_JOB_ID---$(git rev-parse HEAD)
 mkdir -p models/$FOLDERNAME
 
 NAME=$TRAINTYPE-$METRICTYPE
-touch $FOLDERNAME/date-$DATE
+touch models/$FOLDERNAME/date-$DATE
 
 ./run.py train  --savepath models/$FOLDERNAME/$NAME.model --loadpath models/$FOLDERNAME/$NAME.model --metrictype $METRICTYPE --traintype $TRAINTYPE | tee models/$FOLDERNAME/$NAME.log

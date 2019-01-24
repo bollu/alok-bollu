@@ -26,6 +26,6 @@ mkdir -p models/$FOLDERNAME
 
 NAME=$TRAINTYPE-$METRICTYPE
 
-touch $FOLDERNAME/date-$DATE
+touch models/$FOLDERNAME/date-$DATE
 
 ./run.py train  --savepath models/$FOLDERNAME/$NAME.model --loadpath models/$FOLDERNAME/$NAME.model --metrictype $METRICTYPE --traintype $TRAINTYPE | tee models/$FOLDERNAME/$NAME.log

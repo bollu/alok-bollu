@@ -545,11 +545,11 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE):
         """default values"""
         self.EPOCHS = 100
-        self.BATCHSIZE = 512
+        self.BATCHSIZE = 128
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
-        self.WINDOWSIZE = 2
-        self.NWORDS = 10000
+        self.WINDOWSIZE = 5
+        self.NWORDS = 100000
 
         self.create_time = current_time_str()
 

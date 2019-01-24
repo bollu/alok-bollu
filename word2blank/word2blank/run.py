@@ -299,7 +299,7 @@ class PseudoReimannMetric(Metric):
 
 
 class Word2ManSkipGramOneHot(nn.Module):
-    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE, metrictype):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
         super(Word2ManSkipGramOneHot, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
@@ -489,8 +489,8 @@ class Parameters:
         self.EPOCHS = 500
         self.BATCHSIZE = 4096
         self.EMBEDSIZE = 300
-        self.LEARNING_RATE = 0.0001
-        self.WINDOWSIZE = 5
+        self.LEARNING_RATE = 0.001
+        self.WINDOWSIZE = 2
         self.NWORDS = 10000
 
         self.create_time = current_time_str()
@@ -531,7 +531,7 @@ class Parameters:
 
         LOGGER.start("creating word2man")
         if traintype == "skipgramonehot":
-            self.WORD2MAN = Word2ManSkipGramOneHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
+            self.WORD2MAN = Word2ManSkipGramOneHot(VOCABSIZE, self.EMBEDSIZE, DEVICE)
         elif traintype == "skipgramnhot":
             raise RuntimeError("unimplemented n-hot skipgram")
         # self.WORD2MAN = Word2ManSkipGramHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)

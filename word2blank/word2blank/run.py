@@ -486,8 +486,8 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 500
-        self.BATCHSIZE = 4096
+        self.EPOCHS = 100
+        self.BATCHSIZE = 512
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.001
         self.WINDOWSIZE = 2
@@ -761,17 +761,6 @@ else:
     PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
     LOGGER.end()
 
-EXPERIMENT = sacred.Experiment()
-EXPERIMENT.add_config(EPOCHS = PARAMS.EPOCHS,
-                      BATCHSIZE = PARAMS.BATCHSIZE,
-                      EMBEDSIZE = PARAMS.EMBEDSIZE,
-                      LEARNING_RATE = PARAMS.LEARNING_RATE,
-                      WINDOWSIZE = PARAMS.WINDOWSIZE,
-                      NWORDS = PARAMS.NWORDS)
-EXPERIMENT.observers.append(sacred.observers.FileStorageObserver.create('runs'))
-
-
-
 # @EXPERIMENT.capture
 def traincli(savepath):
     def save():
@@ -796,11 +785,9 @@ def traincli(savepath):
     for epoch in range(PARAMS.EPOCHS):
         for traindata in PARAMS.DATALOADER:
             ix += 1
+            PARAMS.optimizer.zero_grad()   # zero the gradient buffers
             l = PARAMS.WORD2MAN.train(traindata, PARAMS.METRIC.mat)
             loss_sum += l.item()
-
-            PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-            # l.backward(retain_graph=True)
             l.backward()
             PARAMS.optimizer.step()
             bar.update(bar.value + 1)

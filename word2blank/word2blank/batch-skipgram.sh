@@ -19,7 +19,7 @@ rm cur.model || true
 
 METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 2))]}
 TRAINTYPE=skipgramonehot
-FOLDERNAME=$SLURM_ARRAY_JOB_ID---$(git rev-parse HEAD)
+FOLDERNAME=$(git rev-parse --short HEAD)---$SLURM_ARRAY_JOB_ID---$DATE
 mkdir -p models/$FOLDERNAME
 
 NAME=$TRAINTYPE-$METRICTYPE

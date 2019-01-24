@@ -296,6 +296,19 @@ class PseudoReimannMetric(Metric):
     def mat(self):
         return self.mat_
 
+def get_windowed_ixs(windowsize, ix, maxix):
+    """Generator that returns values values of:
+        (ix, min(max(0, ix + delta), maxix),
+        delta = [-windowsize, -1] U [1, windowsize]
+        0 <= ix <= self.windowsize
+       Used to list tail elements in a skip gram dataset.
+    """
+        
+        for d in range(max(ix - windowsize, 0), ix):
+            yield (ix, d)
+        for d in range(ix+1, min(ix + windowsize, maxix)):
+            yield (ix, d)
+
 class SkipGramOneHotDataset(Dataset):
     def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
         self.TEXT = TEXT
@@ -309,9 +322,27 @@ class SkipGramOneHotDataset(Dataset):
         self.W2I = { v: k for (k, v) in self.I2W.items() }
         LOGGER.end()
 
+        #begin_ixs = [get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(WINDOWSIZE)]
+        #end_ixs = [get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(len(TEXT) - WINDOWSIZE, len(TEXT))]
+
         LOGGER.start("counting frequency of words")
         self.W2F = mk_word_histogram(TEXT, VOCAB)
         LOGGER.end()
+
+
+    def num_tail_elements(self):
+        """number of elements that are at the beginning / end
+           which do not have a full WINDOWSIZE number of elements
+           to the left / right
+        """
+        size = 0
+        # ith element has i elements on the left and self.WINDOWSIZE
+        # elements on the right
+        for i in range(self.WINDOWSIZE):
+            size += i + self.WINDOWSIZE
+        assert(size == self.WINDOWSIZE * (self.WINDOWSIZE - 1) / 2 + self.WINDOWSIZE * self.WINDOWSIZE)
+        return size
+
 
     def __getitem__(self, ix):
         focusix = ix // (2 * self.WINDOWSIZE)
@@ -325,6 +356,17 @@ class SkipGramOneHotDataset(Dataset):
     def __len__(self):
         # we can't query the first or last value.
         # first because it has no left, last because it has no right
+
+        # first self.WINDOWSIZE elements, have i elements on the left
+        # and windowsize elements on the right.
+        size = 0
+        for i in range(self.WINDOWSIZE):
+            size += i + self.WINDOWSIZE
+
+        # closed form: 
+        # \sum_{i=0}^{self.WINDOWSIZE - 1} (i + self.WINDOWSIZE)
+        # = (self.WINDOWSIZE) (self.WINDOWSIZE - 1) / 2 + self.WINDOWSIZE * self.WINDOWSIZE
+
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
 class Word2ManSkipGramOneHot(nn.Module):

@@ -226,13 +226,14 @@ def normalize(vs, metric):
     # metric = [EMBEDSIZE x EMBEDSIZE]
     # normvs = [S1 x EMBEDSIZE]
     normvs = torch.zeros(vs.size()).to(DEVICE)
-    BATCHSIZE = 512
-    with prompt_toolkit.shortcuts.ProgressBar() as pb:
-        for i in pb(range(math.ceil(vs.size()[0] / BATCHSIZE))):
-            vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
-            vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
-            vslen = vslen.view(-1, 1) # have one element per column which is the length
-            normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
+    BATCHSIZE = 4096
+    # with prompt_toolkit.shortcuts.ProgressBar() as pb:
+    import pudb; pudb.set_trace()
+    for i in (range(math.ceil(vs.size()[0] / BATCHSIZE))):
+        vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
+        vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
+        vslen = vslen.view(-1, 1) # have one element per column which is the length
+        normvs[i*BATCHSIZE:(i+1)*BATCHSIZE, :] = vscur / vslen
 
     # with prompt_toolkit.shortcuts.ProgressBar() as pb:
     #     for i in pb(range(math.ceil(vs.size()[0]))):
@@ -241,7 +242,6 @@ def normalize(vs, metric):
     #         vslen = vslen.view(-1, 1) # have one element per column which is the length
     #         normvs[i, :] = vscur / vslen
     normvs.to(DEVICE)
-    ERROR_THRESHOLD = 0.1
     return normvs
 
 
@@ -486,12 +486,12 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 15
-        self.BATCHSIZE = 256
-        self.EMBEDSIZE = 30
+        self.EPOCHS = 500
+        self.BATCHSIZE = 4096
+        self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.0001
         self.WINDOWSIZE = 5
-        self.NWORDS = None
+        self.NWORDS = 10000
 
         self.create_time = current_time_str()
 

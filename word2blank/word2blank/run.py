@@ -748,10 +748,10 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v1 - v2 + v3, PARAMS.METRIC.mat) 
+            vsim = normalize(v2 - v1+ v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
-                print_formatted_text("\tnormal(a - b + c) %s: %s" % (word, weight))
+                print_formatted_text("\tnormal(b - a + c) %s: %s" % (word, weight))
 
 
             v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
@@ -761,7 +761,7 @@ def cli_prompt():
             vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
-                print_formatted_text("\tnormal(normal(king) - normal(man) + normal(woman)): %s: %s" % (word, weight))
+                print_formatted_text("\tnormal(normal(b) - normal(a) + normal(c)): %s: %s" % (word, weight))
 
         elif raw[0] == "dot":
             if len(raw) != 3:
@@ -773,11 +773,15 @@ def cli_prompt():
             print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.METRIC.mat), ))
         elif raw[0] == "metric":
             print_formatted_text(PARAMS.METRIC.mat)
-            w,v = torch.eig(PARAMS.METRIC.mat,eigenvectors=True)
-            print_formatted_text("eigenvalues:\n%s" % (w, ))
-            print_formatted_text("eigenvectors:\n%s" % (v, ))
-            (s, v, d) = torch.svd(PARAMS.METRIC.mat)
-            print_formatted_text("SVD :=\n%s\n%s\n%s" % (s, v, d))
+            evals,evecs = torch.eig(PARAMS.METRIC.mat,eigenvectors=True)
+
+            evals = [evals[i][0].item() for i in range(evals.size()[0])]
+            evals.sort(key=abs, reverse=True)
+            print_formatted_text("evals: %s" % "\n".join(map(lambda f: "{0: .2f}".format(round(f, 2)), evals)))
+
+            # print_formatted_text("eigenvectors:\n%s" % (evecs, ))
+            # (s, v, d) = torch.svd(PARAMS.METRIC.mat)
+            # print_formatted_text("SVD :=\n%s\n%s\n%s" % (s, v, d))
         else:
             print_formatted_text("invalid command, type ? for help")
 

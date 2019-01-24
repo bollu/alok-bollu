@@ -228,7 +228,6 @@ def normalize(vs, metric):
     normvs = torch.zeros(vs.size()).to(DEVICE)
     BATCHSIZE = 4096
     # with prompt_toolkit.shortcuts.ProgressBar() as pb:
-    import pudb; pudb.set_trace()
     for i in (range(math.ceil(vs.size()[0] / BATCHSIZE))):
         vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
         vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
@@ -725,15 +724,17 @@ def cli_prompt():
             print_formatted_text("invalid command, type ? for help")
 
     session = PromptSession()
-    while True:
-        try:
-            prompt_word(session)
-        except KeyboardInterrupt:
-            break
-        except EOFError:
-            break
-        except KeyError as e:
-            print_formatted_text("exception:\n%s" % (e, ))
+    with torch.no_grad():
+        # event loop
+        while True:
+            try:
+                prompt_word(session)
+            except KeyboardInterrupt:
+                break
+            except EOFError:
+                break
+            except KeyError as e:
+                print_formatted_text("exception:\n%s" % (e, ))
 
 
 # =========== Actual code ============

@@ -303,11 +303,12 @@ def get_windowed_ixs(windowsize, ix, maxix):
         0 <= ix <= self.windowsize
        Used to list tail elements in a skip gram dataset.
     """
-        
-        for d in range(max(ix - windowsize, 0), ix):
-            yield (ix, d)
-        for d in range(ix+1, min(ix + windowsize, maxix)):
-            yield (ix, d)
+    for d in range(max(ix - windowsize, 0), ix):
+        yield (ix, d)
+    for d in range(ix+1, min(ix + windowsize + 1, maxix)):
+        yield (ix, d)
+def flatten(xss):
+    return [x for xs in xss for x in xs]
 
 class SkipGramOneHotDataset(Dataset):
     def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
@@ -322,8 +323,13 @@ class SkipGramOneHotDataset(Dataset):
         self.W2I = { v: k for (k, v) in self.I2W.items() }
         LOGGER.end()
 
-        #begin_ixs = [get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(WINDOWSIZE)]
-        #end_ixs = [get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(len(TEXT) - WINDOWSIZE, len(TEXT))]
+        self.begin_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(WINDOWSIZE)])
+        print("begin ixs:")
+        print(self.begin_ixs)
+        self.end_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(len(TEXT) - WINDOWSIZE, len(TEXT))])
+        print("end ixs:")
+        print(self.end_ixs)
+
 
         LOGGER.start("counting frequency of words")
         self.W2F = mk_word_histogram(TEXT, VOCAB)
@@ -345,12 +351,19 @@ class SkipGramOneHotDataset(Dataset):
 
 
     def __getitem__(self, ix):
-        focusix = ix // (2 * self.WINDOWSIZE)
-        focusix += self.WINDOWSIZE
-        deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+        if ix < len(self.begin_ixs):
+            focusix, ctxix = self.begin_ixs[ix]
+        elif len(self.begin_ixs) <= ix < len(self.begin_ixs) + len(self.end_ixs):
+            focusix, ctxix = self.end_ixs[ix - len(self.begin_ixs)]
+        else:
+            ix = ix - len(self.begin_ixs) - len(self.end_ixs)
+            focusix = ix // (2 * self.WINDOWSIZE)
+            focusix += self.WINDOWSIZE
+            deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+            ctxix = focusix + deltaix
 
         return {'focusonehot': bow_vec([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
-                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                'ctxtruelabel': self.W2I[self.TEXT[ctxix]] 
                 }
 
     def __len__(self):
@@ -363,11 +376,14 @@ class SkipGramOneHotDataset(Dataset):
         for i in range(self.WINDOWSIZE):
             size += i + self.WINDOWSIZE
 
+        assert(size == len(self.begin_ixs))
+        assert(size == len(self.end_ixs))
+
         # closed form: 
         # \sum_{i=0}^{self.WINDOWSIZE - 1} (i + self.WINDOWSIZE)
         # = (self.WINDOWSIZE) (self.WINDOWSIZE - 1) / 2 + self.WINDOWSIZE * self.WINDOWSIZE
 
-        return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE) + len(self.begin_ixs) + len(self.end_ixs)
 
 class Word2ManSkipGramOneHot(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):

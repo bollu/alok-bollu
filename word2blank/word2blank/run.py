@@ -297,6 +297,36 @@ class PseudoReimannMetric(Metric):
     def mat(self):
         return self.mat_
 
+class SkipGramOneHotDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, ix):
+        focusix = ix // (2 * self.WINDOWSIZE)
+        focusix += self.WINDOWSIZE
+        deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+
+        return {'focusonehot': bow_vec([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                }
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
 
 class Word2ManSkipGramOneHot(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
@@ -355,39 +385,40 @@ class Word2ManSkipGramOneHot(nn.Module):
         """
         create a dataset from the given text
         """
-        class SkipGramOneHotDataset(Dataset):
-            def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
-                self.TEXT = TEXT
-
-                self.VOCAB = VOCAB
-                self.VOCABSIZE = VOCABSIZE
-                self.WINDOWSIZE = WINDOWSIZE
-
-                LOGGER.start("creating I2W, W2I")
-                self.I2W = dict(enumerate(VOCAB))
-                self.W2I = { v: k for (k, v) in self.I2W.items() }
-                LOGGER.end()
-
-                LOGGER.start("counting frequency of words")
-                self.W2F = mk_word_histogram(TEXT, VOCAB)
-                LOGGER.end()
-
-            def __getitem__(self, ix):
-                focusix = ix // (2 * self.WINDOWSIZE)
-                focusix += self.WINDOWSIZE
-                deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
-
-                return {'focusonehot': bow_vec([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
-                        'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
-                        }
-
-            def __len__(self):
-                # we can't query the first or last value.
-                # first because it has no left, last because it has no right
-                return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
         return SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
 
 
+class CBOWDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+
+        LOGGER.start("creating I2W, W2I")
+        self.I2W = dict(enumerate(VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        LOGGER.end()
+
+        LOGGER.start("counting frequency of words")
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        LOGGER.end()
+
+    def __getitem__(self, focusix):
+        ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) 
+                 if d != 0 and 0 <= focusix + d < len(self.TEXT)]
+
+        # given context, number of words in context, produce word at focus
+        return {'ctxhot': bow_avg_vec(ctxws, self.W2I, self.VOCABSIZE), #[1xVOCAB]
+                'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]]) # [1]
+                }
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+        return len(self.TEXT)
+    
 class Word2ManCBOW(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE):
         super(Word2ManCBOW, self).__init__()
@@ -449,36 +480,6 @@ class Word2ManCBOW(nn.Module):
         """
         create a dataset from the given text
         """
-        class CBOWDataset(Dataset):
-            def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
-                self.TEXT = TEXT
-
-                self.VOCAB = VOCAB
-                self.VOCABSIZE = VOCABSIZE
-                self.WINDOWSIZE = WINDOWSIZE
-
-                LOGGER.start("creating I2W, W2I")
-                self.I2W = dict(enumerate(VOCAB))
-                self.W2I = { v: k for (k, v) in self.I2W.items() }
-                LOGGER.end()
-
-                LOGGER.start("counting frequency of words")
-                self.W2F = mk_word_histogram(TEXT, VOCAB)
-                LOGGER.end()
-
-            def __getitem__(self, focusix):
-                ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) 
-                         if d != 0 and 0 <= focusix + d < len(self.TEXT)]
-
-                # given context, number of words in context, produce word at focus
-                return {'ctxhot': bow_avg_vec(ctxws, self.W2I, self.VOCABSIZE), #[1xVOCAB]
-                        'focustruelabel': torch.tensor(self.W2I[self.TEXT[focusix]]) # [1]
-                        }
-
-            def __len__(self):
-                # we can't query the first or last value.
-                # first because it has no left, last because it has no right
-                return len(self.TEXT)
         return CBOWDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
 
 
@@ -751,7 +752,8 @@ if PARSED.loadpath is not None:
     # pass the device so that the tensors live on the correct device.
     # this might be stale since we were on a different device before.
     try:
-        PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
+        PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+        #PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
         LOGGER.end("loaded params from: %s" % PARAMS.create_time)
     except FileNotFoundError:
         PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
@@ -766,7 +768,8 @@ def traincli(savepath):
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
-            torch.save(PARAMS.get_model_state_dict(), sf)
+            # torch.save(PARAMS.get_model_state_dict(), sf)
+            torch.save(PARAMS, sf)
         LOGGER.end()
 
 

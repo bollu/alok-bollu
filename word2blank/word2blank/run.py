@@ -4,7 +4,7 @@ from collections import Counter
 
 import argparse
 import sys
-import datetime 
+import datetime
 
 def current_time_str():
     """Return the current time as a string"""
@@ -27,13 +27,16 @@ def parse(s):
 
     test = sub.add_parser("test", help="test the model")
     test.add_argument("loadpath",  help="path to model file")
-    
+
+    evaluate = sub.add_parser("eval", help="evaluate the model")
+    evaluate.add_argument("loadpath", help="path to model file")
+
     return p.parse_args(s)
 # if launching from the shell, parse first, then start loading datasets...
 if __name__ == "__main__":
     global PARSED
     PARSED = parse(sys.argv[1:])
-    assert (PARSED.command in ["train", "test"])
+    assert (PARSED.command in ["train", "test", "eval"])
 
 import itertools
 import torch
@@ -58,23 +61,23 @@ import pudb
 import numpy as np
 
 
-STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", 
-             "you", "your", "yours", "yourself", "yourselves", "he", "him", 
-             "his", "himself", "she", "her", "hers", "herself", "it", "its", 
-             "itself", "they", "them", "their", "theirs", "themselves", 
-             "what", "which", "who", "whom", "this", "that", "these", 
-             "those", "am", "is", "are", "was", "were", "be", "been", 
-             "being", "have", "has", "had", "having", "do", "does", 
-             "did", "doing", "a", "an", "the", "and", "but", 
-             "if", "or", "because", "as", "until", "while", 
-             "of", "at", "by", "for", "with", "about", 
-             "against", "between", "into", "through", "during", "before", 
-             "after", "above", "below", "to", "from", "up", "down", "in", 
-             "out", "on", "off", "over", "under", "again", "further", "then", 
-             "once", "here", "there", "when", "where", "why", "how", "all", 
-             "any", "both", "each", "few", "more", "most", "other", "some", 
-             "such", "no", "nor", "not", "only", "own", "same", "so", 
-             "than", "too", "very", "s", "t", "can", "will", "just", "don", 
+STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves",
+             "you", "your", "yours", "yourself", "yourselves", "he", "him",
+             "his", "himself", "she", "her", "hers", "herself", "it", "its",
+             "itself", "they", "them", "their", "theirs", "themselves",
+             "what", "which", "who", "whom", "this", "that", "these",
+             "those", "am", "is", "are", "was", "were", "be", "been",
+             "being", "have", "has", "had", "having", "do", "does",
+             "did", "doing", "a", "an", "the", "and", "but",
+             "if", "or", "because", "as", "until", "while",
+             "of", "at", "by", "for", "with", "about",
+             "against", "between", "into", "through", "during", "before",
+             "after", "above", "below", "to", "from", "up", "down", "in",
+             "out", "on", "off", "over", "under", "again", "further", "then",
+             "once", "here", "there", "when", "where", "why", "how", "all",
+             "any", "both", "each", "few", "more", "most", "other", "some",
+             "such", "no", "nor", "not", "only", "own", "same", "so",
+             "than", "too", "very", "s", "t", "can", "will", "just", "don",
              "should", "now"])
 
 class TimeLogger:
@@ -151,7 +154,7 @@ def load_corpus(LOGGER, nwords):
     cutoff_freq = get_freq_cutoff(w2f.values(), 0.2)
     corpus = list(filter(lambda w: w2f[w] > cutoff_freq, corpus))
     filtlen = len(corpus)
-    LOGGER.end("filtered #%s (%s percent) words. New corpus size: %s (%s percent of original)" % 
+    LOGGER.end("filtered #%s (%s percent) words. New corpus size: %s (%s percent of original)" %
                (origlen - filtlen,
                 float(origlen - filtlen) / float(origlen) * 100.0,
                 filtlen,
@@ -201,7 +204,7 @@ def dots(vs, ws, metric):
 def dot(v, w, metric):
     return dots(v.view(1, -1), w.view(1, -1), metric)
 
-    
+
 # TODO: extract into method of metric
 def cosinesim(v, w, metric):
     # vs = [1 x EMBEDSIZE]
@@ -228,7 +231,6 @@ def normalize(vs, metric):
     normvs = torch.zeros(vs.size()).to(DEVICE)
     BATCHSIZE = 4096
     # with prompt_toolkit.shortcuts.ProgressBar() as pb:
-    import pudb; pudb.set_trace()
     for i in (range(math.ceil(vs.size()[0] / BATCHSIZE))):
         vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
         vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
@@ -254,7 +256,7 @@ def mk_symmetric_mat(n):
     diag = torch.diag(nn.Parameter(torch.randn(n).to(DEVICE), requires_grad=True))
     return triu + diag + triu.t()
 
-    # make an upper triangle, copy it to lower triangle, and then make a 
+    # make an upper triangle, copy it to lower triangle, and then make a
     # random diagonal as well.
     tri = nn.Parameter(torch.randn((n*(n - 1)) // 2).to(DEVICE), requires_grad=True)
     mat = torch.zeros(n, n).to(DEVICE)
@@ -320,7 +322,7 @@ class SkipGramOneHotDataset(Dataset):
         deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
 
         return {'focusonehot': bow_vec([self.TEXT[focusix]], self.W2I, self.VOCABSIZE),
-                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]] 
+                'ctxtruelabel': self.W2I[self.TEXT[focusix + deltaix]]
                 }
 
     def __len__(self):
@@ -345,12 +347,12 @@ class Word2ManSkipGramOneHot(nn.Module):
 
         xs = [BATCHSIZE x VOCABSIZE], one-hot in the VOCABSIZE dimension
         """
-            
+
         # embedded vectors of the batch vectors
         # [BATCHSIZE x VOCABSIZE] x [VOCABSIZE x EMBEDSIZE] = [BATCHSIZE x EMBEDSIZE]
         xsembeds = torch.mm(xs, self.EMBEDM)
 
-        # dots(BATCHSIZE x EMBEDSIZE], 
+        # dots(BATCHSIZE x EMBEDSIZE],
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
         xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, metric)
@@ -372,7 +374,7 @@ class Word2ManSkipGramOneHot(nn.Module):
         # [BATCHSIZE], contains target label per batch
         target_labels = traindata['ctxtruelabel'].to(DEVICE)
 
-        # dot product of the embedding of the hidden xs vector with 
+        # dot product of the embedding of the hidden xs vector with
         # every other hidden vector
         # xs_dots_embeds: [BATCSIZE x VOCABSIZE]
         xs_dots_embeds = self(xs, metric)
@@ -406,7 +408,7 @@ class CBOWDataset(Dataset):
         LOGGER.end()
 
     def __getitem__(self, focusix):
-        ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1) 
+        ctxws = [self.TEXT[focusix + d] for d in range(-self.WINDOWSIZE, self.WINDOWSIZE + 1)
                  if d != 0 and 0 <= focusix + d < len(self.TEXT)]
 
         # given context, number of words in context, produce word at focus
@@ -418,7 +420,7 @@ class CBOWDataset(Dataset):
         # we can't query the first or last value.
         # first because it has no left, last because it has no right
         return len(self.TEXT)
-    
+
 class Word2ManCBOW(nn.Module):
     def __init__(self, VOCABSIZE, EMBEDSIZE):
         super(Word2ManCBOW, self).__init__()
@@ -448,11 +450,11 @@ class Word2ManCBOW(nn.Module):
 
 
         # [BATCHSIZE x EMBEDSIZE] x [EMBEDSIZE x VOCABSIZE] = [BATCHSIZE x VOCABSIZE]
-        xsouts = torch.mm(xsembeds, self.embed2vocab) 
+        xsouts = torch.mm(xsembeds, self.embed2vocab)
 
         # Step 3. softmax to convert to probability distribution
         # TODO: why is this correct? I don't geddit.
-        # what in the fuck does it mean to log softmax the mean of hidden vectors 
+        # what in the fuck does it mean to log softmax the mean of hidden vectors
         # sent out to an output dimension?
         # [BATCHSIZE x VOCABSIZE]
         xsouts = F.log_softmax(xsouts, dim=1)
@@ -497,8 +499,8 @@ class Parameters:
         self.create_time = current_time_str()
 
 
-    def init_model(self, metrictype, traintype, 
-                          metric_state_dict=None, 
+    def init_model(self, metrictype, traintype,
+                          metric_state_dict=None,
                           word2man_state_dict=None,
                           optimizer_state_dict=None):
         TEXT = load_corpus(LOGGER, self.NWORDS)
@@ -551,18 +553,18 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating dataset...")
-        self.DATASET = self.WORD2MAN.make_dataset(LOGGER, 
-                                                  TEXT, 
-                                                  VOCAB, 
-                                                  VOCABSIZE, 
+        self.DATASET = self.WORD2MAN.make_dataset(LOGGER,
+                                                  TEXT,
+                                                  VOCAB,
+                                                  VOCABSIZE,
                                                   self.WINDOWSIZE)
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
         # make a version that does save state.
         LOGGER.start("creating DATA")
-        self.DATALOADER = DataLoader(self.DATASET, 
-                                     batch_size=self.BATCHSIZE, 
+        self.DATALOADER = DataLoader(self.DATASET,
+                                     batch_size=self.BATCHSIZE,
                                      shuffle=True)
         LOGGER.end()
 
@@ -582,7 +584,7 @@ class Parameters:
             "OPTIMIZER": self.optimizer.state_dict()
         }
         return st
-    
+
     def load_model_state_dict(self, state):
         self.EPOCHS = state["EPOCHS"]
         self.BATCHSIZE = state["BATCHSIZE"]
@@ -596,7 +598,7 @@ class Parameters:
 
         self.init_model(metrictype=self.metrictype,
                                traintype=self.traintype,
-                               metric_state_dict=state["METRIC"], 
+                               metric_state_dict=state["METRIC"],
                                word2man_state_dict=state["WORD2MAN"],
                                optimizer_state_dict=state["OPTIMIZER"])
 
@@ -628,47 +630,47 @@ def bow_avg_vec(ws, W2I, VOCABSIZE):
     return v
 
 
+def word_to_embed_vector(w):
+    """
+    find the embedded vector of word w
+    returns: [1 x EMBEDSIZE]
+    """
+    v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
+    return v.view(1, -1)
+
+def test_find_close_vectors(v):
+    """ Find vectors close to w in the normalized embedding"""
+    # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
+    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.METRIC.mat).to(DEVICE)
+    v = normalize(v, PARAMS.METRIC.mat)
+    wix2sim = dots(v, EMBEDNORM, PARAMS.METRIC.mat)
+
+    wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
+    # The story of floats which cannot be ordered. I found
+    # out I need this filter once I found this entry in the
+    # table: ('classified', nan)
+    wordweights = list(filter(lambda ww: not math.isnan(ww[1]), wordweights))
+    # sort AFTER removing NaNs
+    wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
+
+    return wordweights
+
+
+
+
 def cli_prompt():
     """Call to launch prompt interface."""
 
     LOGGER.start("normalizing EMBEDM...")
     PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
     # PARAMS.METRIC.mat = PARAMS.METRIC.mat.to(DEVICE)
-    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.METRIC.mat).to(DEVICE)
     LOGGER.end("done.")
-
-
-    def word_to_embed_vector(w):
-        """
-        find the embedded vector of word w
-        returns: [1 x EMBEDSIZE]
-        """
-        v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
-        return v.view(1, -1)
-
-    def test_find_close_vectors(v):
-        """ Find vectors close to w in the normalized embedding"""
-        # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        v = normalize(v, PARAMS.METRIC.mat)
-        wix2sim = dots(v, EMBEDNORM, PARAMS.METRIC.mat)
-
-        wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
-        # The story of floats which cannot be ordered. I found
-        # out I need this filter once I found this entry in the
-        # table: ('classified', nan)
-        wordweights = list(filter(lambda ww: not math.isnan(ww[1]), wordweights))
-        # sort AFTER removing NaNs
-        wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
-
-        return wordweights
-
-
     def prompt_word(session):
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
         COMPLETER = ThreadedCompleter(WordCompleter(PARAMS.DATASET.VOCAB))
 
-        raw = session.prompt("type in command>", completer=COMPLETER).split() 
+        raw = session.prompt("type in command>", completer=COMPLETER).split()
         # raw = session.prompt("type in command>", completer=COMPLETER).split()
         if len(raw) == 0:
             return
@@ -691,7 +693,7 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v1 - v2 + v3, PARAMS.METRIC.mat) 
+            vsim = normalize(v1 - v2 + v3, PARAMS.METRIC.mat)
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\tnormal(a - b + c) %s: %s" % (word, weight))
@@ -701,7 +703,7 @@ def cli_prompt():
             v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
             v3 = normalize(word_to_embed_vector(raw[3]), PARAMS.METRIC.mat)
 
-            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat) 
+            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat)
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\tnormal(normal(king) - normal(man) + normal(woman)): %s: %s" % (word, weight))
@@ -742,7 +744,7 @@ LOGGER = TimeLogger()
 
 # setup device
 LOGGER.start("setting up device")
-DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
+DEVICE = torch.device(1) if torch.cuda.is_available() else torch.device('cpu')
 LOGGER.end("device: %s" % DEVICE)
 
 
@@ -776,7 +778,7 @@ def traincli(savepath):
     # Notice that we do not normalize the vectors in the hidden layer
     # when we train them! this is intentional: In general, these vectors don't
     # seem to be normalized by most people, so it's weird if we begin to
-    # normalize them. 
+    # normalize them.
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
     bar = progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATALOADER)))
@@ -801,7 +803,7 @@ def traincli(savepath):
             TARGET_PRINT_TIME_IN_S = 1
             if (now - time_last_print).seconds >= TARGET_PRINT_TIME_IN_S:
                 nbatches = ix - last_print_ix
-                print("\nLOSSES sum: %s | avg per batch(#batch=%s): %s | avg per elements(#elems=%s): %s" % 
+                print("\nLOSSES sum: %s | avg per batch(#batch=%s): %s | avg per elements(#elems=%s): %s" %
                       (loss_sum,
                        nbatches,
                        loss_sum / nbatches,
@@ -818,12 +820,27 @@ def traincli(savepath):
                 time_last_save = now
     save()
 
+def evaluate():
+    # PARAMS.DATASET.VOCAB
+    # PARAMS.DATASET.TEXT
+    # word_to_embed_vector
+    # test_find_close_vectors
+    # dots -> dot products
+    # cosine_sim -> cosine similarity
+
+    for w in PARAMS.DATASET.VOCAB:
+        v = word_to_embed_vector(w)
+        print("%s : %s" %(w, v))
+
+
 # @EXPERIMENT.main
 def main():
     if PARSED.command == "train":
         traincli(PARSED.savepath)
     elif PARSED.command == "test":
         cli_prompt()
+    elif PARSED.command == "eval":
+        evaluate()
     else:
         raise RuntimeError("unknown command: %s" % PARSED.command)
 

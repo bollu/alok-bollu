@@ -26,14 +26,18 @@ def parse(s):
                        choices=["cbow", "skipgramonehot", "skipgramnhot"])
 
     test = sub.add_parser("test", help="test the model")
-    test.add_argument("loadpath",  help="path to model file")
+    test.add_argument("loadpath", help="path to model file to load from", default=None)
+
+
+    dumpsage = sub.add_parser("dumpsage", help="dump data to be imported into sage")
+    dumpsage.add_argument("loadpath", help="path to model file to load from", default=None)
     
     return p.parse_args(s)
 # if launching from the shell, parse first, then start loading datasets...
 if __name__ == "__main__":
     global PARSED
     PARSED = parse(sys.argv[1:])
-    assert (PARSED.command in ["train", "test"])
+    assert (PARSED.command in ["train", "test", "dumpsage"])
 
 import itertools
 import torch
@@ -228,7 +232,6 @@ def normalize(vs, metric):
     normvs = torch.zeros(vs.size()).to(DEVICE)
     BATCHSIZE = 4096
     # with prompt_toolkit.shortcuts.ProgressBar() as pb:
-    import pudb; pudb.set_trace()
     for i in (range(math.ceil(vs.size()[0] / BATCHSIZE))):
         vscur = vs[i*BATCHSIZE:(i+1)*BATCHSIZE, :]
         vslen = torch.sqrt(torch.diag(dots(vscur, vscur, metric)))
@@ -628,6 +631,12 @@ def bow_avg_vec(ws, W2I, VOCABSIZE):
     return v
 
 
+def dump_sage():
+    embednp = PARAMS.WORD2MAN.EMBEDM.detach().numpy()
+    metricnp = PARAMS.METRIC.mat.detach().numpy()
+
+    np.savez_compressed("NPSAVEFILE.npz", embed=embednp, metric=metricnp)
+
 def cli_prompt():
     """Call to launch prompt interface."""
 
@@ -823,7 +832,9 @@ def main():
     if PARSED.command == "train":
         traincli(PARSED.savepath)
     elif PARSED.command == "test":
-        cli_prompt()
+            cli_prompt()
+    elif PARSED.command == "dumpsage":
+        dump_sage()
     else:
         raise RuntimeError("unknown command: %s" % PARSED.command)
 

@@ -8,3 +8,4 @@ sacred
 GitPython
 ldt
 vecto
+nltk

@@ -820,6 +820,8 @@ def traincli(savepath):
                 time_last_save = now
     save()
 
+from nltk.corpus import wordnet
+from random import sample
 def evaluate():
     # PARAMS.DATASET.VOCAB
     # PARAMS.DATASET.TEXT
@@ -828,9 +830,32 @@ def evaluate():
     # dots -> dot products
     # cosine_sim -> cosine similarity
 
-    for w in PARAMS.DATASET.VOCAB:
-        v = word_to_embed_vector(w)
-        print("%s : %s" %(w, v))
+    # Get a sample of unique words (VOCAB)
+    # For each word in the vocab, find the 10 closest vectors
+    # Find these words
+    # Find wup_similarity and path_similarity of the words in the list
+
+    word_vector_pairs = []
+    word_sym_pairs = []
+
+    sampled_words = sample(PARAMS.DATASET.VOCAB, 10)
+    for word in sampled_words:
+        similar_words = test_find_close_vectors(word_to_embed_vector(word))[:10]
+        word_sym_pairs.append((word, similar_words))
+
+    # Approximation made here for now: Only the first sense of each similar word has been taken
+    # Later task: Will compare similarities from the entire synset.
+
+    for (word, sim_words) in word_sym_pairs:
+            wn_word = wordnet.synsets(word)[0]
+            print("\nWord\tSimilar\tWUP Score\tPath Score\tOur Product")
+            for (sim_word, score) in sim_words:
+                if len(wordnet.synsets(sim_word)) > 0:
+                    wn_sim = wordnet.synsets(sim_word)[0]
+                    wup_sim = (wordnet.wup_similarity(wn_word, wn_sim))
+                    path_sim = (wordnet.path_similarity(wn_word, wn_sim))
+                    print(word + "\t" + sim_word + "\t" + str(wup_sim) + "\t" + str(path_sim) + "\t" + str(score))
+
 
 
 # @EXPERIMENT.main

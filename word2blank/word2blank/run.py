@@ -848,21 +848,31 @@ def evaluate():
     # Later task: Will compare similarities from the entire synset.
 
     for (word, sim_words) in word_sym_pairs:
-            wn_word = wordnet.synsets(word)[0]
+            wn_word = wordnet.synsets(word)
             rows = []
             for (sim_word, score) in sim_words:
                 if len(wordnet.synsets(sim_word)) > 0:
                     try:
-                        wn_sim = wordnet.synsets(sim_word)[0]
-                        wup_sim = (wordnet.wup_similarity(wn_word, wn_sim))
-                        path_sim = (wordnet.path_similarity(wn_word, wn_sim))
-                        rows.append([word, sim_word, wup_sim, path_sim, score])
+                        wn_sim = wordnet.synsets(sim_word)
+                        wup = [wordnet.wup_similarity(sense, sim_sense) for sense in wn_word for sim_sense in wn_sim]
+                        path = [wordnet.path_similarity(sense, sim_sense) for sense in wn_word for sim_sense in wn_sim]
+                        wup = [0.0 if w==None else w for w in wup]
+                        path = [0.0 if w==None else w for w in path]
+
+                        rows.append([word, sim_word, max(wup), max(path), score])
                         # print(word + "\t" + sim_word + "\t" + str(wup_sim) + "\t" + str(path_sim) + "\t" + str(score))
                     except IndexError as e:
-                        print("%word not in wordnet: %s" % wn_word)
+                        print("%word not in wordnet: %s" % sim_word)
             print(tabulate.tabulate(rows, headers=["Word", "Similar", "WUP Score", "Path Score", "Our Product"]))
 
+            # What are the closest words according to wordnet that belong in our corpus?
 
+#            wn_max_corpus = []
+#            for corpus_word in PARAMS.DATASET.VOCABS:
+#                wn_corpus_word = wordnet.synsets(corpus_word)
+#                cor_wup = [wordnet.wup_similarity(sense, cor_sense) for sense in wn_word for cor_sense in wn_corpus_word]
+#                cor_wup = [0.0 if w==None else w for w in wup]
+#                wn_max_corpus.append((wn_corpus_word, max(cor_wup)))
 
 
 # @EXPERIMENT.main

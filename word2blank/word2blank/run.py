@@ -59,6 +59,7 @@ import sacred.observers
 import progressbar
 import pudb
 import numpy as np
+import tabulate
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves",
@@ -848,13 +849,19 @@ def evaluate():
 
     for (word, sim_words) in word_sym_pairs:
             wn_word = wordnet.synsets(word)[0]
-            print("\nWord\tSimilar\tWUP Score\tPath Score\tOur Product")
+            rows = []
             for (sim_word, score) in sim_words:
                 if len(wordnet.synsets(sim_word)) > 0:
-                    wn_sim = wordnet.synsets(sim_word)[0]
-                    wup_sim = (wordnet.wup_similarity(wn_word, wn_sim))
-                    path_sim = (wordnet.path_similarity(wn_word, wn_sim))
-                    print(word + "\t" + sim_word + "\t" + str(wup_sim) + "\t" + str(path_sim) + "\t" + str(score))
+                    try:
+                        wn_sim = wordnet.synsets(sim_word)[0]
+                        wup_sim = (wordnet.wup_similarity(wn_word, wn_sim))
+                        path_sim = (wordnet.path_similarity(wn_word, wn_sim))
+                        rows.append([word, sim_word, wup_sim, path_sim, score])
+                        # print(word + "\t" + sim_word + "\t" + str(wup_sim) + "\t" + str(path_sim) + "\t" + str(score))
+                    except IndexError as e:
+                        print("%word not in wordnet: %s" % wn_word)
+            print(tabulate.tabulate(rows, headers=["Word", "Similar", "WUP Score", "Path Score", "Our Product"]))
+
 
 
 

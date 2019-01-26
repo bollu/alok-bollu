@@ -823,6 +823,7 @@ def traincli(savepath):
 
 from nltk.corpus import wordnet
 from random import sample
+import operator
 def evaluate():
     # PARAMS.DATASET.VOCAB
     # PARAMS.DATASET.TEXT
@@ -867,13 +868,33 @@ def evaluate():
 
             # What are the closest words according to wordnet that belong in our corpus?
 
-#            wn_max_corpus = []
-#            for corpus_word in PARAMS.DATASET.VOCABS:
-#                wn_corpus_word = wordnet.synsets(corpus_word)
-#                cor_wup = [wordnet.wup_similarity(sense, cor_sense) for sense in wn_word for cor_sense in wn_corpus_word]
-#                cor_wup = [0.0 if w==None else w for w in wup]
-#                wn_max_corpus.append((wn_corpus_word, max(cor_wup)))
+    for word in sampled_words:
+        wn_max_wup_corpus = []
+        wn_max_path_corpus = []
+        rows = []
+        wn_word = wordnet.synsets(word)
+        for corpus_word in PARAMS.DATASET.VOCAB:
+            wn_corpus_word = wordnet.synsets(corpus_word)
+            cor_wup = [wordnet.wup_similarity(sense, cor_sense) for sense in wn_word for cor_sense in wn_corpus_word]
+            cor_path = [wordnet.path_similarity(sense, cor_sense) for sense in wn_word for cor_sense in wn_corpus_word]
+            cor_wup = [0.0 if w==None else w for w in cor_wup]
+            cor_path = [0.0 if w==None else w for w in cor_path]
 
+            wn_max_wup_corpus.append((wn_corpus_word, max(cor_wup)))
+            wn_max_path_corpus.append((wn_corpus_word, max(cor_path)))
+
+            print(wn_max_wup_corpus[:10])
+#                wn_max_wup_corpus.sort(key=lambda x: x[1])
+#                wn_max_path_corpus.sort(key=lambda x: x[1])
+
+#                wn_wup_top = wn_max_wup_corpus[:10]
+#                wn_path_top = wn_max_path_corpus[:10]
+
+#                sim_scores = [dots(word_to_embed_vector(word), word_to_embed_vector(wup_word)) for (wup_word, _) in wn_wup_top]
+#                rows.append([[word, wup_word, wup_score, path_score, sim_score] for (wup_word, wup_score) in wn_wup_top for (_, path_score) in wn_path_top] for sim_score in sim_scores)
+
+#            print("=============== WORDNET TOP PICKS ====================")
+#            print(tabulate.tabulate(rows, headers=["Word", "Similar", "WUP Score", "Path Score", "Our Product"])
 
 # @EXPERIMENT.main
 def main():

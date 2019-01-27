@@ -830,7 +830,7 @@ def evaluate():
     # word_to_embed_vector
     # test_find_close_vectors
     # dots -> dot products
-    # cosine_sim -> cosine similarity
+    # cosinesim -> cosine similarity
 
     # Get a sample of unique words (VOCAB)
     # For each word in the vocab, find the 10 closest vectors
@@ -848,6 +848,8 @@ def evaluate():
     # Approximation made here for now: Only the first sense of each similar word has been taken
     # Later task: Will compare similarities from the entire synset.
 
+    print("=================>OUR METRIC WORDS<===========================")
+
     for (word, sim_words) in word_sym_pairs:
             wn_word = wordnet.synsets(word)
             rows = []
@@ -860,41 +862,39 @@ def evaluate():
                         wup = [0.0 if w==None else w for w in wup]
                         path = [0.0 if w==None else w for w in path]
 
-                        rows.append([word, sim_word, max(wup), max(path), score])
-                        # print(word + "\t" + sim_word + "\t" + str(wup_sim) + "\t" + str(path_sim) + "\t" + str(score))
+                        if wup==[]:
+                            rows.append([word,sim_word, 0, 0, score])
+                        else:
+                            rows.append([word, sim_word, max(wup), max(path), score])
+                    #    print(word + "\t" + sim_word + "\t" + str(wup_sim) + "\t" + str(path_sim) + "\t" + str(score))
                     except IndexError as e:
                         print("%word not in wordnet: %s" % sim_word)
             print(tabulate.tabulate(rows, headers=["Word", "Similar", "WUP Score", "Path Score", "Our Product"]))
 
-            # What are the closest words according to wordnet that belong in our corpus?
+    # What are the closest words according to wordnet that belong in our corpus?
+    print("=================>WORDNET SIMILARITY WORDS<===========================")
 
     for word in sampled_words:
-        wn_max_wup_corpus = []
-        wn_max_path_corpus = []
         rows = []
-        wn_word = wordnet.synsets(word)
         for corpus_word in PARAMS.DATASET.VOCAB:
+            wn_word = wordnet.synsets(word)
             wn_corpus_word = wordnet.synsets(corpus_word)
-            cor_wup = [wordnet.wup_similarity(sense, cor_sense) for sense in wn_word for cor_sense in wn_corpus_word]
-            cor_path = [wordnet.path_similarity(sense, cor_sense) for sense in wn_word for cor_sense in wn_corpus_word]
-            cor_wup = [0.0 if w==None else w for w in cor_wup]
-            cor_path = [0.0 if w==None else w for w in cor_path]
+            wup = [wordnet.wup_similarity(wn, wn_corpus) for wn in wn_word for wn_corpus in wn_corpus_word]
+            path = [wordnet.path_similarity(wn, wn_corpus) for wn in wn_word for wn_corpus in wn_corpus_word]
+            wup = [0.0 if w==None else w for w in wup]
+            path = [0.0 if w==None else w for w in path]
 
-            wn_max_wup_corpus.append((wn_corpus_word, max(cor_wup)))
-            wn_max_path_corpus.append((wn_corpus_word, max(cor_path)))
+            # print(wup[:10])
 
-            print(wn_max_wup_corpus[:10])
-#                wn_max_wup_corpus.sort(key=lambda x: x[1])
-#                wn_max_path_corpus.sort(key=lambda x: x[1])
+            if wup == []:
+                rows.append([word, corpus_word, 0.0, 0.0, cosinesim(word_to_embed_vector(word), word_to_embed_vector(corpus_word), PARAMS.METRIC.mat)])
+            else:
+                rows.append([word, corpus_word, max(wup), max(path), cosinesim(word_to_embed_vector(word), word_to_embed_vector(corpus_word), PARAMS.METRIC.mat)])
 
-#                wn_wup_top = wn_max_wup_corpus[:10]
-#                wn_path_top = wn_max_path_corpus[:10]
+        rows.sort(key=operator.itemgetter(2), reverse=True)
+        rows = rows[:10]
+        print(tabulate.tabulate(rows, headers=["Word", "Similar", "WUP Score", "Path Score", "Our Product"]))
 
-#                sim_scores = [dots(word_to_embed_vector(word), word_to_embed_vector(wup_word)) for (wup_word, _) in wn_wup_top]
-#                rows.append([[word, wup_word, wup_score, path_score, sim_score] for (wup_word, wup_score) in wn_wup_top for (_, path_score) in wn_path_top] for sim_score in sim_scores)
-
-#            print("=============== WORDNET TOP PICKS ====================")
-#            print(tabulate.tabulate(rows, headers=["Word", "Similar", "WUP Score", "Path Score", "Our Product"])
 
 # @EXPERIMENT.main
 def main():

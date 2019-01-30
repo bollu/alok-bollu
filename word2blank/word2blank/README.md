@@ -19,6 +19,8 @@ $ tail -f slurm-<number>.out # to view file as it's written to
 
 # TODO
 - [train vanilla word2vec](https://radimrehurek.com/gensim/models/word2vec.html)
+- I might have fucked up by flattening the corpus into sentences. Is this the
+  problem? If so, that explains a lot.
 
 # Ideas
 - Dot product `<v|` is linear functional (V -> R). Consider using other

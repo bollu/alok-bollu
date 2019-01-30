@@ -4,6 +4,7 @@ from bokeh.plotting import figure, output_file, show, save
 import os, errno
 import socket
 import getpass
+import glob
 
 def mkdirs(newdir):
     try:
@@ -33,22 +34,22 @@ LOSSES_RELATIVE_FILEPATH = "plots/losses.html"
 
 if __name__ == "__main__":
     mkdirs("plots")
+    # bokeh file to write to
     output_file(LOSSES_RELATIVE_FILEPATH)
 
-
     avgs = {}
-    for name in ["euclid", "reimann", "pseudoreimann"]:
-        with open(name + ".log", "r") as f:
-            avgs[name] = extract_avg_per_elem(f.read())
+    NAMES = glob.glob("*.log")
+    for name in NAMES
+        with open(path, "r") as f:
+            avgs[path] = extract_avg_per_elem(f.read())
 
 
     maxlen = max(map (lambda ls: len(ls), avgs.values()))
     x = list(range(maxlen))
 
     p = figure(title="losses", x_axis_label='tick', y_axis_label='loss')
-    p.line(x, avgs["euclid"], legend="Euclid", line_color="red", line_width=1)
-    p.line(x, avgs["pseudoreimann"], legend="Pseudo-Reimann", line_color="green", line_width=2)
-    p.line(x, avgs["reimann"], legend="Reimann", line_color="blue", line_width=1)
+    for name in avgs:
+        p.line(x, avgs[name], legend=name)
 
     save(p)
 

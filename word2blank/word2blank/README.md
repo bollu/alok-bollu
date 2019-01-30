@@ -11,10 +11,14 @@
 $ sbatch slurm-job.sh
 $ tail -f slurm-<number>.out # to view file as it's written to
 ```
+
 # To use
 ```
 ./run.py --help
 ```
+
+# TODO
+- [train vanilla word2vec](https://radimrehurek.com/gensim/models/word2vec.html)
 
 # Ideas
 - Dot product `<v|` is linear functional (V -> R). Consider using other

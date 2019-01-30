@@ -55,6 +55,7 @@ space embeddings.
 - [CBOW implementation](https://github.com/bastings/nn4nlp2017-code-pytorch/blob/master/01-intro/cbow-pytorch.py)
 - [Well written blog post about choices of losses](https://lilianweng.github.io/lil-log/2017/10/15/learning-word-embedding.html#full-softmax)
 - [Conformal geometry](https://en.wikipedia.org/wiki/Conformal_geometry)
+- [List of implementations of manifolds](http://www.xact.es/links.html)
 
 # Evaluation
 - Use [BATS dataset](http://vecto.space/projects/BATS/)

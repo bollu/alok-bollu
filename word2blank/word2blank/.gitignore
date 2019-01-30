@@ -23,4 +23,9 @@ tags
 slurm-*.out
 
 /cur.model
+<<<<<<< HEAD
 models/
+=======
+
+# numpy save file
+*.npz

@@ -122,7 +122,7 @@ def load_corpus(LOGGER):
     return corpus
 
 def preprocess_doc(LOGGER, corpus):
-    """load the corpus, and pull nwords from the corpus if it's not None"""
+    """load the corpus, and pull NDOCS from the corpus if it's not None"""
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
 
@@ -144,9 +144,9 @@ def preprocess_doc(LOGGER, corpus):
     # corpus = flatten(corpus)
     LOGGER.log("number of words in corpus (original): %s" % (len(corpus), ))
 
-    LOGGER.start("filtering stopwords")
+    # LOGGER.start("filtering stopwords")
     corpus = list(filter(lambda w: w not in STOPWORDS, corpus))
-    LOGGER.end("#words in corpus after filtering: %s" % (len(corpus), ))
+    # LOGGER.end("#words in corpus after filtering: %s" % (len(corpus), ))
 
 
 
@@ -320,22 +320,14 @@ class SkipGramOneHotDataset(Dataset):
         self.VOCABSIZE = VOCABSIZE
         self.WINDOWSIZE = WINDOWSIZE
 
-        LOGGER.start("creating I2W, W2I")
         self.I2W = dict(enumerate(VOCAB))
         self.W2I = { v: k for (k, v) in self.I2W.items() }
-        LOGGER.end()
 
         self.begin_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(WINDOWSIZE)])
-        print("begin ixs:")
-        print(self.begin_ixs)
         self.end_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(len(TEXT) - WINDOWSIZE, len(TEXT))])
-        print("end ixs:")
-        print(self.end_ixs)
 
 
-        LOGGER.start("counting frequency of words")
         self.W2F = mk_word_histogram(TEXT, VOCAB)
-        LOGGER.end()
 
 
     def num_tail_elements(self):
@@ -420,7 +412,7 @@ class Word2ManSkipGramOneHot(nn.Module):
 
         return xsembeds_dots_embeds
 
-    def train(self, traindata, metric):
+    def runtrain(self, traindata, metric):
         """
         run a training on a batch using the given optimizer.
         traindata: [BATCHSIZE x <data from self.dataset>]
@@ -517,7 +509,7 @@ class Word2ManCBOW(nn.Module):
         xsouts = F.log_softmax(xsouts, dim=1)
         return xsouts
 
-    def train(self, traindata, metric):
+    def runtrain(self, traindata, metric):
         """
         run a training on a batch using the given optimizer.
         traindata: [BATCHSIZE x <data from self.dataset>]
@@ -548,12 +540,17 @@ class Parameters:
         """default values"""
         self.EPOCHS = 15
         self.BATCHSIZE = 128
-        self.EMBEDSIZE = 200
+        self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.005
         self.WINDOWSIZE = 5
-        self.NWORDS = None
+        self.NDOCS = None
 
         self.create_time = current_time_str()
+
+        corpus = load_corpus(LOGGER)
+        if self.NDOCS is not None:
+            corpus = list(corpus)[:self.NDOCS]
+        self.TEXT = [preprocess_doc(LOGGER, doc) for doc in corpus]
 
 
     def init_model(self, metrictype, traintype, 
@@ -565,8 +562,6 @@ class Parameters:
                 (metric_state_dict is not None and word2man_state_dict is not None
                  and optimizer_state_dict is not None))
 
-        corpus = load_corpus(LOGGER)
-        self.TEXT = [preprocess_doc(LOGGER, doc) for doc in corpus]
         self.metrictype = metrictype
         self.traintype = traintype
 
@@ -602,6 +597,7 @@ class Parameters:
 
         if word2man_state_dict is not None:
             self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
+            self.WORD2MAN.train()
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
@@ -610,7 +606,6 @@ class Parameters:
             self.optimizer.load_state_dict(optimizer_state_dict)
         LOGGER.end()
 
-        
 
         LOGGER.start("creating dataset...")
         self.DATASET = ConcatDataset([self.WORD2MAN.make_dataset(LOGGER, doc, VOCAB, VOCABSIZE,
@@ -632,7 +627,7 @@ class Parameters:
             "EMBEDSIZE": self.EMBEDSIZE,
             "LEARNINGRATE": self.LEARNING_RATE,
             "WINDOWSIZE": self.WINDOWSIZE,
-            "NWORDS": self.NWORDS,
+            "NDOCS": self.NDOCS,
             "CREATE_TIME": self.create_time,
             "METRICTYPE": self.metrictype,
             "TRAINTYPE": self.traintype,
@@ -648,7 +643,7 @@ class Parameters:
         self.EMBEDSIZE = state["EMBEDSIZE"]
         self.LEARNING_RATE = state["LEARNINGRATE"]
         self.WINDOWSIZE = state["WINDOWSIZE"]
-        self.NWORDS = state["NWORDS"]
+        self.NDOCS = state["NDOCS"]
         self.create_time = state["CREATE_TIME"]
         self.metrictype = state["METRICTYPE"]
         self.traintype = state["TRAINTYPE"]
@@ -658,11 +653,10 @@ class Parameters:
                                metric_state_dict=state["METRIC"], 
                                word2man_state_dict=state["WORD2MAN"],
                                optimizer_state_dict=state["OPTIMIZER"])
-
-
 def mk_word_histogram(ws, vocab):
     """count frequency of words in words, given vocabulary size."""
     w2f = { w : 0 for w in vocab }
+
     for w in ws:
         w2f[w] += 1
     return w2f
@@ -785,11 +779,6 @@ def cli_prompt():
 
             evals = [evals[i][0].item() for i in range(evals.size()[0])]
             evals.sort(key=abs, reverse=True)
-            print_formatted_text("evals: %s" % "\n".join(map(lambda f: "{0: .2f}".format(round(f, 2)), evals)))
-
-            # print_formatted_text("eigenvectors:\n%s" % (evecs, ))
-            # (s, v, d) = torch.svd(PARAMS.METRIC.mat)
-            # print_formatted_text("SVD :=\n%s\n%s\n%s" % (s, v, d))
         else:
             print_formatted_text("invalid command, type ? for help")
 
@@ -822,12 +811,12 @@ if PARSED.loadpath is not None:
     LOGGER.start("loading model from: %s" % (PARSED.loadpath))
     # pass the device so that the tensors live on the correct device.
     # this might be stale since we were on a different device before.
+    PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
     try:
-        PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
-        #PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
+        # PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+        PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
         LOGGER.end("loaded params from: %s" % PARAMS.create_time)
     except FileNotFoundError:
-        PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
         LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
 else:
     LOGGER.start("no loadpath given. Creating fresh parameters...")
@@ -839,9 +828,8 @@ def traincli(savepath):
     def save():
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
-            # torch.save(PARAMS.get_model_state_dict(), sf)
-            torch.save(PARAMS, sf)
-        LOGGER.end()
+            state_dict =  PARAMS.get_model_state_dict()
+            torch.save(state_dict, sf)
 
 
     # Notice that we do not normalize the vectors in the hidden layer
@@ -860,7 +848,7 @@ def traincli(savepath):
         for traindata in PARAMS.DATALOADER:
             ix += 1
             PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-            l = PARAMS.WORD2MAN.train(traindata, PARAMS.METRIC.mat)
+            l = PARAMS.WORD2MAN.runtrain(traindata, PARAMS.METRIC.mat)
             loss_sum += l.item()
             l.backward()
             PARAMS.optimizer.step()
@@ -883,7 +871,7 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 15 * 60 # save every 15 minutes
+            TARGET_SAVE_TIME_IN_S = 2 # save every X minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now

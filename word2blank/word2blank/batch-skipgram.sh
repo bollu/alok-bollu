@@ -3,7 +3,7 @@
 #SBATCH --time=72:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name=word2____
-#SBATCH --mem-per-cpu=8046
+#SBATCH --mem-per-cpu=32000
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END
 #SBATCH --array=0-1
@@ -11,7 +11,7 @@
 set -e 
 set -o xtrace
 
-METRICTYPES=(pseudoreimann euclid)
+METRICTYPES=(euclid pseudoreimann)
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
 
 module add cuda/9.0

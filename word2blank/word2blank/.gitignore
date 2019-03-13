@@ -29,3 +29,4 @@ models/
 
 # numpy save file
 *.npz
+text8

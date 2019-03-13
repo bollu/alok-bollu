@@ -24,6 +24,7 @@ def parse(s):
                        choices=["euclid", "reimann", "pseudoreimann"])
     train.add_argument("--traintype", help="training method to use",
                        choices=["cbow", "skipgramonehot", "skipgramnhot"])
+    train.add_argument("--savetimesecs", help="number of seconds to be elapsed before saving", default=10*60)
 
     test = sub.add_parser("test", help="test the model")
     test.add_argument("loadpath", help="path to model file to load from", default=None)
@@ -871,7 +872,7 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = 2 # save every X minutes
+            TARGET_SAVE_TIME_IN_S = PARSED.savetimesecs # save every X minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now

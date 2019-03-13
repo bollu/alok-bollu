@@ -107,7 +107,21 @@ class TimeLogger:
         print(" " * (4 * (depth - 1)) + "====time: %s" % (now - start))
         sys.stdout.flush()
 
-def load_corpus(LOGGER, nwords):
+def load_corpus(LOGGER):
+    CORPUS_NAME = "text8"
+    LOGGER.start("loading corpus: %s" % CORPUS_NAME)
+    try:
+        sys.path.insert(0, api.base_dir)
+        module = __import__(CORPUS_NAME)
+        corpus = module.load_data()
+    except Exception as e:
+        LOGGER.log("unable to find text8 locally.\nERROR: %s" % (e, ))
+        LOGGER.start("Downloading using gensim-data...")
+        corpus = api.load(CORPUS_NAME)
+        LOGGER.end()
+    return corpus
+
+def preprocess_doc(LOGGER, corpus):
     """load the corpus, and pull nwords from the corpus if it's not None"""
     def flatten(ls):
         return [item for sublist in ls for item in sublist]
@@ -127,20 +141,7 @@ def load_corpus(LOGGER, nwords):
         while tot < TOTFREQ * cutoff and i < len(freqs): i += 1; tot += freqs[i]
         return freqs[i]
 
-    CORPUS_NAME = "text8"
-    LOGGER.start("loading corpus: %s" % CORPUS_NAME)
-    try:
-        sys.path.insert(0, api.base_dir)
-        module = __import__(CORPUS_NAME)
-        corpus = module.load_data()
-    except Exception as e:
-        LOGGER.log("unable to find text8 locally.\nERROR: %s" % (e, ))
-        LOGGER.start("Downloading using gensim-data...")
-        corpus = api.load(CORPUS_NAME)
-        LOGGER.end()
-
-    corpus = list(corpus)
-    corpus = flatten(corpus)
+    # corpus = flatten(corpus)
     LOGGER.log("number of words in corpus (original): %s" % (len(corpus), ))
 
     LOGGER.start("filtering stopwords")
@@ -149,10 +150,11 @@ def load_corpus(LOGGER, nwords):
 
 
 
-    LOGGER.start("filtering low frequency words... (all frequencies that account for < 20% of the dataset)")
+    FREQ_CUTOFF = 0.05
+    LOGGER.start("filtering low frequency words... (all frequencies that account for < %s percent of the dataset)" % (str(FREQ_CUTOFF * 100), ))
     w2f = mk_word_histogram(corpus, set(corpus))
     origlen = len(corpus)
-    cutoff_freq = get_freq_cutoff(w2f.values(), 0.2)
+    cutoff_freq = get_freq_cutoff(w2f.values(), FREQ_CUTOFF)
     corpus = list(filter(lambda w: w2f[w] > cutoff_freq, corpus))
     filtlen = len(corpus)
     LOGGER.end("filtered #%s (%s percent) words. New corpus size: %s (%s percent of original)" % 
@@ -162,10 +164,6 @@ def load_corpus(LOGGER, nwords):
                 filtlen / float(origlen) * 100.0
                ))
 
-    if nwords is not None:
-        LOGGER.log("taking N(%s) words form the corpus: " % (nwords, ))
-        corpus = corpus[:nwords]
-    LOGGER.end()
     return corpus
 
 
@@ -548,12 +546,12 @@ class Parameters:
     """God object containing everything the model has"""
     def __init__(self, LOGGER, DEVICE):
         """default values"""
-        self.EPOCHS = 100
+        self.EPOCHS = 15
         self.BATCHSIZE = 128
-        self.EMBEDSIZE = 30
-        self.LEARNING_RATE = 0.001
+        self.EMBEDSIZE = 200
+        self.LEARNING_RATE = 0.005
         self.WINDOWSIZE = 5
-        self.NWORDS = 100000
+        self.NWORDS = None
 
         self.create_time = current_time_str()
 
@@ -562,17 +560,18 @@ class Parameters:
                           metric_state_dict=None, 
                           word2man_state_dict=None,
                           optimizer_state_dict=None):
-        TEXT = load_corpus(LOGGER, self.NWORDS)
         assert ((metric_state_dict is None and word2man_state_dict is None
                 and optimizer_state_dict is None) or
                 (metric_state_dict is not None and word2man_state_dict is not None
                  and optimizer_state_dict is not None))
 
+        corpus = load_corpus(LOGGER)
+        self.TEXT = [preprocess_doc(LOGGER, doc) for doc in corpus]
         self.metrictype = metrictype
         self.traintype = traintype
 
         LOGGER.start("building vocabulary")
-        VOCAB = set(TEXT)
+        VOCAB = set(flatten(self.TEXT))
         VOCABSIZE = len(VOCAB)
         LOGGER.end()
         LOGGER.start("creating metric")
@@ -611,12 +610,11 @@ class Parameters:
             self.optimizer.load_state_dict(optimizer_state_dict)
         LOGGER.end()
 
+        
+
         LOGGER.start("creating dataset...")
-        self.DATASET = self.WORD2MAN.make_dataset(LOGGER, 
-                                                  TEXT, 
-                                                  VOCAB, 
-                                                  VOCABSIZE, 
-                                                  self.WINDOWSIZE)
+        self.DATASET = ConcatDataset([self.WORD2MAN.make_dataset(LOGGER, doc, VOCAB, VOCABSIZE,
+                                               self.WINDOWSIZE) for doc in self.TEXT])
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.

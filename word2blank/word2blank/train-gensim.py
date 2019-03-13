@@ -87,7 +87,7 @@ def train(savepath, loadpath):
     LOGGER.end()
 
     LOGGER.start("starting training")
-    model.train(corpus, total_examples=len(corpus), epochs=5, report_delay=1)
+    model.train(corpus, total_examples=len(corpus), epochs=15, report_delay=1)
     LOGGER.end()
     model.save(savepath)
 

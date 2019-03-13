@@ -24,7 +24,8 @@ def parse(s):
                        choices=["euclid", "reimann", "pseudoreimann"])
     train.add_argument("--traintype", help="training method to use",
                        choices=["cbow", "skipgramonehot", "skipgramnhot"])
-    train.add_argument("--savetimesecs", help="number of seconds to be elapsed before saving", default=10*60)
+    train.add_argument("--savetimesecs", help="number of seconds to be elapsed
+                       before saving", default=5*60)
 
     test = sub.add_parser("test", help="test the model")
     test.add_argument("loadpath", help="path to model file to load from", default=None)
@@ -544,7 +545,7 @@ class Parameters:
         self.EMBEDSIZE = 300
         self.LEARNING_RATE = 0.005
         self.WINDOWSIZE = 5
-        self.NDOCS = None
+        self.NDOCS = 4
 
         self.create_time = current_time_str()
 

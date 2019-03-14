@@ -23,23 +23,21 @@ def parse(s):
     train.add_argument("--metrictype", help="type of metric to use",
                        choices=["euclid", "reimann", "pseudoreimann"])
     train.add_argument("--traintype", help="training method to use",
-                       choices=["cbow", "skipgramonehot", "skipgramnhot"])
-    train.add_argument("--savetimesecs", help="number of seconds to be elapsed
-                       before saving", default=5*60)
+                       choices=["cbow", "skipgramonehot",
+                                "skipgramnegsampling", "skipgramnhot"])
+    train.add_argument("--savetimesecs", help="number of seconds to be elapsed before saving", default=5*60)
 
-    test = sub.add_parser("test", help="test the model")
-    test.add_argument("loadpath", help="path to model file to load from", default=None)
+    eval_ = sub.add_parser("test", help="test the model")
+    eval_.add_argument("loadpath", help="path to model file to load from", default=None)
 
 
     dumpsage = sub.add_parser("dumpsage", help="dump data to be imported into sage")
     dumpsage.add_argument("loadpath", help="path to model file to load from", default=None)
+
+
+    test = sub.add_parser("test", help="Run an end to end test of the model")
     
     return p.parse_args(s)
-# if launching from the shell, parse first, then start loading datasets...
-if __name__ == "__main__":
-    global PARSED
-    PARSED = parse(sys.argv[1:])
-    assert (PARSED.command in ["train", "test", "dumpsage"])
 
 import itertools
 import torch
@@ -109,8 +107,7 @@ class TimeLogger:
         print(" " * (4 * (depth - 1)) + "====time: %s" % (now - start))
         sys.stdout.flush()
 
-def load_corpus(LOGGER):
-    CORPUS_NAME = "text8"
+def load_corpus(LOGGER, CORPUS_NAME):
     LOGGER.start("loading corpus: %s" % CORPUS_NAME)
     try:
         sys.path.insert(0, api.base_dir)
@@ -152,7 +149,7 @@ def preprocess_doc(LOGGER, corpus):
 
 
 
-    FREQ_CUTOFF = 0.05
+    FREQ_CUTOFF = 0.2
     LOGGER.start("filtering low frequency words... (all frequencies that account for < %s percent of the dataset)" % (str(FREQ_CUTOFF * 100), ))
     w2f = mk_word_histogram(corpus, set(corpus))
     origlen = len(corpus)
@@ -183,7 +180,7 @@ def dots(vs, ws, metric):
     # ws = [S2 x EMBEDSIZE] | ws^t = [EMBEDSIZE x S2]
     # metric = [EMBEDSIZE x EMBEDSIZE]
     # vs * metric = [S1 x EMBEDSIZE]
-    # vs * metric * ws^t = [S1 x EMBEDSIZE] x [EMBEDSIZE x S1] = [S1 x S2]
+    # vs * metric * ws^t = [S1 x EMBEDSIZE] x [EMBEDSIZE x S2] = [S1 x S2]
 
     return torch.mm(torch.mm(vs, metric), ws.t())
 
@@ -225,7 +222,7 @@ def cosinesim(v, w, metric):
     return vs_dot_ws / (vs_dot_vs * ws_dot_ws)
 
 # TODO: extract into method of metric
-def normalize(vs, metric):
+def normalize(DEVICE, vs, metric):
     # vs = [S1 x EMBEDSIZE]
     # metric = [EMBEDSIZE x EMBEDSIZE]
     # normvs = [S1 x EMBEDSIZE]
@@ -276,7 +273,7 @@ class Metric(nn.Module):
         raise NotImplementedError()
 
 class EuclidMetric(Metric):
-    def __init__(self, embedsize):
+    def __init__(self, DEVICE, embedsize):
         super(EuclidMetric, self).__init__()
         self.mat_ = nn.Parameter(torch.eye(embedsize).to(DEVICE), requires_grad=False)
     @property
@@ -284,7 +281,7 @@ class EuclidMetric(Metric):
         return self.mat_
 
 class ReimannMetric(Metric):
-    def __init__(self, embedsize):
+    def __init__(self, DEVICE, embedsize):
         super(ReimannMetric, self).__init__()
         self.sqrt_ = nn.Parameter(torch.randn([embedsize, embedsize]).to(DEVICE), requires_grad=True)
     @property
@@ -292,9 +289,9 @@ class ReimannMetric(Metric):
         return torch.mm(self.sqrt_, self.sqrt_)
 
 class PseudoReimannMetric(Metric):
-    def __init__(self, embedsize):
+    def __init__(self, DEVICE, embedsize):
         super(PseudoReimannMetric, self).__init__()
-        self.mat_ = mk_symmetric_mat(embedsize)
+        self.mat_ = mk_symmetric_mat(embedsize).to(DEVICE)
 
     @property
     def mat(self):
@@ -314,16 +311,106 @@ def get_windowed_ixs(windowsize, ix, maxix):
 def flatten(xss):
     return [x for xs in xss for x in xs]
 
+
+
+def get_columns(m, cols):
+    """Index the cols columns of matrix m"""
+    return m.t()[cols].t()
+
+# def sample_word(vocab, w2f):
+class SkipGramNegSamplingDataset(Dataset):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE, I2W, W2I):
+        self.TEXT = TEXT
+
+        self.VOCAB = VOCAB
+        self.VOCABSIZE = VOCABSIZE
+        self.WINDOWSIZE = WINDOWSIZE
+        self.NEGSAMPLES = 25
+
+        self.I2W = I2W
+        self.W2I = W2I
+
+        self.begin_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(WINDOWSIZE)])
+        self.end_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(len(TEXT) - WINDOWSIZE, len(TEXT))])
+
+
+        self.W2F = mk_word_histogram(TEXT, VOCAB)
+        # words in a sequence
+        self.ws = list(self.W2F.keys())
+        fs = np.array(list(self.W2F.values()))
+        # word probabilityes in the same sequence
+        self.wps = fs / float(sum(fs))
+
+
+    def num_tail_elements(self):
+        """number of elements that are at the beginning / end
+           which do not have a full WINDOWSIZE number of elements
+           to the left / right
+        """
+        size = 0
+        # ith element has i elements on the left and self.WINDOWSIZE
+        # elements on the right
+        for i in range(self.WINDOWSIZE):
+            size += i + self.WINDOWSIZE
+        assert(size == self.WINDOWSIZE * (self.WINDOWSIZE - 1) / 2 + self.WINDOWSIZE * self.WINDOWSIZE)
+        return size
+
+
+    def __getitem__(self, ix):
+        ix = ix // self.NEGSAMPLES;
+        ixnegsample = ix % self.NEGSAMPLES
+        if ix < len(self.begin_ixs):
+            focusix, ctxix = self.begin_ixs[ix]
+        elif len(self.begin_ixs) <= ix < len(self.begin_ixs) + len(self.end_ixs):
+            focusix, ctxix = self.end_ixs[ix - len(self.begin_ixs)]
+        else:
+            ix = ix - len(self.begin_ixs) - len(self.end_ixs)
+            focusix = ix // (2 * self.WINDOWSIZE)
+            focusix += self.WINDOWSIZE
+            deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+            ctxix = focusix + deltaix
+        if ixnegsample == 0:
+            return {'ctx':self.W2I[self.TEXT[ctxix]],
+                    'focus': self.W2I[self.TEXT[focusix]],
+                    'dot': torch.tensor(1.0)
+                    }
+        else:
+            negsampleix = self.W2I[np.random.choice(self.ws, p=self.wps)]
+            return {'ctx': self.W2I[self.TEXT[ctxix]],
+                    'focus': negsampleix,
+                    'dot': torch.tensor(0.0)
+                    }
+
+    def __len__(self):
+        # we can't query the first or last value.
+        # first because it has no left, last because it has no right
+
+        # first self.WINDOWSIZE elements, have i elements on the left
+        # and windowsize elements on the right.
+        size = 0
+        for i in range(self.WINDOWSIZE):
+            size += i + self.WINDOWSIZE
+
+        assert(size == len(self.begin_ixs))
+        assert(size == len(self.end_ixs))
+
+        # closed form: 
+        # \sum_{i=0}^{self.WINDOWSIZE - 1} (i + self.WINDOWSIZE)
+        # = (self.WINDOWSIZE) (self.WINDOWSIZE - 1) / 2 + self.WINDOWSIZE * self.WINDOWSIZE
+
+        return ((len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
+                + len(self.begin_ixs) + len(self.end_ixs)) * self.NEGSAMPLES
+
 class SkipGramOneHotDataset(Dataset):
-    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE, I2W, W2I):
         self.TEXT = TEXT
 
         self.VOCAB = VOCAB
         self.VOCABSIZE = VOCABSIZE
         self.WINDOWSIZE = WINDOWSIZE
 
-        self.I2W = dict(enumerate(VOCAB))
-        self.W2I = { v: k for (k, v) in self.I2W.items() }
+        self.I2W = I2W
+        self.W2I = W2I
 
         self.begin_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(WINDOWSIZE)])
         self.end_ixs = flatten([get_windowed_ixs(WINDOWSIZE, i, len(TEXT)) for i in range(len(TEXT) - WINDOWSIZE, len(TEXT))])
@@ -382,7 +469,7 @@ class SkipGramOneHotDataset(Dataset):
         return (len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE) + len(self.begin_ixs) + len(self.end_ixs)
 
 class Word2ManSkipGramOneHot(nn.Module):
-    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, LOGGER, DEVICE):
         super(Word2ManSkipGramOneHot, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
@@ -414,7 +501,7 @@ class Word2ManSkipGramOneHot(nn.Module):
 
         return xsembeds_dots_embeds
 
-    def runtrain(self, traindata, metric):
+    def runtrain(self, traindata, metric, DEVICE):
         """
         run a training on a batch using the given optimizer.
         traindata: [BATCHSIZE x <data from self.dataset>]
@@ -434,25 +521,82 @@ class Word2ManSkipGramOneHot(nn.Module):
         return l
 
     @classmethod
-    def make_dataset(cls, LOGGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+    def make_dataset(cls, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE, I2W, W2I):
         """
         create a dataset from the given text
         """
-        return SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
+        return SkipGramOneHotDataset(LOGGER, TEXT, VOCAB, VOCABSIZE,
+                                     WINDOWSIZE, I2W, W2I)
 
+
+class Word2ManSkipGramNegSampling(nn.Module):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, LOGGER, DEVICE):
+        super(Word2ManSkipGramNegSampling, self).__init__()
+        LOGGER.start("creating EMBEDM")
+        self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        LOGGER.end()
+
+
+    def forward(self, xs, ys, metric):
+        """
+        xs is the context word indeces
+        ys are the context word indeces
+
+        returns: zipWith dotproduct xs ys
+        """
+            
+        xsembeds = self.EMBEDM[xs]
+        ysembeds = self.EMBEDM[ys]
+
+        # dots(BATCHSIZE x EMBEDSIZE], 
+        #     [BATCHSIZE x EMBEDSIZE],
+        #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x BATCHSIZE]
+        # diag(BATCHSIZE x BATCHSIZE] = [BATCHSIZE x 1]
+        xsembeds_dots_embeds = torch.diag(dots(xsembeds, ysembeds, metric))
+        return F.sigmoid(xsembeds_dots_embeds)
+
+    def runtrain(self, traindata, metric, DEVICE):
+        """
+        run a training on a batch using the given optimizer.
+        traindata: [BATCHSIZE x <data from self.dataset>]
+        metric: torch.mat of dimension [EMBEDSIZE x EMBEDSIZE]
+        """
+        # [BATCHSIZE x VOCABSIZE]
+        ctxs = traindata['ctx'].to(DEVICE)
+        # [BATCHSIZE x VOCABSIZE]
+        focuses = traindata['focus'].to(DEVICE)
+        dots_targets = traindata['dot'].to(DEVICE)
+        dots_nn = self(ctxs, focuses, metric)
+
+        # print("CTXS: %s" % ctxs)
+        # print("FOCUSES: %s" % focuses)
+        # print("DOT TARGETS: %s" % dots_targets)
+
+        # print("TARGETS SIZE:", dots_targets.size(), "NN SIZE:", dots_nn.size())
+        # print(dots_targets)
+        # print(dots_nn)
+        
+        l = F.binary_cross_entropy(dots_nn, dots_targets)
+        return l
+
+    @classmethod
+    def make_dataset(cls, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE, I2W, W2I):
+        """
+        create a dataset from the given text
+        """
+        return SkipGramNegSamplingDataset(LOGGER, TEXT, VOCAB, VOCABSIZE,
+                                     WINDOWSIZE, I2W, W2I)
 
 class CBOWDataset(Dataset):
-    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE):
+    def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE, I2W, W2I):
         self.TEXT = TEXT
 
         self.VOCAB = VOCAB
         self.VOCABSIZE = VOCABSIZE
         self.WINDOWSIZE = WINDOWSIZE
 
-        LOGGER.start("creating I2W, W2I")
-        self.I2W = dict(enumerate(VOCAB))
-        self.W2I = { v: k for (k, v) in self.I2W.items() }
-        LOGGER.end()
+        self.I2W = I2W
+        self.W2I = W2I
 
         LOGGER.start("counting frequency of words")
         self.W2F = mk_word_histogram(TEXT, VOCAB)
@@ -473,7 +617,7 @@ class CBOWDataset(Dataset):
         return len(self.TEXT)
     
 class Word2ManCBOW(nn.Module):
-    def __init__(self, VOCABSIZE, EMBEDSIZE):
+    def __init__(self, VOCABSIZE, EMBEDSIZE, DEVICE):
         super(Word2ManCBOW, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
@@ -511,7 +655,7 @@ class Word2ManCBOW(nn.Module):
         xsouts = F.log_softmax(xsouts, dim=1)
         return xsouts
 
-    def runtrain(self, traindata, metric):
+    def runtrain(self, traindata, metric, DEVICE):
         """
         run a training on a batch using the given optimizer.
         traindata: [BATCHSIZE x <data from self.dataset>]
@@ -538,24 +682,24 @@ class Word2ManCBOW(nn.Module):
 
 class Parameters:
     """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE):
+    def __init__(self, LOGGER, DEVICE, corpus, EMBEDSIZE):
         """default values"""
         self.EPOCHS = 15
-        self.BATCHSIZE = 128
-        self.EMBEDSIZE = 300
+        self.BATCHSIZE = 2048
+        self.EMBEDSIZE = EMBEDSIZE
         self.LEARNING_RATE = 0.005
-        self.WINDOWSIZE = 5
-        self.NDOCS = 4
+        self.WINDOWSIZE = 4
+        self.NDOCS = None
+        self.DEVICE = DEVICE
 
         self.create_time = current_time_str()
 
-        corpus = load_corpus(LOGGER)
         if self.NDOCS is not None:
             corpus = list(corpus)[:self.NDOCS]
         self.TEXT = [preprocess_doc(LOGGER, doc) for doc in corpus]
 
 
-    def init_model(self, metrictype, traintype, 
+    def init_model(self, LOGGER, metrictype, traintype, 
                           metric_state_dict=None, 
                           word2man_state_dict=None,
                           optimizer_state_dict=None):
@@ -568,18 +712,20 @@ class Parameters:
         self.traintype = traintype
 
         LOGGER.start("building vocabulary")
-        VOCAB = set(flatten(self.TEXT))
-        VOCABSIZE = len(VOCAB)
+        self.VOCAB = set(flatten(self.TEXT))
+        self.VOCABSIZE = len(self.VOCAB)
+        self.I2W = dict(enumerate(self.VOCAB))
+        self.W2I = { v: k for (k, v) in self.I2W.items() }
         LOGGER.end()
         LOGGER.start("creating metric")
 
         if metrictype == "euclid":
-            self.METRIC = EuclidMetric(self.EMBEDSIZE)
+            self.METRIC = EuclidMetric(self.DEVICE, self.EMBEDSIZE)
         elif metrictype == "reimann":
-            self.METRIC = ReimannMetric(self.EMBEDSIZE)
+            self.METRIC = ReimannMetric(self.DEVICE, self.EMBEDSIZE)
         else:
             assert(metrictype == "pseudoreimann")
-            self.METRIC = PseudoReimannMetric(self.EMBEDSIZE)
+            self.METRIC = PseudoReimannMetric(self.DEVICE, self.EMBEDSIZE)
         # check that metric is subclass of Metric
         assert(self.METRIC is not None)
         # TODO: check that metric is a subclass
@@ -589,13 +735,16 @@ class Parameters:
 
         LOGGER.start("creating word2man")
         if traintype == "skipgramonehot":
-            self.WORD2MAN = Word2ManSkipGramOneHot(VOCABSIZE, self.EMBEDSIZE, DEVICE)
+            self.WORD2MAN = Word2ManSkipGramOneHot(self.VOCABSIZE,
+                                                   self.EMBEDSIZE, LOGGER, self.DEVICE)
+        elif traintype == "skipgramnegsampling":
+            self.WORD2MAN = Word2ManSkipGramNegSampling(self.VOCABSIZE,
+                                                   self.EMBEDSIZE, LOGGER, self.DEVICE)
         elif traintype == "skipgramnhot":
             raise RuntimeError("unimplemented n-hot skipgram")
-        # self.WORD2MAN = Word2ManSkipGramHot(VOCABSIZE, self.EMBEDSIZE, DEVICE, metrictype)
         else:
             assert(traintype == "cbow")
-            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE)
+            self.WORD2MAN = Word2ManCBOW(VOCABSIZE, self.EMBEDSIZE, self.DEVICE)
 
         if word2man_state_dict is not None:
             self.WORD2MAN.load_state_dict(word2man_state_dict, strict=True)
@@ -610,8 +759,12 @@ class Parameters:
 
 
         LOGGER.start("creating dataset...")
-        self.DATASET = ConcatDataset([self.WORD2MAN.make_dataset(LOGGER, doc, VOCAB, VOCABSIZE,
-                                               self.WINDOWSIZE) for doc in self.TEXT])
+        self.DATASET = ConcatDataset([self.WORD2MAN.make_dataset(LOGGER, doc,
+                                                                 self.VOCAB,
+                                                                 self.VOCABSIZE, 
+                                                                 self.WINDOWSIZE,
+                                                                 self.I2W,
+                                                                 self.W2I) for doc in self.TEXT])
         LOGGER.end()
 
         # TODO: pytorch dataloader is sad since it doesn't save state.
@@ -639,7 +792,7 @@ class Parameters:
         }
         return st
     
-    def load_model_state_dict(self, state):
+    def load_model_state_dict(self, LOGGER, state):
         self.EPOCHS = state["EPOCHS"]
         self.BATCHSIZE = state["BATCHSIZE"]
         self.EMBEDSIZE = state["EMBEDSIZE"]
@@ -650,7 +803,7 @@ class Parameters:
         self.metrictype = state["METRICTYPE"]
         self.traintype = state["TRAINTYPE"]
 
-        self.init_model(metrictype=self.metrictype,
+        self.init_model(LOGGER, metrictype=self.metrictype,
                                traintype=self.traintype,
                                metric_state_dict=state["METRIC"], 
                                word2man_state_dict=state["WORD2MAN"],
@@ -683,37 +836,36 @@ def bow_avg_vec(ws, W2I, VOCABSIZE):
     return v
 
 
-def dump_sage():
+def dump_sage(PARAMS):
     embednp = PARAMS.WORD2MAN.EMBEDM.detach().numpy()
     metricnp = PARAMS.METRIC.mat.detach().numpy()
 
     np.savez_compressed("NPSAVEFILE.npz", embed=embednp, metric=metricnp)
 
-def cli_prompt():
+def evalcli(PARAMS, LOGGER, DEVICE):
     """Call to launch prompt interface."""
 
     LOGGER.start("normalizing EMBEDM...")
     PARAMS.WORD2MAN.EMBEDM = PARAMS.WORD2MAN.EMBEDM.to(DEVICE)
     # PARAMS.METRIC.mat = PARAMS.METRIC.mat.to(DEVICE)
-    EMBEDNORM = normalize(PARAMS.WORD2MAN.EMBEDM, PARAMS.METRIC.mat).to(DEVICE)
+    EMBEDNORM = normalize(DEVICE, PARAMS.WORD2MAN.EMBEDM, PARAMS.METRIC.mat).to(DEVICE)
     LOGGER.end("done.")
-
 
     def word_to_embed_vector(w):
         """
         find the embedded vector of word w
         returns: [1 x EMBEDSIZE]
         """
-        v = PARAMS.WORD2MAN.EMBEDM[PARAMS.DATASET.W2I[w], :]
+        v = PARAMS.WORD2MAN.EMBEDM[PARAMS.W2I[w], :]
         return v.view(1, -1)
 
     def test_find_close_vectors(v):
         """ Find vectors close to w in the normalized embedding"""
         # dot [1 x EMBEDSIZE] [VOCABSIZE x EMBEDSIZE] = [1 x VOCABSIZE]
-        v = normalize(v, PARAMS.METRIC.mat)
+        v = normalize(DEVICE, v, PARAMS.METRIC.mat)
         wix2sim = dots(v, EMBEDNORM, PARAMS.METRIC.mat)
 
-        wordweights = [(PARAMS.DATASET.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.DATASET.VOCABSIZE)]
+        wordweights = [(PARAMS.I2W[i], wix2sim[0][i].item()) for i in range(PARAMS.VOCABSIZE)]
         # The story of floats which cannot be ordered. I found
         # out I need this filter once I found this entry in the
         # table: ('classified', nan)
@@ -727,7 +879,7 @@ def cli_prompt():
     def prompt_word(session):
         """Prompt for a word and print the closest vectors to the word"""
         # [VOCABSIZE x EMBEDSIZE]
-        COMPLETER = ThreadedCompleter(WordCompleter(PARAMS.DATASET.VOCAB))
+        COMPLETER = ThreadedCompleter(WordCompleter(PARAMS.VOCAB))
 
         raw = session.prompt("type in command>", completer=COMPLETER).split() 
         # raw = session.prompt("type in command>", completer=COMPLETER).split()
@@ -752,17 +904,17 @@ def cli_prompt():
             v1 = word_to_embed_vector(raw[1])
             v2 = word_to_embed_vector(raw[2])
             v3 = word_to_embed_vector(raw[3])
-            vsim = normalize(v2 - v1+ v3, PARAMS.METRIC.mat) 
+            vsim = normalize(DEVICE, v2 - v1+ v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\tnormal(b - a + c) %s: %s" % (word, weight))
 
 
-            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
-            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
-            v3 = normalize(word_to_embed_vector(raw[3]), PARAMS.METRIC.mat)
+            v1 = normalize(DEVICE, word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
+            v2 = normalize(DEVICE, word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
+            v3 = normalize(DEVICE, word_to_embed_vector(raw[3]), PARAMS.METRIC.mat)
 
-            vsim = normalize(v2 - v1 + v3, PARAMS.METRIC.mat) 
+            vsim = normalize(DEVICE, v2 - v1 + v3, PARAMS.METRIC.mat) 
             wordweights = test_find_close_vectors(vsim)
             for (word, weight) in wordweights[:15]:
                 print_formatted_text("\tnormal(normal(b) - normal(a) + normal(c)): %s: %s" % (word, weight))
@@ -772,8 +924,8 @@ def cli_prompt():
                 print_formatted_text("error: expected dot <w1> <w2>")
                 return
 
-            v1 = normalize(word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
-            v2 = normalize(word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
+            v1 = normalize(DEVICE, word_to_embed_vector(raw[1]), PARAMS.METRIC.mat)
+            v2 = normalize(DEVICE, word_to_embed_vector(raw[2]), PARAMS.METRIC.mat)
             print_formatted_text("\t%s" % (dots(v1, v2, PARAMS.METRIC.mat), ))
         elif raw[0] == "metric":
             print_formatted_text(PARAMS.METRIC.mat)
@@ -798,36 +950,10 @@ def cli_prompt():
                 print_formatted_text("exception:\n%s" % (e, ))
 
 
-# =========== Actual code ============
-LOGGER = TimeLogger()
-
-
-# setup device
-LOGGER.start("setting up device")
-DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
-LOGGER.end("device: %s" % DEVICE)
-
-
-PARAMS = Parameters(LOGGER, DEVICE)
-if PARSED.loadpath is not None:
-    LOGGER.start("loading model from: %s" % (PARSED.loadpath))
-    # pass the device so that the tensors live on the correct device.
-    # this might be stale since we were on a different device before.
-    PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
-    try:
-        # PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
-        PARAMS.load_model_state_dict(torch.load(PARSED.loadpath, map_location=DEVICE))
-        LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-    except FileNotFoundError:
-        LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
-else:
-    LOGGER.start("no loadpath given. Creating fresh parameters...")
-    PARAMS.init_model(traintype=PARSED.traintype, metrictype=PARSED.metrictype)
-    LOGGER.end()
-
 # @EXPERIMENT.capture
-def traincli(savepath):
+def traincli(savepath, savetimesecs, PARAMS, LOGGER, DEVICE):
     def save():
+        if savepath is None: return
         LOGGER.start("\nsaving model to: %s" % (savepath))
         with open(savepath, "wb") as sf:
             state_dict =  PARAMS.get_model_state_dict()
@@ -850,7 +976,7 @@ def traincli(savepath):
         for traindata in PARAMS.DATALOADER:
             ix += 1
             PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-            l = PARAMS.WORD2MAN.runtrain(traindata, PARAMS.METRIC.mat)
+            l = PARAMS.WORD2MAN.runtrain(traindata, PARAMS.METRIC.mat, DEVICE)
             loss_sum += l.item()
             l.backward()
             PARAMS.optimizer.step()
@@ -873,23 +999,61 @@ def traincli(savepath):
                 last_print_ix = ix
 
             # saving
-            TARGET_SAVE_TIME_IN_S = PARSED.savetimesecs # save every X minutes
+            TARGET_SAVE_TIME_IN_S = savetimesecs # save every X minutes
             if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
                 save()
                 time_last_save = now
     save()
 
+
 # @EXPERIMENT.main
 def main():
+    LOGGER = TimeLogger()
+
+    # setup device
+    LOGGER.start("setting up device")
+    DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
+    LOGGER.end("device: %s" % DEVICE)
+
+    PARSED = parse(sys.argv[1:])
+    assert (PARSED.command in ["train", "eval", "test", "dumpsage"])
+
+    # if we are testing, let the corpus be a synthetic corpus
+    if PARSED.command == "test":
+        corpus = list(load_corpus(LOGGER, "text8"))[:1]
+        PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=10)
+        PARAMS.init_model(LOGGER, traintype="skipgramnegsampling", metrictype="euclid")
+    else:
+        # not testing, so load the model
+        corpus = load_corpus(LOGGER, "text8")
+        PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=200)
+        if PARSED.loadpath is not None:
+            LOGGER.start("loading model from: %s" % (PARSED.loadpath))
+            # pass the device so that the tensors live on the correct device.
+            # this might be stale since we were on a different device before.
+            try:
+                # PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+                PARAMS.load_model_state_dict(LOGGER, torch.load(PARSED.loadpath, map_location=DEVICE))
+                LOGGER.end("loaded params from: %s" % PARAMS.create_time)
+            except FileNotFoundError:
+                LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
+        else:
+            LOGGER.start("no loadpath given. Creating fresh parameters...")
+            PARAMS.init_model(LOGGER, traintype=PARSED.traintype, metrictype=PARSED.metrictype)
+            LOGGER.end()
+
     if PARSED.command == "train":
-        traincli(PARSED.savepath)
-    elif PARSED.command == "test":
-            cli_prompt()
+        traincli(PARSED.savepath, PARSED.savetimescs, PARAMS, LOGGER, DEVICE)
+    elif PARSED.command == "eval":
+        evalcli(PARAMS, LOGGER, DEVICE)
     elif PARSED.command == "dumpsage":
-        dump_sage()
+        dump_sage(PARAMS)
+    elif PARSED.command == "test":
+        SECS_TO_SAVE = 30
+        traincli('testsave', SECS_TO_SAVE, PARAMS, LOGGER, DEVICE)
+        evalcli(PARAMS, LOGGER, DEVICE)
     else:
         raise RuntimeError("unknown command: %s" % PARSED.command)
 
 if __name__ == "__main__":
     main()
-

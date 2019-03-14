@@ -325,7 +325,7 @@ class SkipGramNegSamplingDataset(Dataset):
         self.VOCAB = VOCAB
         self.VOCABSIZE = VOCABSIZE
         self.WINDOWSIZE = WINDOWSIZE
-        self.NEGSAMPLES = 25
+        self.NNEGSAMPLES = 25
 
         self.I2W = I2W
         self.W2I = W2I
@@ -357,28 +357,32 @@ class SkipGramNegSamplingDataset(Dataset):
 
 
     def __getitem__(self, ix):
-        ix = ix // self.NEGSAMPLES;
-        ixnegsample = ix % self.NEGSAMPLES
-        if ix < len(self.begin_ixs):
-            focusix, ctxix = self.begin_ixs[ix]
-        elif len(self.begin_ixs) <= ix < len(self.begin_ixs) + len(self.end_ixs):
-            focusix, ctxix = self.end_ixs[ix - len(self.begin_ixs)]
+        if (ix < len(self.TEXT) * self.NNEGSAMPLES):
+            # generate negative sample
+            focusix = ix // self.NNEGSAMPLES;
+            # sample according to the freq dist
+            negsampleix = self.W2I[np.random.choice(self.ws, p=self.wps)]
+            return {'ctx': self.W2I[self.TEXT[negsampleix]],
+                    'focus': self.W2I[self.TEXT[focusix]],
+                    'dot': torch.tensor(0.0)
+                   }
         else:
-            ix = ix - len(self.begin_ixs) - len(self.end_ixs)
-            focusix = ix // (2 * self.WINDOWSIZE)
-            focusix += self.WINDOWSIZE
-            deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
-            ctxix = focusix + deltaix
-        if ixnegsample == 0:
+            # generate positive samples
+            ix -= len(self.TEXT * self.NNEGSAMPLES)
+
+            if ix < len(self.begin_ixs):
+                focusix, ctxix = self.begin_ixs[ix]
+            elif len(self.begin_ixs) <= ix < len(self.begin_ixs) + len(self.end_ixs):
+                focusix, ctxix = self.end_ixs[ix - len(self.begin_ixs)]
+            else:
+                ix = ix - len(self.begin_ixs) - len(self.end_ixs)
+                focusix = ix // (2 * self.WINDOWSIZE)
+                focusix += self.WINDOWSIZE
+                deltaix = (ix % (2 * self.WINDOWSIZE)) - self.WINDOWSIZE
+                ctxix = focusix + deltaix
             return {'ctx':self.W2I[self.TEXT[ctxix]],
                     'focus': self.W2I[self.TEXT[focusix]],
                     'dot': torch.tensor(1.0)
-                    }
-        else:
-            negsampleix = self.W2I[np.random.choice(self.ws, p=self.wps)]
-            return {'ctx': self.W2I[self.TEXT[ctxix]],
-                    'focus': negsampleix,
-                    'dot': torch.tensor(0.0)
                     }
 
     def __len__(self):
@@ -398,8 +402,9 @@ class SkipGramNegSamplingDataset(Dataset):
         # \sum_{i=0}^{self.WINDOWSIZE - 1} (i + self.WINDOWSIZE)
         # = (self.WINDOWSIZE) (self.WINDOWSIZE - 1) / 2 + self.WINDOWSIZE * self.WINDOWSIZE
 
-        return ((len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
-                + len(self.begin_ixs) + len(self.end_ixs)) * self.NEGSAMPLES
+        return (((len(self.TEXT) - 2 * self.WINDOWSIZE) * (2 * self.WINDOWSIZE)
+                + len(self.begin_ixs) + len(self.end_ixs)) 
+                + len(self.TEXT) * self.NNEGSAMPLES)
 
 class SkipGramOneHotDataset(Dataset):
     def __init__(self, LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE, I2W, W2I):
@@ -685,7 +690,7 @@ class Parameters:
     def __init__(self, LOGGER, DEVICE, corpus, EMBEDSIZE):
         """default values"""
         self.EPOCHS = 15
-        self.BATCHSIZE = 2048
+        self.BATCHSIZE = 64
         self.EMBEDSIZE = EMBEDSIZE
         self.LEARNING_RATE = 0.005
         self.WINDOWSIZE = 4
@@ -1018,32 +1023,32 @@ def main():
     PARSED = parse(sys.argv[1:])
     assert (PARSED.command in ["train", "eval", "test", "dumpsage"])
 
+    PARAMS = None
     # if we are testing, let the corpus be a synthetic corpus
     if PARSED.command == "test":
         corpus = list(load_corpus(LOGGER, "text8"))[:1]
         PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=10)
         PARAMS.init_model(LOGGER, traintype="skipgramnegsampling", metrictype="euclid")
-    else:
-        # not testing, so load the model
+    elif PARSED.loadpath is not None:
         corpus = load_corpus(LOGGER, "text8")
         PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=200)
-        if PARSED.loadpath is not None:
-            LOGGER.start("loading model from: %s" % (PARSED.loadpath))
-            # pass the device so that the tensors live on the correct device.
-            # this might be stale since we were on a different device before.
-            try:
-                # PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
-                PARAMS.load_model_state_dict(LOGGER, torch.load(PARSED.loadpath, map_location=DEVICE))
-                LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-            except FileNotFoundError:
-                LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
-        else:
-            LOGGER.start("no loadpath given. Creating fresh parameters...")
-            PARAMS.init_model(LOGGER, traintype=PARSED.traintype, metrictype=PARSED.metrictype)
-            LOGGER.end()
+        PARAMS.init_model(LOGGER, traintype=PARSED.traintype, metrictype=PARSED.metrictype)
+        try:
+            # PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
+            PARAMS.load_model_state_dict(LOGGER, torch.load(PARSED.loadpath, map_location=DEVICE))
+            LOGGER.end("loaded params from: %s" % PARAMS.create_time)
+        except FileNotFoundError:
+            LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
+
+    if PARAMS is None:
+        LOGGER.start("no parameter object given. Creating fresh parameters...")
+        corpus = list(load_corpus(LOGGER, "text8"))[:1]
+        PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=200)
+        PARAMS.init_model(LOGGER, traintype=PARSED.traintype, metrictype=PARSED.metrictype)
+        LOGGER.end()
 
     if PARSED.command == "train":
-        traincli(PARSED.savepath, PARSED.savetimescs, PARAMS, LOGGER, DEVICE)
+        traincli(PARSED.savepath, PARSED.savetimesecs, PARAMS, LOGGER, DEVICE)
     elif PARSED.command == "eval":
         evalcli(PARAMS, LOGGER, DEVICE)
     elif PARSED.command == "dumpsage":

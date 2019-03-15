@@ -40,4 +40,4 @@ touch models/$FOLDERNAME/date-$DATE
         --learningrate $LEARNINGRATE \
         --windowsize $WINDOWSIZE \
         --metrictype $METRICTYPE \
-        --traintype $TRAINTYPE | tee models/$FOLDERNAME/$NAME.log
+        --traintype $TRAINTYPE 2>&1 | tee models/$FOLDERNAME/$NAME.log

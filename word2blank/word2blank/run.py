@@ -664,24 +664,23 @@ class Parameters:
                  and optimizer_state_dict is not None))
 
         self.corpus = corpus
-        self.NDOCS = NDOCS
+        self.NDOCS = int(NDOCS)
         self.DEVICE = DEVICE
-        self.EPOCHS = EPOCHS
-        self.BATCHSIZE = BATCHSIZE
-        self.EMBEDSIZE = EMBEDSIZE
-        self.LEARNING_RATE = LEARNING_RATE
-        self.WINDOWSIZE = WINDOWSIZE
+        self.EPOCHS = int(EPOCHS)
+        self.BATCHSIZE = int(BATCHSIZE)
+        self.EMBEDSIZE = int(EMBEDSIZE)
+        self.LEARNING_RATE = float(LEARNING_RATE)
+        self.WINDOWSIZE = int(WINDOWSIZE)
         self.create_time = create_time
         self.metrictype = metrictype
         self.traintype = traintype
 
-        if self.NDOCS is not None and self.NDOCS != -1:
-            self.corpus = list(self.corpus)[:NDOCS]
+        if (self.NDOCS is not None):
+            print("NDOCS:", self.NDOCS)
+            self.corpus = list(self.corpus)[:self.NDOCS]
 
         self.TEXT = [preprocess_doc(LOGGER, doc) for doc in self.corpus]
 
-        self.metrictype = metrictype
-        self.traintype = traintype
 
         LOGGER.start("building vocabulary")
         self.VOCAB = set(flatten(self.TEXT))
@@ -691,6 +690,7 @@ class Parameters:
         LOGGER.end()
         LOGGER.start("creating metric")
 
+        print("METRIC:", metrictype)
         if metrictype == "euclid":
             self.METRIC = EuclidMetric(self.DEVICE, self.EMBEDSIZE)
         elif metrictype == "reimann":

@@ -33,7 +33,7 @@ touch models/$FOLDERNAME/date-$DATE
 ./run.py train  \
         --savepath models/$FOLDERNAME/$NAME.model \
         --loadpath models/$FOLDERNAME/$NAME.model \
-        --ndocs $NDOCS
+        --ndocs $NDOCS \
         --epochs $EPOCHS \
         --batchsize $BATCHSIZE \
         --embedsize $EMBEDSIZE \

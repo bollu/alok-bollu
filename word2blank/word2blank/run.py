@@ -1,43 +1,9 @@
 #!/usr/bin/env python3
 from collections import Counter
 
-
 import argparse
 import sys
 import datetime 
-
-def current_time_str():
-    """Return the current time as a string"""
-    return datetime.datetime.now().strftime("%X-%a-%b")
-
-def parse(s):
-    def DEFAULT_MODELPATH():
-        now = datetime.datetime.now()
-        return "save-auto-%s.model" % (current_time_str(), )
-    p = argparse.ArgumentParser()
-
-    sub = p.add_subparsers(dest="command")
-    train = sub.add_parser("train", help="train the model")
-    train.add_argument("--loadpath", help="path to model file to load from", default=None)
-    train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
-    train.add_argument("--metrictype", help="type of metric to use",
-                       choices=["euclid", "reimann", "pseudoreimann"])
-    train.add_argument("--traintype", help="training method to use",
-                       choices=["cbow", "skipgramonehot",
-                                "skipgramnegsampling", "skipgramnhot"])
-    train.add_argument("--savetimesecs", help="number of seconds to be elapsed before saving", default=5*60)
-
-    eval_ = sub.add_parser("test", help="test the model")
-    eval_.add_argument("loadpath", help="path to model file to load from", default=None)
-
-
-    dumpsage = sub.add_parser("dumpsage", help="dump data to be imported into sage")
-    dumpsage.add_argument("loadpath", help="path to model file to load from", default=None)
-
-
-    test = sub.add_parser("test", help="Run an end to end test of the model")
-    
-    return p.parse_args(s)
 
 import itertools
 import torch
@@ -362,7 +328,7 @@ class SkipGramNegSamplingDataset(Dataset):
             focusix = ix // self.NNEGSAMPLES;
             # sample according to the freq dist
             negsampleix = self.W2I[np.random.choice(self.ws, p=self.wps)]
-            return {'ctx': self.W2I[self.TEXT[negsampleix]],
+            return {'ctx': negsampleix,
                     'focus': self.W2I[self.TEXT[focusix]],
                     'dot': torch.tensor(0.0)
                    }
@@ -684,27 +650,10 @@ class Word2ManCBOW(nn.Module):
         """
         return CBOWDataset(LOGGER, TEXT, VOCAB, VOCABSIZE, WINDOWSIZE)
 
-
 class Parameters:
-    """God object containing everything the model has"""
-    def __init__(self, LOGGER, DEVICE, corpus, EMBEDSIZE):
-        """default values"""
-        self.EPOCHS = 15
-        self.BATCHSIZE = 64
-        self.EMBEDSIZE = EMBEDSIZE
-        self.LEARNING_RATE = 0.005
-        self.WINDOWSIZE = 4
-        self.NDOCS = None
-        self.DEVICE = DEVICE
 
-        self.create_time = current_time_str()
-
-        if self.NDOCS is not None:
-            corpus = list(corpus)[:self.NDOCS]
-        self.TEXT = [preprocess_doc(LOGGER, doc) for doc in corpus]
-
-
-    def init_model(self, LOGGER, metrictype, traintype, 
+    def __init__(self, LOGGER, DEVICE, corpus, EPOCHS, BATCHSIZE, EMBEDSIZE, LEARNING_RATE,
+                   WINDOWSIZE, NDOCS, create_time, metrictype, traintype, 
                           metric_state_dict=None, 
                           word2man_state_dict=None,
                           optimizer_state_dict=None):
@@ -712,6 +661,20 @@ class Parameters:
                 and optimizer_state_dict is None) or
                 (metric_state_dict is not None and word2man_state_dict is not None
                  and optimizer_state_dict is not None))
+
+        self.EPOCHS = EPOCHS
+        self.BATCHSIZE = BATCHSIZE
+        self.EMBEDSIZE = EMBEDSIZE
+        self.LEARNING_RATE = LEARNING_RATE
+        self.WINDOWSIZE = WINDOWSIZE
+        self.NDOCS = NDOCS
+        self.create_time = create_time
+        self.metrictype = metrictype
+        self.traintype = traintype
+
+        if self.NDOCS is not None:
+            self.corpus = list(self.corpus)[:self.NDOCS]
+        self.TEXT = [preprocess_doc(LOGGER, doc) for doc in self.corpus]
 
         self.metrictype = metrictype
         self.traintype = traintype
@@ -757,14 +720,16 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
-        self.optimizer = optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
+        self.optimizer = 
+            optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
         if optimizer_state_dict is not None:
             self.optimizer.load_state_dict(optimizer_state_dict)
         LOGGER.end()
 
 
         LOGGER.start("creating dataset...")
-        self.DATASET = ConcatDataset([self.WORD2MAN.make_dataset(LOGGER, doc,
+        self.DATASET = ConcatDataset([self.WORD2MAN.make_dataset(LOGGER, 
+                                                                 doc,
                                                                  self.VOCAB,
                                                                  self.VOCABSIZE, 
                                                                  self.WINDOWSIZE,
@@ -797,22 +762,33 @@ class Parameters:
         }
         return st
     
-    def load_model_state_dict(self, LOGGER, state):
-        self.EPOCHS = state["EPOCHS"]
-        self.BATCHSIZE = state["BATCHSIZE"]
-        self.EMBEDSIZE = state["EMBEDSIZE"]
-        self.LEARNING_RATE = state["LEARNINGRATE"]
-        self.WINDOWSIZE = state["WINDOWSIZE"]
-        self.NDOCS = state["NDOCS"]
-        self.create_time = state["CREATE_TIME"]
-        self.metrictype = state["METRICTYPE"]
-        self.traintype = state["TRAINTYPE"]
+    @classmethod
+    def load_model_state_dict(self, LOGGER, DEVICE, corpus, state):
+        EPOCHS = state["EPOCHS"]
+        BATCHSIZE = state["BATCHSIZE"]
+        EMBEDSIZE = state["EMBEDSIZE"]
+        LEARNING_RATE = state["LEARNINGRATE"]
+        WINDOWSIZE = state["WINDOWSIZE"]
+        NDOCS = state["NDOCS"]
+        create_time = state["CREATE_TIME"]
+        metrictype = state["METRICTYPE"]
+        traintype = state["TRAINTYPE"]
 
-        self.init_model(LOGGER, metrictype=self.metrictype,
-                               traintype=self.traintype,
-                               metric_state_dict=state["METRIC"], 
-                               word2man_state_dict=state["WORD2MAN"],
-                               optimizer_state_dict=state["OPTIMIZER"])
+        return Parameters(LOGGER, 
+                          DEVICE,
+                          corpus=corpus,
+                          EPOCHS=EPOCHS,
+                          BATCHSIZE=BATCHSIZE,
+                          EMBEDSIZE=EMBEDSIZE,
+                          LEARNING_RATE=LEARNING_RATE,
+                          WINDOWSIZE=WINDOWSIZE,
+                          NDOCS=NDOCS,
+                          create_time=create_time,
+                          metrictype=metrictype,
+                          traintype=traintype,
+                          metric_state_dict=state["METRIC"], 
+                          word2man_state_dict=state["WORD2MAN"],
+                          optimizer_state_dict=state["OPTIMIZER"])
 def mk_word_histogram(ws, vocab):
     """count frequency of words in words, given vocabulary size."""
     w2f = { w : 0 for w in vocab }
@@ -1011,41 +987,114 @@ def traincli(savepath, savetimesecs, PARAMS, LOGGER, DEVICE):
     save()
 
 
+def current_time_str():
+    """Return the current time as a string"""
+    return datetime.datetime.now().strftime("%X-%a-%b")
+
+def parse(s):
+    def DEFAULT_MODELPATH():
+        now = datetime.datetime.now()
+        return "save-auto-%s.model" % (current_time_str(), )
+    p = argparse.ArgumentParser()
+
+    sub = p.add_subparsers(dest="command")
+    train = sub.add_parser("train", help="train the model")
+    train.add_argument("--loadpath", help="path to model file to load from", default=None)
+    train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
+    train.add_argument("--epochs", default=5)
+    train.add_argument"--batchsize", default=64)
+    train.add_argument("--learningrate", default=0.05)
+    train.add_argument("--windowsize", default=4)
+    # number of documents to process. is None by default to run on the
+    # entire corpus
+    train.add_argument("--ndocs", default=None)
+    train.add_argument("--metrictype", help="type of metric to use",
+                       choices=["euclid", "reimann", "pseudoreimann"])
+    train.add_argument("--traintype", help="training method to use",
+                       choices=["cbow", "skipgramonehot",
+                                "skipgramnegsampling", "skipgramnhot"])
+    train.add_argument("--savetimesecs", help="number of seconds to be elapsed before saving", default=5*60)
+
+    eval_ = sub.add_parser("eval", help="evaluate the model")
+    eval_.add_argument("loadpath", help="path to model file to load from", default=None)
+
+
+    dumpsage = sub.add_parser("dumpsage", help="dump data to be imported into sage")
+    dumpsage.add_argument("loadpath", help="path to model file to load from", default=None)
+
+
+    test = sub.add_parser("test", help="Run an end to end test of the model")
+    
+    return p.parse_args(s)
+
+
+
 # @EXPERIMENT.main
 def main():
     LOGGER = TimeLogger()
+
+    # parse args
+    PARSED = parse(sys.argv[1:])
+    assert (PARSED.command in ["train", "eval", "test", "dumpsage"])
 
     # setup device
     LOGGER.start("setting up device")
     DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
     LOGGER.end("device: %s" % DEVICE)
 
-    PARSED = parse(sys.argv[1:])
-    assert (PARSED.command in ["train", "eval", "test", "dumpsage"])
 
-    PARAMS = None
+    # load corpus
+    # TODO: fold corpus state into PARAMS
+    corpus = load_corpus(LOGGER, "text8")
+
     # if we are testing, let the corpus be a synthetic corpus
     if PARSED.command == "test":
         corpus = list(load_corpus(LOGGER, "text8"))[:1]
-        PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=10)
-        PARAMS.init_model(LOGGER, traintype="skipgramnegsampling", metrictype="euclid")
-    elif PARSED.loadpath is not None:
-        corpus = load_corpus(LOGGER, "text8")
-        PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=200)
-        PARAMS.init_model(LOGGER, traintype=PARSED.traintype, metrictype=PARSED.metrictype)
-        try:
-            # PARAMS = torch.load(PARSED.loadpath, map_location=DEVICE)
-            PARAMS.load_model_state_dict(LOGGER, torch.load(PARSED.loadpath, map_location=DEVICE))
-            LOGGER.end("loaded params from: %s" % PARAMS.create_time)
-        except FileNotFoundError:
-            LOGGER.end("file (%s) not found. Creating new model" % (PARSED.loadpath, ))
+        PARAMS = Parameters(LOGGER, 
+                            DEVICE, 
+                            corpus=corpus,
+                            EPOCHS=2,
+                            BATCHSIZE=64,
+                            EMBEDSIZE=30,
+                            LEARNING_RATE=0.05,
+                            WINDOWSIZE=4,
+                            NDOCS=4,
+                            create_time=curent_time_str(),
+                            metrictype="euclid",
+                            traintype="skipgramnegsampling")
+    # if we are evaluating, just load data
+    elif PARSED.command == "eval":
+        state = torch.load(PARSED.loadpath, map_location=DEVICE))
+        PARAMS = Parameters.load_model_state_dict(LOGGER, 
+                                                  DEVICE,
+                                                  corpus,
+                                                  state)
+    # if we are training and the load path exists, load
+    else:
+        assert(PARSED.command == "train")
+        
+        if PARSED.loadpath is not None and os.exists(loadpath):
+            LOGGER.start("loaded params from: %s" % PARAMS.create_time)
+            state = torch.load(PARSED.loadpath, map_location=DEVICE))
+            PARAMS = Parameters.load_model_state_dict(LOGGER, 
+                                                      DEVICE,
+                                                      corpus,
+                                                      state)
+            LOGGER.end()
+        else:
+            PARAMS = Parameters(LOGGER, 
+                                DEVICE, 
+                                corpus, 
+                                EPOCHS=PARAMS.epochs,
+                                EMBEDSIZE=PARAMS.embedsize,
+                                LEARNING_RATE=PARAMS.learningrate,
+                                WINDOWSIZE=PARAMS.windowsize,
+                                NDOCS=PARAMS.ndocs,
+                                create_time=current_time_str(),
+                                metrictype=PARAMS.metrictype
+                                traintype=PARAMS.traintype)
 
-    if PARAMS is None:
-        LOGGER.start("no parameter object given. Creating fresh parameters...")
-        corpus = list(load_corpus(LOGGER, "text8"))[:1]
-        PARAMS = Parameters(LOGGER, DEVICE, corpus, EMBEDSIZE=200)
-        PARAMS.init_model(LOGGER, traintype=PARSED.traintype, metrictype=PARSED.metrictype)
-        LOGGER.end()
+    assert(PARAMS is not None)
 
     if PARSED.command == "train":
         traincli(PARSED.savepath, PARSED.savetimesecs, PARAMS, LOGGER, DEVICE)

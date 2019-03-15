@@ -6,7 +6,7 @@
 #SBATCH --mem-per-cpu=32000
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END
-#SBATCH -o ./slurm/%a.out 
+#SBATCH -o ./slurm/%j
 
 set -e 
 set -o xtrace

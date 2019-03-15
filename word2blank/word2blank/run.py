@@ -4,7 +4,8 @@ from collections import Counter
 import argparse
 import sys
 import datetime 
-
+import os
+import os.path
 import itertools
 import torch
 import torch.autograd
@@ -1074,7 +1075,7 @@ def main():
     else:
         assert(PARSED.command == "train")
         
-        if PARSED.loadpath is not None and os.exists(loadpath):
+        if PARSED.loadpath is not None and os.path.exists(PARAMS.loadpath):
             LOGGER.start("loaded params from: %s" % PARAMS.create_time)
             state = torch.load(PARSED.loadpath, map_location=DEVICE)
             PARAMS = Parameters.load_model_state_dict(LOGGER, 

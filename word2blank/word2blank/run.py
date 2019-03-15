@@ -1087,14 +1087,14 @@ def main():
             PARAMS = Parameters(LOGGER, 
                                 DEVICE, 
                                 corpus, 
-                                ndocs=PARAMS.ndocs,
-                                EPOCHS=PARAMS.epochs,
-                                EMBEDSIZE=PARAMS.embedsize,
-                                LEARNING_RATE=PARAMS.learningrate,
-                                WINDOWSIZE=PARAMS.windowsize,
+                                ndocs=PARSED.ndocs,
+                                EPOCHS=PARSED.epochs,
+                                EMBEDSIZE=PARSED.embedsize,
+                                LEARNING_RATE=PARSED.learningrate,
+                                WINDOWSIZE=PARSED.windowsize,
                                 create_time=current_time_str(),
-                                metrictype=PARAMS.metrictype,
-                                traintype=PARAMS.traintype)
+                                metrictype=PARSED.metrictype,
+                                traintype=PARSED.traintype)
 
     assert(PARAMS is not None)
 

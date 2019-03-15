@@ -1090,6 +1090,7 @@ def main():
                                 corpus, 
                                 NDOCS=PARSED.ndocs,
                                 EPOCHS=PARSED.epochs,
+                                BATCHSIZE=PARSED.batchsize,
                                 EMBEDSIZE=PARSED.embedsize,
                                 LEARNING_RATE=PARSED.learningrate,
                                 WINDOWSIZE=PARSED.windowsize,

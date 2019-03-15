@@ -1006,6 +1006,7 @@ def parse(s):
     train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
     train.add_argument("--epochs", default=5)
     train.add_argument("--batchsize", default=64)
+    train.add_argument("--embedsize", default=200)
     train.add_argument("--learningrate", default=0.05)
     train.add_argument("--windowsize", default=4)
     # number of documents to process. is None by default to run on the
@@ -1087,7 +1088,7 @@ def main():
             PARAMS = Parameters(LOGGER, 
                                 DEVICE, 
                                 corpus, 
-                                ndocs=PARSED.ndocs,
+                                NDOCS=PARSED.ndocs,
                                 EPOCHS=PARSED.epochs,
                                 EMBEDSIZE=PARSED.embedsize,
                                 LEARNING_RATE=PARSED.learningrate,

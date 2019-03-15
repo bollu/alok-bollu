@@ -6,6 +6,7 @@
 #SBATCH --mem-per-cpu=32000
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END
+#SBATCH -o ./slurm/%a.out 
 
 set -e 
 set -o xtrace
@@ -16,6 +17,7 @@ BATCHSIZE=64
 EMBEDSIZE=200
 LEARNINGRATE=0.05
 WINDOWSIZE=4
+NDOCS=100
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
 
 module add cuda/9.0
@@ -23,6 +25,7 @@ rm cur.model || true
 
 FOLDERNAME=$(git rev-parse --short HEAD)---$SLURM_ARRAY_JOB_ID---$DATE
 mkdir -p models/$FOLDERNAME
+mkdir -p slurm/
 
 NAME=$TRAINTYPE-$METRICTYPE
 touch models/$FOLDERNAME/date-$DATE
@@ -30,6 +33,7 @@ touch models/$FOLDERNAME/date-$DATE
 ./run.py train  \
         --savepath models/$FOLDERNAME/$NAME.model \
         --loadpath models/$FOLDERNAME/$NAME.model \
+        --ndocs $NDOCS
         --epochs $EPOCHS \
         --batchsize $BATCHSIZE \
         --embedsize $EMBEDSIZE \

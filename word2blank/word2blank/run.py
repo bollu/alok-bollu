@@ -652,8 +652,8 @@ class Word2ManCBOW(nn.Module):
 
 class Parameters:
 
-    def __init__(self, LOGGER, DEVICE, corpus, EPOCHS, BATCHSIZE, EMBEDSIZE, LEARNING_RATE,
-                   WINDOWSIZE, NDOCS, create_time, metrictype, traintype, 
+    def __init__(self, LOGGER, DEVICE, corpus, NDOCS, EPOCHS, BATCHSIZE, EMBEDSIZE, LEARNING_RATE,
+                   WINDOWSIZE, create_time, metrictype, traintype, 
                           metric_state_dict=None, 
                           word2man_state_dict=None,
                           optimizer_state_dict=None):
@@ -662,18 +662,21 @@ class Parameters:
                 (metric_state_dict is not None and word2man_state_dict is not None
                  and optimizer_state_dict is not None))
 
+        self.corpus = corpus
+        self.NDOCS = NDOCS
+        self.DEVICE = DEVICE
         self.EPOCHS = EPOCHS
         self.BATCHSIZE = BATCHSIZE
         self.EMBEDSIZE = EMBEDSIZE
         self.LEARNING_RATE = LEARNING_RATE
         self.WINDOWSIZE = WINDOWSIZE
-        self.NDOCS = NDOCS
         self.create_time = create_time
         self.metrictype = metrictype
         self.traintype = traintype
 
-        if self.NDOCS is not None:
-            self.corpus = list(self.corpus)[:self.NDOCS]
+        if self.NDOCS is not None and self.NDOCS != -1:
+            self.corpus = list(self.corpus)[:NDOCS]
+
         self.TEXT = [preprocess_doc(LOGGER, doc) for doc in self.corpus]
 
         self.metrictype = metrictype
@@ -720,8 +723,7 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
-        self.optimizer = 
-            optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
+        self.optimizer = optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
         if optimizer_state_dict is not None:
             self.optimizer.load_state_dict(optimizer_state_dict)
         LOGGER.end()
@@ -747,12 +749,12 @@ class Parameters:
 
     def get_model_state_dict(self):
         st =  {
+            "NDOCS": self.NDOCS,
             "EPOCHS": self.EPOCHS,
             "BATCHSIZE": self.BATCHSIZE,
             "EMBEDSIZE": self.EMBEDSIZE,
             "LEARNINGRATE": self.LEARNING_RATE,
             "WINDOWSIZE": self.WINDOWSIZE,
-            "NDOCS": self.NDOCS,
             "CREATE_TIME": self.create_time,
             "METRICTYPE": self.metrictype,
             "TRAINTYPE": self.traintype,
@@ -764,12 +766,12 @@ class Parameters:
     
     @classmethod
     def load_model_state_dict(self, LOGGER, DEVICE, corpus, state):
+        NDOCS = state["NDOCS"]
         EPOCHS = state["EPOCHS"]
         BATCHSIZE = state["BATCHSIZE"]
         EMBEDSIZE = state["EMBEDSIZE"]
         LEARNING_RATE = state["LEARNINGRATE"]
         WINDOWSIZE = state["WINDOWSIZE"]
-        NDOCS = state["NDOCS"]
         create_time = state["CREATE_TIME"]
         metrictype = state["METRICTYPE"]
         traintype = state["TRAINTYPE"]
@@ -777,12 +779,12 @@ class Parameters:
         return Parameters(LOGGER, 
                           DEVICE,
                           corpus=corpus,
+                          NDOCS=NDOCS,
                           EPOCHS=EPOCHS,
                           BATCHSIZE=BATCHSIZE,
                           EMBEDSIZE=EMBEDSIZE,
                           LEARNING_RATE=LEARNING_RATE,
                           WINDOWSIZE=WINDOWSIZE,
-                          NDOCS=NDOCS,
                           create_time=create_time,
                           metrictype=metrictype,
                           traintype=traintype,
@@ -1002,7 +1004,7 @@ def parse(s):
     train.add_argument("--loadpath", help="path to model file to load from", default=None)
     train.add_argument("--savepath", help="path to save model to", default=DEFAULT_MODELPATH())
     train.add_argument("--epochs", default=5)
-    train.add_argument"--batchsize", default=64)
+    train.add_argument("--batchsize", default=64)
     train.add_argument("--learningrate", default=0.05)
     train.add_argument("--windowsize", default=4)
     # number of documents to process. is None by default to run on the
@@ -1049,22 +1051,21 @@ def main():
 
     # if we are testing, let the corpus be a synthetic corpus
     if PARSED.command == "test":
-        corpus = list(load_corpus(LOGGER, "text8"))[:1]
         PARAMS = Parameters(LOGGER, 
                             DEVICE, 
                             corpus=corpus,
+                            NDOCS=10,
                             EPOCHS=2,
                             BATCHSIZE=64,
                             EMBEDSIZE=30,
                             LEARNING_RATE=0.05,
                             WINDOWSIZE=4,
-                            NDOCS=4,
-                            create_time=curent_time_str(),
+                            create_time=current_time_str(),
                             metrictype="euclid",
                             traintype="skipgramnegsampling")
     # if we are evaluating, just load data
     elif PARSED.command == "eval":
-        state = torch.load(PARSED.loadpath, map_location=DEVICE))
+        state = torch.load(PARSED.loadpath, map_location=DEVICE)
         PARAMS = Parameters.load_model_state_dict(LOGGER, 
                                                   DEVICE,
                                                   corpus,
@@ -1075,7 +1076,7 @@ def main():
         
         if PARSED.loadpath is not None and os.exists(loadpath):
             LOGGER.start("loaded params from: %s" % PARAMS.create_time)
-            state = torch.load(PARSED.loadpath, map_location=DEVICE))
+            state = torch.load(PARSED.loadpath, map_location=DEVICE)
             PARAMS = Parameters.load_model_state_dict(LOGGER, 
                                                       DEVICE,
                                                       corpus,
@@ -1085,13 +1086,13 @@ def main():
             PARAMS = Parameters(LOGGER, 
                                 DEVICE, 
                                 corpus, 
+                                ndocs=PARAMS.ndocs,
                                 EPOCHS=PARAMS.epochs,
                                 EMBEDSIZE=PARAMS.embedsize,
                                 LEARNING_RATE=PARAMS.learningrate,
                                 WINDOWSIZE=PARAMS.windowsize,
-                                NDOCS=PARAMS.ndocs,
                                 create_time=current_time_str(),
-                                metrictype=PARAMS.metrictype
+                                metrictype=PARAMS.metrictype,
                                 traintype=PARAMS.traintype)
 
     assert(PARAMS is not None)

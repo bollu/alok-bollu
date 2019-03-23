@@ -32,3 +32,6 @@ models/
 *.npz
 text8
 testsave
+
+# folders of models
+./models/*

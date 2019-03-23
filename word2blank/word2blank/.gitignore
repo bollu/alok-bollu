@@ -26,3 +26,9 @@ slurm-*.out
 
 models
 working-models
+models/
+
+# numpy save file
+*.npz
+text8
+testsave

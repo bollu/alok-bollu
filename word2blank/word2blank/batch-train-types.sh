@@ -11,7 +11,7 @@
 set -e 
 set -o xtrace
 
-DATE=`date '+%Y-%m-%d %H:%M:%S'`
+DATE=`date '+%Y-%m-%d-%H:%M:%S'`
 
 METRICTYPES=(pseudoreimann euclid)
 TRAINTYPES=(skipgramonehot cbow)
@@ -21,11 +21,9 @@ rm cur.model || true
 
 METRICTYPE=${METRICTYPES[$(($SLURM_ARRAY_TASK_ID % 2))]}
 TRAINTYPE=${TRAINTYPES[$(($SLURM_ARRAY_TASK_ID / 2))]}
-FOLDERNAME=$SLURM_ARRAY_JOB_ID-$(git rev-parse HEAD)
+FOLDERNAME=$(git rev-parse --short HEAD)---$SLURM_ARRAY_JOB_ID---$DATE
 mkdir -p models/$FOLDERNAME
 
 NAME=$TRAINTYPE-$METRICTYPE
-
-touch models/$FOLDERNAME/date-$DATE
 
 ./run.py train  --savepath models/$FOLDERNAME/$NAME.model --loadpath models/$FOLDERNAME/$NAME.model --metrictype $METRICTYPE --traintype $TRAINTYPE | tee models/$FOLDERNAME/$NAME.log

@@ -395,8 +395,15 @@ void InitNet() {
             printf("Memory allocation failed\n");
             exit(1);
         }
-        for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
+
+	for (a = 0; a < vocab_size; a++)
+		for (b = 0; b < layer1_size; b++) {
+			next_random = next_random * (unsigned long long)25214903917 + 11;
+			syn1neg[a * layer1_size + b] =
+				(((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+		}
+        // for (a = 0; a < vocab_size; a++)
+        //     for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
     }
     for (a = 0; a < vocab_size; a++)
         for (b = 0; b < layer1_size; b++) {

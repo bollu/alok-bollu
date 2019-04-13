@@ -45,7 +45,7 @@ long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0,
           classes = 0;
 real alpha = 0.025, starting_alpha, sample = 1e-3;
-real *syn0, *syn1, *syn1neg, *expTable;
+real *syn0, *syn1, *expTable;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -388,22 +388,6 @@ void InitNet() {
             for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     }
     if (negative > 0) {
-	//syn1NEG: VOCAB x LAYER1 | zero-init
-        a = posix_memalign((void **)&syn1neg, 128,
-                           (long long)vocab_size * layer1_size * sizeof(real));
-        if (syn1neg == NULL) {
-            printf("Memory allocation failed\n");
-            exit(1);
-        }
-
-	for (a = 0; a < vocab_size; a++)
-		for (b = 0; b < layer1_size; b++) {
-			next_random = next_random * (unsigned long long)25214903917 + 11;
-			syn1neg[a * layer1_size + b] =
-				(((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
-		}
-        // for (a = 0; a < vocab_size; a++)
-        //     for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
     }
     for (a = 0; a < vocab_size; a++)
         for (b = 0; b < layer1_size; b++) {
@@ -548,7 +532,7 @@ void *TrainModelThread(void *id) {
 
 			// f: neu1[c] . syn1neg 
                         for (c = 0; c < layer1_size; c++)
-                            f += neu1[c] * syn1neg[c + l2];
+                            f += neu1[c] * syn0[c + l2];
                         if (f > MAX_EXP)
                             g = (label - 1) * alpha;
                         else if (f < -MAX_EXP)
@@ -559,9 +543,9 @@ void *TrainModelThread(void *id) {
                                                          MAX_EXP / 2))]) *
                                 alpha;
                         for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1neg[c + l2];
+                            neu1e[c] += g * syn0[c + l2];
                         for (c = 0; c < layer1_size; c++)
-                            syn1neg[c + l2] += g * neu1[c];
+                            syn0[c + l2] += g * neu1[c];
                     }
                 // hidden -> in
                 for (a = b; a < window * 2 + 1 - b; a++)
@@ -633,7 +617,7 @@ void *TrainModelThread(void *id) {
                             f = 0;
 			    // f = syn0[focus] . syn1neg[ctx]
                             for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1neg[c + l2];
+                                f += syn0[c + l1] * syn0[c + l2];
 			    // why is this called the gradient when this
 			    // is not d(error)/dx?
 			    // g = error * training rate
@@ -649,10 +633,10 @@ void *TrainModelThread(void *id) {
                                     alpha;
 			    // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1neg[c + l2];
+                                neu1e[c] += g * syn0[c + l2];
 			    // backprop of syn1neg
                             for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0[c + l1];
+                                syn0[c + l2] += g * syn0[c + l1];
                         }
 		    // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden

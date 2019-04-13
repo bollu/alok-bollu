@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef float real;  // Precision of float numbers
+
 const long long max_size = 2000;  // max length of strings
 const long long N = 40;           // number of closest words that will be shown
 const long long max_w = 50;       // max length of vocabulary entries
@@ -44,6 +46,7 @@ int main(int argc, char **argv) {
     }
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
+    real *metric = (real *)malloc(size * sizeof(real));
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
     M = (float *)malloc((long long)words * (long long)size * sizeof(float));
@@ -52,6 +55,12 @@ int main(int argc, char **argv) {
                (long long)words * size * sizeof(float) / 1048576, words, size);
         return -1;
     }
+
+    for (a = 0; a < size; a++) {
+        fread(&metric[a], sizeof(float), 1, f);
+        printf("%lf ", metric[a]);
+    }
+
     for (b = 0; b < words; b++) {
         a = 0;
         while (1) {
@@ -62,8 +71,10 @@ int main(int argc, char **argv) {
         vocab[b * max_w + a] = 0;
         for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
         len = 0;
-        for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+        for (a = 0; a < size; a++)
+            len += M[a + b * size] * metric[a] * M[a + b * size];
         len = sqrt(len);
+        // we are normalizing by length^2
         for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);
@@ -119,7 +130,7 @@ int main(int argc, char **argv) {
             for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
         }
         len = 0;
-        for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        for (a = 0; a < size; a++) len += vec[a] * metric[a] * vec[a];
         len = sqrt(len);
         for (a = 0; a < size; a++) vec[a] /= len;
         for (a = 0; a < N; a++) bestd[a] = -1;
@@ -130,7 +141,8 @@ int main(int argc, char **argv) {
                 if (bi[b] == c) a = 1;
             if (a == 1) continue;
             dist = 0;
-            for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            for (a = 0; a < size; a++)
+                dist += vec[a] * metric[a] * M[a + c * size];
             for (a = 0; a < N; a++) {
                 if (dist > bestd[a]) {
                     for (d = N - 1; d > a; d--) {

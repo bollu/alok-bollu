@@ -2,7 +2,7 @@
 #SBATCH -p long
 #SBATCH --time=72:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name=word2____
+#SBATCH --job-name=w2m
 #SBATCH --mem-per-cpu=32000
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j

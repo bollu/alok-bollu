@@ -444,8 +444,8 @@ void *TrainModelThread(void *id) {
             last_word_count = word_count;
             if ((debug_mode > 1)) {
                 now = clock();
-                printf("Alpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk",
-                       13, alpha,
+                printf("Alpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk\n",
+                       alpha,
                        word_count_actual / (real)(iter * train_words + 1) * 100,
                        word_count_actual / ((real)(now - start + 1) /
                                             (real)CLOCKS_PER_SEC * 1000));
@@ -677,22 +677,21 @@ void *TrainModelThread(void *id) {
                             else
                                 g = (label - expTable[ix]) * alpha;
 
+                            pthread_mutex_lock(&mut);
+                            for (c = 0; c < layer1_size; c++)
+                                M[c] +=
+                                    g * g * g * syn0[c + l1] * syn1neg[c + l2];
+                            // metric gradient forcing l1 norm regularization
+                            // for (c = 0; c < layer1_size; c++)
+                            //     M[c] += alpha * (1.0 - fabs(M[c]));
+                            pthread_mutex_unlock(&mut);
+
                             // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++)
                                 neu1e[c] += g * syn1neg[c + l2] * M[c];
                             // backprop of syn1neg
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] += g * syn0[c + l1] * M[c];
-
-                            pthread_mutex_lock(&mut);
-                            for (c = 0; c < layer1_size; c++)
-                                M[c] +=
-                                    g * g * g * syn0[c + l1] * syn1neg[c + l2];
-
-                            // metric gradient forcing l1 norm regularization
-                            // for (c = 0; c < layer1_size; c++)
-                            //     M[c] += alpha * (1.0 - fabs(M[c]));
-                            pthread_mutex_unlock(&mut);
                         }
                     // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden

@@ -23,6 +23,10 @@
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
+pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
@@ -45,7 +49,7 @@ long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0,
           classes = 0;
 real alpha = 0.025, starting_alpha, sample = 1e-3;
-real *syn0, *syn1, *expTable;
+real *syn0, *syn1, *syn1neg, *M, *expTable;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -377,6 +381,14 @@ void InitNet() {
         printf("Memory allocation failed\n");
         exit(1);
     }
+    a = posix_memalign((void **)&M, 128,
+                       (long long)(layer1_size + 10) * sizeof(real));
+    if (M == NULL) {
+        printf("Memory allocation failed\n");
+        fflush(stdout);
+        exit(1);
+    }
+    printf("M successfully allocated...\n");
     if (hs) {
         a = posix_memalign((void **)&syn1, 128,
                            (long long)vocab_size * layer1_size * sizeof(real));
@@ -388,6 +400,15 @@ void InitNet() {
             for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     }
     if (negative > 0) {
+        // syn1NEG: VOCAB x LAYER1 | zero-init
+        a = posix_memalign((void **)&syn1neg, 128,
+                           (long long)vocab_size * layer1_size * sizeof(real));
+        if (syn1neg == NULL) {
+            printf("Memory allocation failed\n");
+            exit(1);
+        }
+        for (a = 0; a < vocab_size; a++)
+            for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
     }
     for (a = 0; a < vocab_size; a++)
         for (b = 0; b < layer1_size; b++) {
@@ -395,6 +416,9 @@ void InitNet() {
             syn0[a * layer1_size + b] =
                 (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
+    // initialize metric
+    for (a = 0; a < layer1_size; a++) M[a] = a % 2 == 0 ? 1 : -1;
+    printf("M successfully initialized...\n");
     CreateBinaryTree();
 }
 
@@ -411,6 +435,7 @@ void *TrainModelThread(void *id) {
 
     // thread-local buffer to store gradients
     real *neu1e = (real *)calloc(layer1_size, sizeof(real));
+    real *Mbuffer = (real *)calloc(layer1_size, sizeof(real));
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
@@ -419,12 +444,23 @@ void *TrainModelThread(void *id) {
             last_word_count = word_count;
             if ((debug_mode > 1)) {
                 now = clock();
-                printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ",
-                    13, alpha,
-                    word_count_actual / (real)(iter * train_words + 1) * 100,
-                    word_count_actual / ((real)(now - start + 1) /
-                                         (real)CLOCKS_PER_SEC * 1000));
+                printf("Alpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk\n",
+                       alpha,
+                       word_count_actual / (real)(iter * train_words + 1) * 100,
+                       word_count_actual / ((real)(now - start + 1) /
+                                            (real)CLOCKS_PER_SEC * 1000));
+
+                float Mmax = M[0], Mmin = M[0];
+                for (int i = 1; i < layer1_size; i++) {
+                    Mmax = max(Mmax, M[i]);
+                    Mmin = min(Mmin, M[i]);
+                }
+                printf("|");
+                for (int i = 0; i < min(10, layer1_size); i++) {
+                    printf("%7.2f ", M[i]);
+                }
+                printf("|");
+                printf(" Mmax: %7.2f Mmin: %7.2f\n", Mmax, Mmin);
                 fflush(stdout);
             }
             alpha = starting_alpha *
@@ -470,6 +506,7 @@ void *TrainModelThread(void *id) {
         if (word == -1) continue;
         for (c = 0; c < layer1_size; c++) neu1[c] = 0;
         for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+        for (c = 0; c < layer1_size; c++) Mbuffer[c] = 0;
         next_random = next_random * (unsigned long long)25214903917 + 11;
         b = next_random % window;
         if (cbow) {  // train the cbow architecture
@@ -494,7 +531,7 @@ void *TrainModelThread(void *id) {
                         l2 = vocab[word].point[d] * layer1_size;
                         // Propagate hidden -> output
                         for (c = 0; c < layer1_size; c++)
-                            f += neu1[c] * syn1[c + l2];
+                            f += neu1[c] * syn1[c + l2] * M[c];
                         if (f <= -MAX_EXP)
                             continue;
                         else if (f >= MAX_EXP)
@@ -506,10 +543,13 @@ void *TrainModelThread(void *id) {
                         g = (1 - vocab[word].code[d] - f) * alpha;
                         // Propagate errors output -> hidden
                         for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1[c + l2];
+                            neu1e[c] += g * syn1[c + l2] * M[c];
                         // Learn weights hidden -> output
                         for (c = 0; c < layer1_size; c++)
-                            syn1[c + l2] += g * neu1[c];
+                            syn1[c + l2] += g * neu1[c] * M[c];
+                        // Learn metric update
+                        for (c = 0; c < layer1_size; c++)
+                            M[c] += g * neu1[c] * syn1[c + l2];
                     }
                 // NEGATIVE SAMPLING
                 if (negative > 0)
@@ -530,9 +570,9 @@ void *TrainModelThread(void *id) {
                         l2 = target * layer1_size;
                         f = 0;
 
-			// f: neu1[c] . syn1neg 
+                        // f: neu1[c] . syn1neg
                         for (c = 0; c < layer1_size; c++)
-                            f += neu1[c] * syn0[c + l2];
+                            f += neu1[c] * syn1neg[c + l2] * M[c];
                         if (f > MAX_EXP)
                             g = (label - 1) * alpha;
                         else if (f < -MAX_EXP)
@@ -543,9 +583,12 @@ void *TrainModelThread(void *id) {
                                                          MAX_EXP / 2))]) *
                                 alpha;
                         for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn0[c + l2];
+                            neu1e[c] += g * syn1neg[c + l2] * M[c];
                         for (c = 0; c < layer1_size; c++)
-                            syn0[c + l2] += g * neu1[c];
+                            syn1neg[c + l2] += g * neu1[c] * M[c];
+                        // buffer updates to metric
+                        for (c = 0; c < layer1_size; c++)
+                            Mbuffer[c] += g * syn1neg[c + l2] * neu1[c];
                     }
                 // hidden -> in
                 for (a = b; a < window * 2 + 1 - b; a++)
@@ -556,7 +599,8 @@ void *TrainModelThread(void *id) {
                         last_word = sen[c];
                         if (last_word == -1) continue;
                         for (c = 0; c < layer1_size; c++)
-                            syn0[c + last_word * layer1_size] += neu1e[c];
+                            syn0[c + last_word * layer1_size] +=
+                                neu1e[c] * M[c];
                     }
             }
         } else {  // train skip-gram
@@ -615,32 +659,49 @@ void *TrainModelThread(void *id) {
                             }
                             l2 = target * layer1_size;
                             f = 0;
-			    // f = syn0[focus] . syn1neg[ctx]
+                            // f = syn0[focus] . syn1neg[ctx]
                             for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn0[c + l2];
-			    // why is this called the gradient when this
-			    // is not d(error)/dx?
-			    // g = error * training rate
-			    // g = (label - sigmoid(2f - 1)) * alpha
-                            if (f > MAX_EXP)
+                                f += syn0[c + l1] * syn1neg[c + l2] * M[c];
+
+                            // why is this called the gradient when this
+                            // is not d(error)/dx?
+                            // g = error * training rate
+                            // g = (label - sigmoid(2f - 1)) * alpha
+                            const int ix =
+                                (int)((f + MAX_EXP) *
+                                      (EXP_TABLE_SIZE / MAX_EXP / 2));
+                            if (f > MAX_EXP || ix >= EXP_TABLE_SIZE)
                                 g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
+                            else if (f < -MAX_EXP || ix < 0)
                                 g = (label - 0) * alpha;
                             else
-                                g = (label - expTable[(int)((f + MAX_EXP) *
-                                                            (EXP_TABLE_SIZE /
-                                                             MAX_EXP / 2))]) *
-                                    alpha;
-			    // backprop of syn0 batched in neu1e
+                                g = (label - expTable[ix]) * alpha;
+
+                            pthread_mutex_lock(&mut);
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn0[c + l2];
-			    // backprop of syn1neg
+                                M[c] +=
+                                    g * g * g * syn0[c + l1] * syn1neg[c + l2];
+                            // metric gradient forcing l1 norm regularization
+                            // for (c = 0; c < layer1_size; c++)
+                            //     M[c] += alpha * (1.0 - fabs(M[c]));
+                            pthread_mutex_unlock(&mut);
+
+                            // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++)
-                                syn0[c + l2] += g * syn0[c + l1];
+                                neu1e[c] += g * syn1neg[c + l2] * M[c];
+                            // backprop of syn1neg
+                            for (c = 0; c < layer1_size; c++)
+                                syn1neg[c + l2] += g * syn0[c + l1] * M[c];
                         }
-		    // BATCH BACKPROP OVER |SYN0|
+                    // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden
                     for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+                    // all my performance dies here :(
+                    // Why do concurrent reads and writes SEGFAULT?
+                    // Maybe move this inside?
+                    // pthread_mutex_lock(&mut);
+                    // for (c = 0; c < layer1_size; c++) M[c] += Mbuffer[c];
+                    // pthread_mutex_unlock(&mut);
                 }
         }
         sentence_position++;
@@ -652,6 +713,7 @@ void *TrainModelThread(void *id) {
     fclose(fi);
     free(neu1);
     free(neu1e);
+    free(Mbuffer);
     pthread_exit(NULL);
 }
 
@@ -677,6 +739,10 @@ void TrainModel() {
     if (classes == 0) {
         // Save the word vectors
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+        for (a = 0; a < layer1_size; a++) {
+            fprintf(fo, "%f ", M[a]);
+        }
+        fprintf(fo, "\n");
         for (a = 0; a < vocab_size; a++) {
             fprintf(fo, "%s ", vocab[a].word);
             if (binary)
@@ -860,7 +926,8 @@ int main(int argc, char **argv) {
     vocab =
         (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
     vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
-    // sigmoid(2x - 1) 0 -> sigmoid(-MAX_EXP) ; EXP_TABLE_SIZE -> sigmoid(MAX_EXP)
+    // sigmoid(2x - 1) 0 -> sigmoid(-MAX_EXP) ; EXP_TABLE_SIZE ->
+    // sigmoid(MAX_EXP)
     expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
     for (i = 0; i < EXP_TABLE_SIZE; i++) {
         expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) *

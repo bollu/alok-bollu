@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
     char st1[max_size];
     char *bestw[N];
     char file_name[max_size], st[100][max_size];
-    float dist, len, bestd[N], vec[max_size];
+    float dist, lensq, bestd[N], vec[max_size];
     long long words, size, a, b, c, d, cn, bi[100];
     float *M;
     char *vocab;
@@ -56,10 +57,14 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    printf("metric:");
     for (a = 0; a < size; a++) {
-        fread(&metric[a], sizeof(float), 1, f);
-        printf("%lf ", metric[a]);
+        if (a % 10 == 0) printf("\n  ");
+        fscanf(f, "%f", &metric[a]);
+        printf("%7.2lf ", metric[a]);
     }
+    printf("|\n");
+    getchar();
 
     for (b = 0; b < words; b++) {
         a = 0;
@@ -70,18 +75,20 @@ int main(int argc, char **argv) {
         }
         vocab[b * max_w + a] = 0;
         for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-        len = 0;
+        lensq = 0;
         for (a = 0; a < size; a++)
-            len += M[a + b * size] * metric[a] * M[a + b * size];
-        len = sqrt(len);
+            lensq += M[a + b * size] * metric[a] * M[a + b * size];
+        // assert(lensq >= 0);
+        // len = sqrt(len);
         // we are normalizing by length^2
-        for (a = 0; a < size; a++) M[a + b * size] /= len;
+        // for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);
     while (1) {
         for (a = 0; a < N; a++) bestd[a] = 0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
         printf("Enter word or sentence (EXIT to break): ");
+        // a = len(st1)
         a = 0;
         while (1) {
             st1[a] = fgetc(stdin);
@@ -92,6 +99,7 @@ int main(int argc, char **argv) {
             a++;
         }
         if (!strcmp(st1, "EXIT")) break;
+        // cn: number of words being searched
         cn = 0;
         b = 0;
         c = 0;
@@ -119,32 +127,40 @@ int main(int argc, char **argv) {
                 break;
             }
         }
+        // bi[x]: position of st[x] in vocab
         if (b == -1) continue;
         printf(
             "\n                                              Word       Cosine "
             "distance\n--------------------------------------------------------"
             "----------------\n");
         for (a = 0; a < size; a++) vec[a] = 0;
+        // create a vector that is the sum of all input vectors
+        // vec[a] is the vector to find cosine sim with
         for (b = 0; b < cn; b++) {
             if (bi[b] == -1) continue;
             for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
         }
-        len = 0;
-        for (a = 0; a < size; a++) len += vec[a] * metric[a] * vec[a];
-        len = sqrt(len);
-        for (a = 0; a < size; a++) vec[a] /= len;
-        for (a = 0; a < N; a++) bestd[a] = -1;
-        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        // len = 0;
+        // for (a = 0; a < size; a++) len += vec[a] * metric[a] * vec[a];
+        // assert(len >= 0);
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) vec[a] /= len;
+        for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) strcpy(bestw[a], "$$$");
         for (c = 0; c < words; c++) {
             a = 0;
             for (b = 0; b < cn; b++)
                 if (bi[b] == c) a = 1;
+            // if the word is in the list of words, don't take cosine sim.
+            // because it will have very high cosine sim.
             if (a == 1) continue;
             dist = 0;
-            for (a = 0; a < size; a++)
-                dist += vec[a] * metric[a] * M[a + c * size];
+            for (a = 0; a < size; a++) {
+                // dist += vec[a] * metric[a] * M[a + c * size];
+                dist += vec[a] * M[a + c * size];
+            }
             for (a = 0; a < N; a++) {
-                if (dist > bestd[a]) {
+                if (fabs(dist) > fabs(bestd[a])) {
                     for (d = N - 1; d > a; d--) {
                         bestd[d] = bestd[d - 1];
                         strcpy(bestw[d], bestw[d - 1]);

@@ -23,6 +23,8 @@
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
@@ -379,7 +381,8 @@ void InitNet() {
         printf("Memory allocation failed\n");
         exit(1);
     }
-    a = posix_memalign((void **)&M, 128, (long long)layer1_size * sizeof(real));
+    a = posix_memalign((void **)&M, 128,
+                       (long long)(layer1_size + 10) * sizeof(real));
     if (M == NULL) {
         printf("Memory allocation failed\n");
         fflush(stdout);
@@ -414,8 +417,7 @@ void InitNet() {
                 (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
     // initialize metric
-    for (a = 0; a < layer1_size / 2; a++) M[a] = 1;
-    for (a = layer1_size / 2; a < layer1_size; a++) M[a] = -1;
+    for (a = 0; a < layer1_size; a++) M[a] = a % 2 == 0 ? 1 : -1;
     printf("M successfully initialized...\n");
     CreateBinaryTree();
 }
@@ -442,16 +444,23 @@ void *TrainModelThread(void *id) {
             last_word_count = word_count;
             if ((debug_mode > 1)) {
                 now = clock();
-                printf("%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk",
+                printf("Alpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk",
                        13, alpha,
                        word_count_actual / (real)(iter * train_words + 1) * 100,
                        word_count_actual / ((real)(now - start + 1) /
                                             (real)CLOCKS_PER_SEC * 1000));
+
+                float Mmax = M[0], Mmin = M[0];
+                for (int i = 1; i < layer1_size; i++) {
+                    Mmax = max(Mmax, M[i]);
+                    Mmin = min(Mmin, M[i]);
+                }
                 printf("|");
-                for (int i = 0; i < 10; i++) {
+                for (int i = 0; i < min(10, layer1_size); i++) {
                     printf("%7.2f ", M[i]);
                 }
                 printf("|");
+                printf(" Mmax: %7.2f Mmin: %7.2f\n", Mmax, Mmin);
                 fflush(stdout);
             }
             alpha = starting_alpha *
@@ -653,19 +662,21 @@ void *TrainModelThread(void *id) {
                             // f = syn0[focus] . syn1neg[ctx]
                             for (c = 0; c < layer1_size; c++)
                                 f += syn0[c + l1] * syn1neg[c + l2] * M[c];
+
                             // why is this called the gradient when this
                             // is not d(error)/dx?
                             // g = error * training rate
                             // g = (label - sigmoid(2f - 1)) * alpha
-                            if (f > MAX_EXP)
+                            const int ix =
+                                (int)((f + MAX_EXP) *
+                                      (EXP_TABLE_SIZE / MAX_EXP / 2));
+                            if (f > MAX_EXP || ix >= EXP_TABLE_SIZE)
                                 g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
+                            else if (f < -MAX_EXP || ix < 0)
                                 g = (label - 0) * alpha;
                             else
-                                g = (label - expTable[(int)((f + MAX_EXP) *
-                                                            (EXP_TABLE_SIZE /
-                                                             MAX_EXP / 2))]) *
-                                    alpha;
+                                g = (label - expTable[ix]) * alpha;
+
                             // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++)
                                 neu1e[c] += g * syn1neg[c + l2] * M[c];
@@ -673,9 +684,15 @@ void *TrainModelThread(void *id) {
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] += g * syn0[c + l1] * M[c];
 
-                            // backprop of M
+                            pthread_mutex_lock(&mut);
                             for (c = 0; c < layer1_size; c++)
-                                Mbuffer[c] += syn0[c + l1] * syn1neg[c + l2];
+                                M[c] +=
+                                    g * g * g * syn0[c + l1] * syn1neg[c + l2];
+
+                            // metric gradient forcing l1 norm regularization
+                            // for (c = 0; c < layer1_size; c++)
+                            //     M[c] += alpha * (1.0 - fabs(M[c]));
+                            pthread_mutex_unlock(&mut);
                         }
                     // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden
@@ -683,9 +700,9 @@ void *TrainModelThread(void *id) {
                     // all my performance dies here :(
                     // Why do concurrent reads and writes SEGFAULT?
                     // Maybe move this inside?
-                    pthread_mutex_lock(&mut);
-                    for (c = 0; c < layer1_size; c++) M[c] += Mbuffer[c];
-                    pthread_mutex_unlock(&mut);
+                    // pthread_mutex_lock(&mut);
+                    // for (c = 0; c < layer1_size; c++) M[c] += Mbuffer[c];
+                    // pthread_mutex_unlock(&mut);
                 }
         }
         sentence_position++;
@@ -724,7 +741,7 @@ void TrainModel() {
         // Save the word vectors
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
         for (a = 0; a < layer1_size; a++) {
-            fprintf(fo, "%lf ", M[a]);
+            fprintf(fo, "%f ", M[a]);
         }
         fprintf(fo, "\n");
         for (a = 0; a < vocab_size; a++) {

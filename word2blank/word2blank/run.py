@@ -15,6 +15,7 @@ import gensim.downloader as api
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import numpy as np
 import math
+import prompt_toolkit
 from prompt_toolkit.completion import WordCompleter, ThreadedCompleter
 from prompt_toolkit import PromptSession
 from prompt_toolkit import print_formatted_text
@@ -441,6 +442,9 @@ class Word2ManSkipGramOneHot(nn.Module):
         super(Word2ManSkipGramOneHot, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        self.NEGEMBEDM = nn.Parameter(Variable.torch.zeros(VOCABSIZE,
+                                                           EMBEDSIZE).to(DEVICE),
+                                      requires_grad = True)
         LOGGER.end()
 
     def forward(self, xs, metric):
@@ -461,7 +465,7 @@ class Word2ManSkipGramOneHot(nn.Module):
         # dots(BATCHSIZE x EMBEDSIZE],
         #     [VOCABSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x VOCABSIZE]
-        xsembeds_dots_embeds = dots(xsembeds, self.EMBEDM, metric)
+        xsembeds_dots_embeds = dots(xsembeds, self.NEGEMBEDM, metric)
         # TODO: why is this correct? I don't geddit.
         # what in the fuck does it mean to log softmax cosine?
         # [BATCHSIZE x VOCABSIZE]
@@ -502,6 +506,9 @@ class Word2ManSkipGramNegSampling(nn.Module):
         super(Word2ManSkipGramNegSampling, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
+        self.NEGEMBEDM = nn.Parameter(Variable.torch.zeros(VOCABSIZE,
+                                                           EMBEDSIZE).to(DEVICE),
+                                      requires_grad = True)
         LOGGER.end()
 
 
@@ -514,13 +521,14 @@ class Word2ManSkipGramNegSampling(nn.Module):
         """
 
         xsembeds = self.EMBEDM[xs]
-        ysembeds = self.EMBEDM[ys]
+        ysembeds = self.NEGEMBEDM[ys]
 
         # dots(BATCHSIZE x EMBEDSIZE],
         #     [BATCHSIZE x EMBEDSIZE],
         #     [EMBEDSIZE x EMBEDSIZE]) = [BATCHSIZE x BATCHSIZE]
         # diag(BATCHSIZE x BATCHSIZE] = [BATCHSIZE x 1]
         xsembeds_dots_embeds = torch.diag(dots(xsembeds, ysembeds, metric))
+        # return F.sigmoid(2 * xsembeds_dots_embeds - 1)
         return F.sigmoid(xsembeds_dots_embeds)
 
     def runtrain(self, traindata, metric, DEVICE):
@@ -834,6 +842,7 @@ def find_close_vectors(PARAMS, DEVICE, EMBEDNORM, v):
     wordweights = list(filter(lambda ww: not math.isnan(ww[1]), wordweights))
     # sort AFTER removing NaNs
     wordweights.sort(key=lambda wdot: wdot[1], reverse=True)
+    return wordweights
 
 
 def word_to_embed_vector(PARAMS, w):
@@ -1087,8 +1096,8 @@ def parse(s):
                                 "skipgramnegsampling", "skipgramnhot"])
     train.add_argument("--savetimesecs", help="number of seconds to be elapsed before saving", default=5*60)
 
-    eval_ = sub.add_parser("eval", help="evaluate the model")
-    eval_.add_argument("loadpath", help="path to model file to load from", default=None)
+    evalrepl = sub.add_parser("evalrepl", help="evaluate the model in a repl")
+    evalrepl.add_argument("loadpath", help="path to model file to load from", default=None)
 
 
     testrepl = sub.add_parser("testrepl", help="interactively test the model")
@@ -1107,7 +1116,7 @@ def main():
 
     # parse args
     PARSED = parse(sys.argv[1:])
-    assert (PARSED.command in ["train", "wordneteval", "testrepl", "dumpsage"])
+    assert (PARSED.command in ["train", "wordneteval", "testrepl", "evalrepl", "dumpsage"])
 
     # setup device
     LOGGER.start("setting up device")
@@ -1134,7 +1143,7 @@ def main():
                             metrictype="euclid",
                             traintype="skipgramnegsampling")
     # if we are evaluating, just load data
-    elif PARSED.command == "wordneteval":
+    elif PARSED.command == "wordneteval" or PARSED.command == "evalrepl":
         state = torch.load(PARSED.loadpath, map_location=DEVICE)
         PARAMS = Parameters.load_model_state_dict(LOGGER,
                                                   DEVICE,
@@ -1172,6 +1181,8 @@ def main():
         traincli(PARSED.savepath, PARSED.savetimesecs, PARAMS, LOGGER, DEVICE)
     elif PARSED.command == "dumpsage":
         dump_sage(PARAMS)
+    elif PARSED.command == "evalrepl":
+        replcli(PARAMS, LOGGER, DEVICE)
     elif PARSED.command == "testrepl":
         SECS_TO_SAVE = 30
         traincli('testsave', SECS_TO_SAVE, PARAMS, LOGGER, DEVICE)

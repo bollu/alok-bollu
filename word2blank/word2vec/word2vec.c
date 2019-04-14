@@ -444,23 +444,30 @@ void *TrainModelThread(void *id) {
             last_word_count = word_count;
             if ((debug_mode > 1)) {
                 now = clock();
-                printf("Alpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk\n",
+                printf("Alpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk",
                        alpha,
                        word_count_actual / (real)(iter * train_words + 1) * 100,
                        word_count_actual / ((real)(now - start + 1) /
                                             (real)CLOCKS_PER_SEC * 1000));
 
-                float Mmax = M[0], Mmin = M[0];
-                for (int i = 1; i < layer1_size; i++) {
+                float Mmax = M[0], Mmin = M[0], Mavg = 0, Mvar = 0;
+                for (int i = 0; i < layer1_size; i++) {
+                    Mavg += M[i];
                     Mmax = max(Mmax, M[i]);
                     Mmin = min(Mmin, M[i]);
                 }
+                Mavg /= layer1_size;
+                for (int i = 0; i < layer1_size; i++) {
+                    Mvar += (Mavg - M[i]) * (Mavg - M[i]);
+                }
+
                 printf("|");
                 for (int i = 0; i < min(10, layer1_size); i++) {
-                    printf("%7.2f ", M[i]);
+                    printf("%5.2f ", M[i]);
                 }
                 printf("|");
-                printf(" Mmax: %7.2f Mmin: %7.2f\n", Mmax, Mmin);
+                printf(" max %5.2f  min %5.2f  avg %5.2f  var %4.2f\n", Mmax,
+                       Mmin, Mavg, Mvar);
                 fflush(stdout);
             }
             alpha = starting_alpha *

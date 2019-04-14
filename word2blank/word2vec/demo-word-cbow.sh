@@ -1,3 +1,4 @@
+set -e
 make
 if [ ! -e text8 ]; then
   wget http://mattmahoney.net/dc/text8.zip -O text8.gz

@@ -57,9 +57,12 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
-inline real valid(real v) {
-    assert(!(isnan(v) || isinf(v)));
-    return v;
+inline real valid(real v, int lineno) {
+    if (!isnan(v) && !isinf(v)) return v;
+    fprintf(stderr, "found NAN / INF, propagating 0. LINE: %d\n", lineno);
+    fflush(stderr);
+    assert(0 && "found NAN");
+    return 0;
 }
 
 void InitUnigramTable() {
@@ -676,7 +679,7 @@ void *TrainModelThread(void *id) {
                             for (c = 0; c < layer1_size; c++)
                                 f += syn0[c + l1] * syn1neg[c + l2] * M[c];
 
-                            valid(f);
+                            valid(f, __LINE__);
 
                             // why is this called the gradient when this
                             // is not d(error)/dx?
@@ -691,7 +694,7 @@ void *TrainModelThread(void *id) {
                                 g = (label - 0) * alpha;
                             else
                                 g = (label - expTable[ix]) * alpha;
-                            g = valid(g);
+                            g = valid(g, __LINE__);
 
                             // only take one positive and
                             // one negative sample to update
@@ -702,8 +705,9 @@ void *TrainModelThread(void *id) {
                             if (d == 0 || d == 1) {
                                 pthread_mutex_lock(&mut);
                                 for (c = 0; c < layer1_size; c++)
-                                    M[c] += valid(g * syn0[c + l1] *
-                                                  syn1neg[c + l2]);
+                                    M[c] += valid(
+                                        g * syn0[c + l1] * syn1neg[c + l2],
+                                        __LINE__);
                                 // metric gradient forcing l1 norm
                                 // regularization for (c = 0; c < layer1_size;
                                 // c++)
@@ -713,16 +717,17 @@ void *TrainModelThread(void *id) {
 
                             // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += valid(g * syn1neg[c + l2] * M[c]);
+                                neu1e[c] +=
+                                    valid(g * syn1neg[c + l2] * M[c], __LINE__);
                             // backprop of syn1neg
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] +=
-                                    valid(g * syn0[c + l1] * M[c]);
+                                    valid(g * syn0[c + l1] * M[c], __LINE__);
                         }
                     // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden
                     for (c = 0; c < layer1_size; c++)
-                        syn0[c + l1] += valid(neu1e[c]);
+                        syn0[c + l1] += valid(neu1e[c], __LINE__);
                     // all my performance dies here :(
                     // Why do concurrent reads and writes SEGFAULT?
                     // Maybe move this inside?

@@ -442,9 +442,9 @@ class Word2ManSkipGramOneHot(nn.Module):
         super(Word2ManSkipGramOneHot, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
-        self.NEGEMBEDM = nn.Parameter(Variable.torch.zeros(VOCABSIZE,
+        self.NEGEMBEDM = nn.Parameter(Variable(torch.zeros(VOCABSIZE,
                                                            EMBEDSIZE).to(DEVICE),
-                                      requires_grad = True)
+                                      requires_grad = True))
         LOGGER.end()
 
     def forward(self, xs, metric):
@@ -506,9 +506,9 @@ class Word2ManSkipGramNegSampling(nn.Module):
         super(Word2ManSkipGramNegSampling, self).__init__()
         LOGGER.start("creating EMBEDM")
         self.EMBEDM = nn.Parameter(Variable(torch.randn(VOCABSIZE, EMBEDSIZE).to(DEVICE), requires_grad=True))
-        self.NEGEMBEDM = nn.Parameter(Variable.torch.zeros(VOCABSIZE,
+        self.NEGEMBEDM = nn.Parameter(Variable(torch.zeros(VOCABSIZE,
                                                            EMBEDSIZE).to(DEVICE),
-                                      requires_grad = True)
+                                               requires_grad = True))
         LOGGER.end()
 
 

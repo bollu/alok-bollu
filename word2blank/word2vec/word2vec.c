@@ -677,14 +677,22 @@ void *TrainModelThread(void *id) {
                             else
                                 g = (label - expTable[ix]) * alpha;
 
-                            pthread_mutex_lock(&mut);
-                            for (c = 0; c < layer1_size; c++)
-                                M[c] +=
-                                    g * g * g * syn0[c + l1] * syn1neg[c + l2];
-                            // metric gradient forcing l1 norm regularization
-                            // for (c = 0; c < layer1_size; c++)
-                            //     M[c] += alpha * (1.0 - fabs(M[c]));
-                            pthread_mutex_unlock(&mut);
+                            // only take one positive and
+                            // one negative sample to update
+                            // the metric, otherwise we update
+                            // the metric 15x with the pressure to make
+                            // dot products 0 and 1x the pressure to make
+                            // dot products 1
+                            if (d == 0 || d == 1) {
+                                pthread_mutex_lock(&mut);
+                                for (c = 0; c < layer1_size; c++)
+                                    M[c] += g * syn0[c + l1] * syn1neg[c + l2];
+                                // metric gradient forcing l1 norm
+                                // regularization for (c = 0; c < layer1_size;
+                                // c++)
+                                //     M[c] += alpha * (1.0 - fabs(M[c]));
+                                pthread_mutex_unlock(&mut);
+                            }
 
                             // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++)

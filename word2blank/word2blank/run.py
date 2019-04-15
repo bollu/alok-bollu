@@ -884,7 +884,7 @@ def replcli(PARAMS, LOGGER, DEVICE):
                 return
             wordweights = find_close_vectors(PARAMS, DEVICE, EMBEDNORM, word_to_embed_vector(PARAMS, raw[1]))
             for (word, weight) in wordweights[:15]:
-                print_formatted_text("\t%s: %s" % (word, weight))
+                print_formatted_text("\t%40s %0.2f" % (word, weight))
         elif raw[0] == "sim":
             if len(raw) != 4:
                 print_formatted_text("error: expected sim <w1> <w2> <w3>")
@@ -957,11 +957,11 @@ def traincli(savepath, savetimesecs, PARAMS, LOGGER, DEVICE):
     # normalize them.
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
-    bar = progressbar.ProgressBar(max_value=math.ceil(PARAMS.EPOCHS * len(PARAMS.DATALOADER)))
     loss_sum = 0
     ix = 0
     time_last_save = datetime.datetime.now()
     time_last_print = datetime.datetime.now()
+    tbegin = datetime.datetime.now()
     last_print_ix = 0
     for epoch in range(PARAMS.EPOCHS):
         for traindata in PARAMS.DATALOADER:
@@ -971,20 +971,25 @@ def traincli(savepath, savetimesecs, PARAMS, LOGGER, DEVICE):
             loss_sum += l.item()
             l.backward()
             PARAMS.optimizer.step()
-            bar.update(bar.value + 1)
             # updating data
             now = datetime.datetime.now()
+            # num units / unit time
+            ratesec = (now - tbegin) / ix
+            # time left
+            tleft = ratesec * (len(PARAMS.DATALOADER) * PARAMS.EPOCHS - ix)
+
 
             # printing
             TARGET_PRINT_TIME_IN_S = 1
             if (now - time_last_print).seconds >= TARGET_PRINT_TIME_IN_S:
                 nbatches = ix - last_print_ix
-                print("\nLOSSES sum: %s | avg per batch(#batch=%s): %s | avg per elements(#elems=%s): %s" %
+                print("LOSSES sum: %0.2f | avg per batch(#batch=%s): %0.2f | avg per elements(#elems=%s): %0.2f | eta: %s" %
                       (loss_sum,
                        nbatches,
                        loss_sum / nbatches,
                        nbatches * PARAMS.BATCHSIZE,
-                       loss_sum / (nbatches * PARAMS.BATCHSIZE)))
+                       loss_sum / (nbatches * PARAMS.BATCHSIZE),
+                      tleft))
                 loss_sum = 0
                 time_last_print = now
                 last_print_ix = ix

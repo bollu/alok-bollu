@@ -303,6 +303,7 @@ class SkipGramNegSamplingDataset(Dataset):
         # words in a sequence
         self.ws = list(self.W2F.keys())
         fs = np.array(list(self.W2F.values()))
+        fs = np.power(fs, 0.75)
         # word probabilityes in the same sequence
         self.wps = fs / float(sum(fs))
 
@@ -529,7 +530,7 @@ class Word2ManSkipGramNegSampling(nn.Module):
         # diag(BATCHSIZE x BATCHSIZE] = [BATCHSIZE x 1]
         xsembeds_dots_embeds = torch.diag(dots(xsembeds, ysembeds, metric))
         # return F.sigmoid(2 * xsembeds_dots_embeds - 1)
-        return F.sigmoid(xsembeds_dots_embeds)
+        return F.sigmoid(2 * xsembeds_dots_embeds - 1)
 
     def runtrain(self, traindata, metric, DEVICE):
         """
@@ -726,7 +727,7 @@ class Parameters:
         LOGGER.end()
 
         LOGGER.start("creating OPTIMISER")
-        self.optimizer = optim.Adam(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
+        self.optimizer = optim.SGD(itertools.chain(self.WORD2MAN.parameters(), self.METRIC.parameters()), lr=self.LEARNING_RATE)
         if optimizer_state_dict is not None:
             self.optimizer.load_state_dict(optimizer_state_dict)
         LOGGER.end()

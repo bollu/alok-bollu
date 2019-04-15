@@ -2,7 +2,7 @@
 #SBATCH -p long
 #SBATCH --time=72:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name=w2b-negeuc
+#SBATCH --job-name=neg-euc
 #SBATCH --mem-per-cpu=32000
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END

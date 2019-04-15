@@ -12,12 +12,12 @@ set -e
 set -o xtrace
 METRICTYPE=euclid
 TRAINTYPE=skipgramnegsampling
-EPOCHS=1
+EPOCHS=10
 BATCHSIZE=64
 EMBEDSIZE=200
 LEARNINGRATE=0.01
 WINDOWSIZE=4
-NDOCS=100
+NDOCS=10
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
 
 module add cuda/9.0

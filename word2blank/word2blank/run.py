@@ -1106,7 +1106,6 @@ def parse(s):
 
 
     testrepl = sub.add_parser("testrepl", help="interactively test the model")
-    testrepl.add_argument("loadpath", help="path to model file to load from", default=None)
 
 
     dumpsage = sub.add_parser("dumpsage", help="dump data to be imported into sage")
@@ -1138,12 +1137,12 @@ def main():
         PARAMS = Parameters(LOGGER,
                             DEVICE,
                             corpus=corpus,
-                            NDOCS=10,
-                            EPOCHS=2,
-                            BATCHSIZE=64,
-                            EMBEDSIZE=30,
-                            LEARNING_RATE=0.05,
-                            WINDOWSIZE=4,
+                            NDOCS=1,
+                            EPOCHS=15,
+                            BATCHSIZE=32,
+                            EMBEDSIZE=3,
+                            LEARNING_RATE=0.025,
+                            WINDOWSIZE=2,
                             create_time=current_time_str(),
                             metrictype="euclid",
                             traintype="skipgramnegsampling")

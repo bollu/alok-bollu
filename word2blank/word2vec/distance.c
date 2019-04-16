@@ -29,13 +29,15 @@ int main(int argc, char **argv) {
     char st1[max_size];
     char *bestw[N];
     char file_name[max_size], st[100][max_size];
-    float dist, lensq, bestd[N], vec[max_size];
+    float dist, lensq, len, bestd[N], vec[max_size];
     long long words, size, a, b, c, d, cn, bi[100];
     float *M;
+    real *metric;
     char *vocab;
-    if (argc < 2) {
+    if (argc < 3) {
         printf(
-            "Usage: ./distance <FILE>\nwhere FILE contains word projections in "
+            "Usage: ./distance  <FILE> <USEMETRIC=0,1>\nwhere FILE contains "
+            "word projections in "
             "the BINARY FORMAT\n");
         return 0;
     }
@@ -47,7 +49,11 @@ int main(int argc, char **argv) {
     }
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
-    real *metric = (real *)malloc(size * sizeof(real));
+
+    int usemetric = atoi(argv[2]);
+    assert(usemetric == 0 || usemetric == 1);
+    metric = (real *)malloc(size * sizeof(real));
+
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
     M = (float *)malloc((long long)words * (long long)size * sizeof(float));
@@ -57,14 +63,17 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    printf("metric:");
-    for (a = 0; a < size; a++) {
-        if (a % 10 == 0) printf("\n  ");
-        fscanf(f, "%f", &metric[a]);
-        printf("%7.2lf ", metric[a]);
-    }
-    printf("|\n");
-    getchar();
+    if (usemetric) {
+        printf("metric:");
+        for (a = 0; a < size; a++) {
+            if (a % 10 == 0) printf("\n  ");
+            fscanf(f, "%f", &metric[a]);
+            printf("%7.2lf ", metric[a]);
+        }
+        printf("|\n");
+        getchar();
+    } else
+        for (a = 0; a < size; a++) metric[a] = 1;
 
     for (b = 0; b < words; b++) {
         a = 0;
@@ -76,12 +85,14 @@ int main(int argc, char **argv) {
         vocab[b * max_w + a] = 0;
         for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
         lensq = 0;
-        for (a = 0; a < size; a++)
-            lensq += M[a + b * size] * metric[a] * M[a + b * size];
-        // assert(lensq >= 0);
-        // len = sqrt(len);
+        for (a = 0; a < size; a++) {
+            // lensq += M[a + b * size] * metric[a] * M[a + b * size];
+            lensq += M[a + b * size] * M[a + b * size];
+        }
+        assert(lensq >= 0);
+        len = sqrt(lensq);
         // we are normalizing by length^2
-        // for (a = 0; a < size; a++) M[a + b * size] /= len;
+        for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);
     while (1) {
@@ -140,11 +151,14 @@ int main(int argc, char **argv) {
             if (bi[b] == -1) continue;
             for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
         }
-        // len = 0;
-        // for (a = 0; a < size; a++) len += vec[a] * metric[a] * vec[a];
-        // assert(len >= 0);
-        // len = sqrt(len);
-        // for (a = 0; a < size; a++) vec[a] /= len;
+        len = 0;
+        for (a = 0; a < size; a++) {
+            // len += vec[a] * metric[a] * vec[a];
+            len += vec[a] * vec[a];
+        }
+        assert(len >= 0);
+        len = sqrt(len);
+        for (a = 0; a < size; a++) vec[a] /= len;
         for (a = 0; a < N; a++) bestd[a] = 0;
         for (a = 0; a < N; a++) strcpy(bestw[a], "$$$");
         for (c = 0; c < words; c++) {

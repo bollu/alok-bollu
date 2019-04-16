@@ -29,9 +29,10 @@ int main(int argc, char **argv) {
     char st1[max_size];
     char *bestw[N];
     char file_name[max_size], st[100][max_size];
-    float dist, lensq, len, bestd[N], vec[max_size];
+    float dist, metricdist, lensq, len, bestd[N], bestmetricd[N],
+        vecnorm[max_size], vec[max_size];
     long long words, size, a, b, c, d, cn, bi[100];
-    float *M;
+    float *M, *Mnorm;
     real *metric;
     char *vocab;
     if (argc < 3) {
@@ -63,6 +64,13 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    Mnorm = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    if (Mnorm == NULL) {
+        printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
+               (long long)words * size * sizeof(float) / 1048576, words, size);
+        return -1;
+    }
+
     if (usemetric) {
         printf("metric:");
         for (a = 0; a < size; a++) {
@@ -89,14 +97,28 @@ int main(int argc, char **argv) {
             // lensq += M[a + b * size] * metric[a] * M[a + b * size];
             lensq += M[a + b * size] * M[a + b * size];
         }
-        assert(lensq >= 0);
-        len = sqrt(lensq);
-        // we are normalizing by length^2
-        for (a = 0; a < size; a++) M[a + b * size] /= len;
+        if (lensq >= 0) {
+            len = sqrt(lensq);
+            // we are normalizing by length^2
+            for (a = 0; a < size; a++)
+                Mnorm[a + b * size] = M[a + b * size] / len;
+        } else {
+            for (a = 0; a < size; a++) Mnorm[a + b * size] = 0;
+        }
+
+        float pos = 0, neg = 0;
+        for (a = 0; a < size; a++) {
+            if (metric[a] >= 0)
+                pos += M[a + b * size];
+            else
+                neg += M[a + b * size];
+        }
+        printf("%30s  M+: %5.2f  M-: %5.2f\n", &vocab[b * max_w], pos, neg);
     }
     fclose(f);
     while (1) {
         for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) bestmetricd[a] = 0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
         printf("Enter word or sentence (EXIT to break): ");
         // a = len(st1)
@@ -141,25 +163,28 @@ int main(int argc, char **argv) {
         // bi[x]: position of st[x] in vocab
         if (b == -1) continue;
         printf(
-            "\n                                              Word       Cosine "
-            "distance\n--------------------------------------------------------"
+            "\n                          Word\t\tCosine "
+            "distance\t\tMetric distance"
+            "\n--------------------------------------------------------"
             "----------------\n");
+        for (a = 0; a < size; a++) vecnorm[a] = 0;
         for (a = 0; a < size; a++) vec[a] = 0;
-        // create a vector that is the sum of all input vectors
-        // vec[a] is the vector to find cosine sim with
+        // create a vecnormtor that is the sum of all input vecnormtors
+        // vecnorm[a] is the vecnormtor to find cosine sim with
         for (b = 0; b < cn; b++) {
             if (bi[b] == -1) continue;
+            for (a = 0; a < size; a++) vecnorm[a] += Mnorm[a + bi[b] * size];
             for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
         }
         len = 0;
         for (a = 0; a < size; a++) {
-            // len += vec[a] * metric[a] * vec[a];
-            len += vec[a] * vec[a];
+            // len += vecnorm[a] * metric[a] * vecnorm[a];
+            len += vecnorm[a] * vecnorm[a];
         }
-        assert(len >= 0);
         len = sqrt(len);
-        for (a = 0; a < size; a++) vec[a] /= len;
+        for (a = 0; a < size; a++) vecnorm[a] /= len;
         for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) bestmetricd[a] = 0;
         for (a = 0; a < N; a++) strcpy(bestw[a], "$$$");
         for (c = 0; c < words; c++) {
             a = 0;
@@ -168,24 +193,44 @@ int main(int argc, char **argv) {
             // if the word is in the list of words, don't take cosine sim.
             // because it will have very high cosine sim.
             if (a == 1) continue;
+
             dist = 0;
+            metricdist = 0;
             for (a = 0; a < size; a++) {
-                // dist += vec[a] * metric[a] * M[a + c * size];
-                dist += vec[a] * M[a + c * size];
+                dist += vecnorm[a] * Mnorm[a + c * size];
             }
+            for (a = 0; a < size; a += 1) {
+                metricdist += vec[a] * M[a + c * size] * metric[a];
+            }
+            // if (metricdist < 0) continue;
+
+            lensq = 0;
+            for (int i = 0; i < size; i++) lensq += vec[a] * metric[a] * vec[a];
+            // if (lensq < 0) continue;
+
+            lensq = 0;
+            for (int i = 0; i < size; i++)
+                lensq += M[a + c * size] * metric[a] * M[a + c * size];
+            // if (lensq < 0) continue;
+
             for (a = 0; a < N; a++) {
-                if (fabs(dist) > fabs(bestd[a])) {
+                float curd = dist;
+                // if (fabs(curd) > fabs(bestd[a])) {
+                if (fabs(curd) > fabs(bestd[a])) {
                     for (d = N - 1; d > a; d--) {
                         bestd[d] = bestd[d - 1];
+                        bestmetricd[d] = bestmetricd[d - 1];
                         strcpy(bestw[d], bestw[d - 1]);
                     }
-                    bestd[a] = dist;
+                    bestd[a] = curd;
+                    bestmetricd[a] = metricdist;
                     strcpy(bestw[a], &vocab[c * max_w]);
                     break;
                 }
             }
         }
-        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+        for (a = 0; a < N; a++)
+            printf("%24s\t\t%f\t\t%f\n", bestw[a], bestd[a], bestmetricd[a]);
     }
     return 0;
 }

@@ -57,11 +57,17 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
+int ninvalid = 0;  // number of times we have consecutively hit nan / inf
 inline real valid(real v, int lineno) {
-    if (!isnan(v) && !isinf(v)) return v;
-    fprintf(stderr, "found NAN / INF, propagating 0. LINE: %d\n", lineno);
+    if (!isnan(v) && !isinf(v)) {
+        ninvalid = 0;
+        return v;
+    }
+    fprintf(stderr, "nan/inf LINE:%4d  ninvalid:%5d\n", lineno, ninvalid);
     fflush(stderr);
-    assert(0 && "found NAN");
+    if (ninvalid++ > 100) {
+        assert(0 && "nan/inf for over 100 states\n");
+    }
     return 0;
 }
 
@@ -675,9 +681,10 @@ void *TrainModelThread(void *id) {
                             }
                             l2 = target * layer1_size;
                             f = 0;
-                            // f = syn0[focus] . syn1neg[ctx]
                             for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1neg[c + l2] * M[c];
+                                f +=
+                                    valid(syn0[c + l1] * syn1neg[c + l2] * M[c],
+                                          __LINE__);
 
                             valid(f, __LINE__);
 

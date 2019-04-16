@@ -59,7 +59,10 @@ int *table;
 
 // if something is going above 100, then we're probably on the royal road
 // to divergence.
-inline int isvalid(real v) { return !isnan(v) && !isinf(v) && (fabs(v) < 100); }
+inline int isvalid(real v) {
+    return 1;
+    // return !isnan(v) && !isinf(v) && (fabs(v) < 100);
+}
 
 int ninvalid = 0;  // number of times we have hit nan / inf
 inline real invalidzero(real v, int lineno) {

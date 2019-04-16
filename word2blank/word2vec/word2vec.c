@@ -57,15 +57,16 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
-int ninvalid = 0;  // number of times we have consecutively hit nan / inf
-inline real valid(real v, int lineno) {
-    if (!isnan(v) && !isinf(v)) {
-        ninvalid = 0;
+inline int isvalid(real v) { return (!isnan(v) && !isinf(v)); }
+
+int ninvalid = 0;  // number of times we have hit nan / inf
+inline real invalidzero(real v, int lineno) {
+    if (isvalid(v)) {
         return v;
     }
     fprintf(stderr, "nan/inf LINE:%4d  ninvalid:%5d\n", lineno, ninvalid);
     fflush(stderr);
-    if (ninvalid++ > 100) {
+    if (++ninvalid >= 100) {
         assert(0 && "nan/inf for over 100 states\n");
     }
     return 0;
@@ -681,12 +682,28 @@ void *TrainModelThread(void *id) {
                             }
                             l2 = target * layer1_size;
                             f = 0;
-                            for (c = 0; c < layer1_size; c++)
-                                f +=
-                                    valid(syn0[c + l1] * syn1neg[c + l2] * M[c],
-                                          __LINE__);
+                            for (c = 0; c < layer1_size; c++) {
+                                real delta =
+                                    syn0[c + l1] * syn1neg[c + l2] * M[c];
+                                real new = f + delta;
 
-                            valid(f, __LINE__);
+                                if (!isvalid(delta) || !isvalid(new)) {
+                                    fprintf(stdout, "*%d\n", __LINE__);
+                                    fprintf(
+                                        stdout,
+                                        "  syn0[%lld + %lld = %lld] = %.2f\n",
+                                        c, l1, c + l1, syn0[c + l1]);
+                                    fprintf(stdout,
+                                            "  syn1neg[%lld + %lld = %lld] = "
+                                            "%.2f\n",
+                                            c, l2, c + l2, syn1neg[c + l1]);
+                                    fprintf(stdout, "  M[%lld] = %.2f\n", c,
+                                            M[c]);
+                                    fprintf(stdout, "  delta = %.2f", delta);
+                                    fprintf(stdout, "  new = %.2f", new);
+                                }
+                                f = invalidzero(new, __LINE__);
+                            }
 
                             // why is this called the gradient when this
                             // is not d(error)/dx?
@@ -701,7 +718,7 @@ void *TrainModelThread(void *id) {
                                 g = (label - 0) * alpha;
                             else
                                 g = (label - expTable[ix]) * alpha;
-                            g = valid(g, __LINE__);
+                            g = invalidzero(g, __LINE__);
 
                             // only take one positive and
                             // one negative sample to update
@@ -710,10 +727,30 @@ void *TrainModelThread(void *id) {
                             // dot products 0 and 1x the pressure to make
                             // dot products 1
                             if (d == 0 || d == 1) {
-                                for (c = 0; c < layer1_size; c++)
-                                    M[c] += valid(
-                                        g * syn0[c + l1] * syn1neg[c + l2],
-                                        __LINE__);
+                                for (c = 0; c < layer1_size; c++) {
+                                    real delta =
+                                        g * syn0[c + l1] * syn1neg[c + l2];
+                                    real new = M[c] + delta;
+                                    if (!isvalid(delta) || !isvalid(new)) {
+                                        fprintf(stdout, "*%d\n", __LINE__);
+                                        fprintf(stdout,
+                                                "  syn0[%lld + %lld = %lld] = "
+                                                "%.2f\n",
+                                                c, l1, c + l1, syn0[c + l1]);
+                                        fprintf(
+                                            stdout,
+                                            "  syn1neg[%lld + %lld = %lld] = "
+                                            "%.2f\n",
+                                            c, l2, c + l2, syn1neg[c + l1]);
+                                        fprintf(stdout, "  M[%lld] = %.2f\n", c,
+                                                g);
+                                        fprintf(stdout, "  g = %.2f\n", g);
+                                        fprintf(stdout, "  delta = %.2f",
+                                                delta);
+                                        fprintf(stdout, "  new = %.2f", new);
+                                    }
+                                    M[c] = new;
+                                }
                                 // metric gradient forcing l1 norm
                                 // regularization for (c = 0; c < layer1_size;
                                 // c++)
@@ -721,18 +758,53 @@ void *TrainModelThread(void *id) {
                             }
 
                             // backprop of syn0 batched in neu1e
-                            for (c = 0; c < layer1_size; c++)
-                                neu1e[c] +=
-                                    valid(g * syn1neg[c + l2] * M[c], __LINE__);
+                            for (c = 0; c < layer1_size; c++) {
+                                real delta = g * syn1neg[c + l2] * M[c];
+                                real new = neu1e[c] + delta;
+                                if (!isvalid(delta) || !isvalid(new)) {
+                                    fprintf(stdout, "*%d\n", __LINE__);
+                                    fprintf(
+                                        stdout,
+                                        "  syn0[%lld + %lld = %lld] = %.2f\n",
+                                        c, l1, c + l1, syn0[c + l1]);
+                                    fprintf(stdout,
+                                            "  syn1neg[%lld + %lld = %lld] = "
+                                            "%.2f\n",
+                                            c, l2, c + l2, syn1neg[c + l1]);
+                                    fprintf(stdout, "  M[%lld] = %.2f\n", c, g);
+                                    fprintf(stdout, "  g = %.2f\n", g);
+                                    fprintf(stdout, "  delta = %.2f", delta);
+                                    fprintf(stdout, "  new = %.2f", new);
+                                }
+                                neu1e[c] = new;
+                            }
                             // backprop of syn1neg
-                            for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] +=
-                                    valid(g * syn0[c + l1] * M[c], __LINE__);
+                            for (c = 0; c < layer1_size; c++) {
+                                real delta = g * syn0[c + l1] * M[c];
+                                real new = syn1neg[c + l2] + delta;
+                                if (!isvalid(delta) || !isvalid(new)) {
+                                    fprintf(stdout, "*%d\n", __LINE__);
+                                    fprintf(
+                                        stdout,
+                                        "  syn0[%lld + %lld = %lld] = %.2f\n",
+                                        c, l1, c + l1, syn0[c + l1]);
+                                    fprintf(stdout,
+                                            "  syn1neg[%lld + %lld = %lld] = "
+                                            "%.2f\n",
+                                            c, l2, c + l2, syn1neg[c + l1]);
+                                    fprintf(stdout, "  M[%lld] = %.2f\n", c, g);
+                                    fprintf(stdout, "  g = %.2f\n", g);
+                                    fprintf(stdout, "  delta = %.2f", delta);
+                                    fprintf(stdout, "  new = %.2f", new);
+                                }
+                                syn1neg[c + l2] = new;
+                            }
                         }
                     // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden
-                    for (c = 0; c < layer1_size; c++)
-                        syn0[c + l1] += valid(neu1e[c], __LINE__);
+                    for (c = 0; c < layer1_size; c++) {
+                        syn0[c + l1] += invalidzero(neu1e[c], __LINE__);
+                    }
                     // all my performance dies here :(
                     // Why do concurrent reads and writes SEGFAULT?
                     // Maybe move this inside?

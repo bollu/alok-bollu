@@ -572,9 +572,6 @@ void *TrainModelThread(void *id) {
                         // Learn weights hidden -> output
                         for (c = 0; c < layer1_size; c++)
                             syn1[c + l2] += g * neu1[c] * M[c];
-                        // Learn metric update
-                        for (c = 0; c < layer1_size; c++)
-                            M[c] += g * neu1[c] * syn1[c + l2];
                     }
                 // NEGATIVE SAMPLING
                 if (negative > 0)
@@ -729,6 +726,7 @@ void *TrainModelThread(void *id) {
                             // the metric 15x with the pressure to make
                             // dot products 0 and 1x the pressure to make
                             // dot products 1
+                            /*
                             if (d == 0 || d == 1) {
                                 for (c = 0; c < layer1_size; c++) {
                                     real delta =
@@ -760,6 +758,7 @@ void *TrainModelThread(void *id) {
                                 // c++)
                                 //     M[c] += alpha * (1.0 - fabs(M[c]));
                             }
+                            */
 
                             // backprop of syn0 batched in neu1e
                             for (c = 0; c < layer1_size; c++) {

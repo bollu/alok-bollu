@@ -57,7 +57,9 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
-inline int isvalid(real v) { return (!isnan(v) && !isinf(v)); }
+// if something is going above 1e3, then we're probably on the royal road
+// to divergence.
+inline int isvalid(real v) { return !isnan(v) && !isinf(v) && (fabs(v) < 1e3); }
 
 int ninvalid = 0;  // number of times we have hit nan / inf
 inline real invalidzero(real v, int lineno) {
@@ -688,19 +690,20 @@ void *TrainModelThread(void *id) {
                                 real new = f + delta;
 
                                 if (!isvalid(delta) || !isvalid(new)) {
-                                    fprintf(stdout, "*%d\n", __LINE__);
+                                    fprintf(stderr, "*%d\n", __LINE__);
                                     fprintf(
-                                        stdout,
+                                        stderr,
                                         "  syn0[%lld + %lld = %lld] = %.2f\n",
                                         c, l1, c + l1, syn0[c + l1]);
-                                    fprintf(stdout,
+                                    fprintf(stderr,
                                             "  syn1neg[%lld + %lld = %lld] = "
                                             "%.2f\n",
                                             c, l2, c + l2, syn1neg[c + l1]);
-                                    fprintf(stdout, "  M[%lld] = %.2f\n", c,
+                                    fprintf(stderr, "  M[%lld] = %.2f\n", c,
                                             M[c]);
-                                    fprintf(stdout, "  delta = %.2f", delta);
-                                    fprintf(stdout, "  new = %.2f", new);
+                                    fprintf(stderr, "  delta = %.2f", delta);
+                                    fprintf(stderr, "  new = %.2f", new);
+                                    fflush(stderr);
                                 }
                                 f = invalidzero(new, __LINE__);
                             }
@@ -732,22 +735,23 @@ void *TrainModelThread(void *id) {
                                         g * syn0[c + l1] * syn1neg[c + l2];
                                     real new = M[c] + delta;
                                     if (!isvalid(delta) || !isvalid(new)) {
-                                        fprintf(stdout, "*%d\n", __LINE__);
-                                        fprintf(stdout,
+                                        fprintf(stderr, "*%d\n", __LINE__);
+                                        fprintf(stderr,
                                                 "  syn0[%lld + %lld = %lld] = "
                                                 "%.2f\n",
                                                 c, l1, c + l1, syn0[c + l1]);
                                         fprintf(
-                                            stdout,
+                                            stderr,
                                             "  syn1neg[%lld + %lld = %lld] = "
                                             "%.2f\n",
                                             c, l2, c + l2, syn1neg[c + l1]);
-                                        fprintf(stdout, "  M[%lld] = %.2f\n", c,
+                                        fprintf(stderr, "  M[%lld] = %.2f\n", c,
                                                 g);
-                                        fprintf(stdout, "  g = %.2f\n", g);
-                                        fprintf(stdout, "  delta = %.2f",
+                                        fprintf(stderr, "  g = %.2f\n", g);
+                                        fprintf(stderr, "  delta = %.2f",
                                                 delta);
-                                        fprintf(stdout, "  new = %.2f", new);
+                                        fprintf(stderr, "  new = %.2f", new);
+                                        fflush(stderr);
                                     }
                                     M[c] = new;
                                 }
@@ -762,19 +766,20 @@ void *TrainModelThread(void *id) {
                                 real delta = g * syn1neg[c + l2] * M[c];
                                 real new = neu1e[c] + delta;
                                 if (!isvalid(delta) || !isvalid(new)) {
-                                    fprintf(stdout, "*%d\n", __LINE__);
+                                    fprintf(stderr, "*%d\n", __LINE__);
                                     fprintf(
-                                        stdout,
+                                        stderr,
                                         "  syn0[%lld + %lld = %lld] = %.2f\n",
                                         c, l1, c + l1, syn0[c + l1]);
-                                    fprintf(stdout,
+                                    fprintf(stderr,
                                             "  syn1neg[%lld + %lld = %lld] = "
                                             "%.2f\n",
                                             c, l2, c + l2, syn1neg[c + l1]);
-                                    fprintf(stdout, "  M[%lld] = %.2f\n", c, g);
-                                    fprintf(stdout, "  g = %.2f\n", g);
-                                    fprintf(stdout, "  delta = %.2f", delta);
-                                    fprintf(stdout, "  new = %.2f", new);
+                                    fprintf(stderr, "  M[%lld] = %.2f\n", c, g);
+                                    fprintf(stderr, "  g = %.2f\n", g);
+                                    fprintf(stderr, "  delta = %.2f", delta);
+                                    fprintf(stderr, "  new = %.2f", new);
+                                    fflush(stderr);
                                 }
                                 neu1e[c] = new;
                             }
@@ -783,19 +788,20 @@ void *TrainModelThread(void *id) {
                                 real delta = g * syn0[c + l1] * M[c];
                                 real new = syn1neg[c + l2] + delta;
                                 if (!isvalid(delta) || !isvalid(new)) {
-                                    fprintf(stdout, "*%d\n", __LINE__);
+                                    fprintf(stderr, "*%d\n", __LINE__);
                                     fprintf(
-                                        stdout,
+                                        stderr,
                                         "  syn0[%lld + %lld = %lld] = %.2f\n",
                                         c, l1, c + l1, syn0[c + l1]);
-                                    fprintf(stdout,
+                                    fprintf(stderr,
                                             "  syn1neg[%lld + %lld = %lld] = "
                                             "%.2f\n",
                                             c, l2, c + l2, syn1neg[c + l1]);
-                                    fprintf(stdout, "  M[%lld] = %.2f\n", c, g);
-                                    fprintf(stdout, "  g = %.2f\n", g);
-                                    fprintf(stdout, "  delta = %.2f", delta);
-                                    fprintf(stdout, "  new = %.2f", new);
+                                    fprintf(stderr, "  M[%lld] = %.2f\n", c, g);
+                                    fprintf(stderr, "  g = %.2f\n", g);
+                                    fprintf(stderr, "  delta = %.2f", delta);
+                                    fprintf(stderr, "  new = %.2f", new);
+                                    fflush(stderr);
                                 }
                                 syn1neg[c + l2] = new;
                             }
@@ -803,6 +809,19 @@ void *TrainModelThread(void *id) {
                     // BATCH BACKPROP OVER |SYN0|
                     // Learn weights input -> hidden
                     for (c = 0; c < layer1_size; c++) {
+                        real new = syn0[c + l1] + neu1e[c];
+                        if (!isvalid(neu1e[c]) || !isvalid(new)) {
+                            fprintf(stderr, "*%d\n", __LINE__);
+                            fprintf(stderr,
+                                    "  syn0[%lld + %lld = %lld] = %.2f\n", c,
+                                    l1, c + l1, syn0[c + l1]);
+                            fprintf(stderr,
+                                    "  neu1e[%lld] = "
+                                    "%.2f\n",
+                                    c, neu1e[c]);
+                            fprintf(stderr, "  new = %.2f", new);
+                            fflush(stderr);
+                        }
                         syn0[c + l1] += invalidzero(neu1e[c], __LINE__);
                     }
                     // all my performance dies here :(

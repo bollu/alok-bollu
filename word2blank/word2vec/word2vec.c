@@ -57,9 +57,9 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
-// if something is going above 1e3, then we're probably on the royal road
+// if something is going above 100, then we're probably on the royal road
 // to divergence.
-inline int isvalid(real v) { return !isnan(v) && !isinf(v) && (fabs(v) < 1e3); }
+inline int isvalid(real v) { return !isnan(v) && !isinf(v) && (fabs(v) < 100); }
 
 int ninvalid = 0;  // number of times we have hit nan / inf
 inline real invalidzero(real v, int lineno) {

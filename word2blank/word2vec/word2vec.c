@@ -698,8 +698,8 @@ void *TrainModelThread(void *id) {
                                             c, l2, c + l2, syn1neg[c + l1]);
                                     fprintf(stderr, "  M[%lld] = %.2f\n", c,
                                             M[c]);
-                                    fprintf(stderr, "  delta = %.2f", delta);
-                                    fprintf(stderr, "  new = %.2f", new);
+                                    fprintf(stderr, "  delta = %.2f\n", delta);
+                                    fprintf(stderr, "  new = %.2f\n", new);
                                     fflush(stderr);
                                 }
                                 f = invalidzero(new, __LINE__);
@@ -746,9 +746,9 @@ void *TrainModelThread(void *id) {
                                         fprintf(stderr, "  M[%lld] = %.2f\n", c,
                                                 g);
                                         fprintf(stderr, "  g = %.2f\n", g);
-                                        fprintf(stderr, "  delta = %.2f",
+                                        fprintf(stderr, "  delta = %.2f\n",
                                                 delta);
-                                        fprintf(stderr, "  new = %.2f", new);
+                                        fprintf(stderr, "  new = %.2f\n", new);
                                         fflush(stderr);
                                     }
                                     M[c] = new;
@@ -776,8 +776,8 @@ void *TrainModelThread(void *id) {
                                             c, l2, c + l2, syn1neg[c + l1]);
                                     fprintf(stderr, "  M[%lld] = %.2f\n", c, g);
                                     fprintf(stderr, "  g = %.2f\n", g);
-                                    fprintf(stderr, "  delta = %.2f", delta);
-                                    fprintf(stderr, "  new = %.2f", new);
+                                    fprintf(stderr, "  delta = %.2f\n", delta);
+                                    fprintf(stderr, "  new = %.2f\n", new);
                                     fflush(stderr);
                                 }
                                 neu1e[c] = new;
@@ -818,7 +818,7 @@ void *TrainModelThread(void *id) {
                                     "  neu1e[%lld] = "
                                     "%.2f\n",
                                     c, neu1e[c]);
-                            fprintf(stderr, "  new = %.2f", new);
+                            fprintf(stderr, "  new = %.2f\n", new);
                             fflush(stderr);
                         }
                         syn0[c + l1] += invalidzero(neu1e[c], __LINE__);

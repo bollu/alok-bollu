@@ -12,4 +12,4 @@ mkdir -p models/$FOLDERNAME
 mkdir -p slurm/
 
 make word2vec
-time ./word2vec -train text8 -metrictype euc -output models/$FOLDERNAME/$GITNAME.bin -cbow 0 -size 50 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 
+time ./word2vec -train text8 -metrictype euc -output models/$FOLDERNAME/$GITNAME.bin -cbow 0 -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 

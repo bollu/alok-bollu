@@ -27,6 +27,9 @@
 #define max(x, y) ((x) > (y) ? (x) : (y))
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
+enum { MetrictypeEuclid, MetrictypePesudoreimann } mty;
+int nhyperbolic;
+
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
 const int vocab_hash_size =
@@ -438,7 +441,7 @@ void InitNet() {
                 (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
     // initialize metric
-    for (a = 0; a < layer1_size; a++) M[a] = a % 2 == 0 ? 1 : -1;
+    for (a = 0; a < layer1_size; a++) M[a] = a >= nhyperbolic ? 1 : -1;
     printf("M successfully initialized...\n");
     CreateBinaryTree();
 }
@@ -961,6 +964,10 @@ int main(int argc, char **argv) {
         printf(
             "\t\tUse <file> to save the resulting word vectors / word "
             "clusters\n");
+        printf("\t-metrictype <euc|pr>\n");
+        printf("\t\tSet metric type to euclid or pseudoreimann\n");
+        printf("\t-nhyperbolic\n");
+        printf("\t\tSet the number of hyperbolic dimensions\n");
         printf("\t-size <int>\n");
         printf("\t\tSet size of word vectors; default is 100\n");
         printf("\t-window <int>\n");
@@ -1021,6 +1028,28 @@ int main(int argc, char **argv) {
     output_file[0] = 0;
     save_vocab_file[0] = 0;
     read_vocab_file[0] = 0;
+    if ((i = ArgPos((char *)"-metrictype", argc, argv)) > 0) {
+        if (!strcmp(argv[i + 1], "euc"))
+            mty = MetrictypeEuclid;
+        else if (!strcmp(argv[i + 1], "pr"))
+            mty = MetrictypePesudoreimann;
+        else {
+            fprintf(stderr, "expected metrictype={euc, pr}");
+            fflush(stderr);
+            exit(0);
+        }
+    } else {
+        fprintf(stderr, "metrictype excepted!");
+        fflush(stderr);
+        exit(0);
+    }
+
+    if (mty == MetrictypePesudoreimann) {
+        i = ArgPos((char *)"-nhyperbolic", argc, argv);
+        assert(i > 0 && "-nhyperbolic must be provided with -metrictype");
+        nhyperbolic = atoi(argv[i + 1]);
+    }
+
     if ((i = ArgPos((char *)"-size", argc, argv)) > 0)
         layer1_size = atoi(argv[i + 1]);
     if ((i = ArgPos((char *)"-train", argc, argv)) > 0)

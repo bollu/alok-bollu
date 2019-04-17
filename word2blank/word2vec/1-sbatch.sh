@@ -7,7 +7,7 @@
 #SBATCH -o ./slurm/%j
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
 GITNAME=$(git rev-parse --short HEAD)
-FOLDERNAME=$GITNAME---$SLURM_ARRAY_JOB_ID---$DATE
+FOLDERNAME=$GITNAME
 mkdir -p models/$FOLDERNAME
 mkdir -p slurm/
 

@@ -28,7 +28,7 @@
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 enum { MetrictypeEuclid, MetrictypePesudoreimann } mty;
-int nhyperbolic;
+float frachyperbolic = 0.0;
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
@@ -441,7 +441,8 @@ void InitNet() {
                 (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
     // initialize metric
-    for (a = 0; a < layer1_size; a++) M[a] = a >= nhyperbolic ? 1 : -1;
+    for (a = 0; a < layer1_size; a++)
+        M[a] = a >= frachyperbolic * layer1_size ? 1 : -1;
     printf("M successfully initialized...\n");
     CreateBinaryTree();
 }
@@ -966,8 +967,9 @@ int main(int argc, char **argv) {
             "clusters\n");
         printf("\t-metrictype <euc|pr>\n");
         printf("\t\tSet metric type to euclid or pseudoreimann\n");
-        printf("\t-nhyperbolic\n");
-        printf("\t\tSet the number of hyperbolic dimensions\n");
+        printf("\t-frachyperbolic\n");
+        printf(
+            "\t\tSet the fraction of hyperbolic dimensions from total size\n");
         printf("\t-size <int>\n");
         printf("\t\tSet size of word vectors; default is 100\n");
         printf("\t-window <int>\n");
@@ -1045,9 +1047,11 @@ int main(int argc, char **argv) {
     }
 
     if (mty == MetrictypePesudoreimann) {
-        i = ArgPos((char *)"-nhyperbolic", argc, argv);
-        assert(i > 0 && "-nhyperbolic must be provided with -metrictype");
-        nhyperbolic = atoi(argv[i + 1]);
+        i = ArgPos((char *)"-frachyperbolic", argc, argv);
+        assert(i > 0 && "-frachyperbolic must be provided with -metrictype");
+        frachyperbolic = atof(argv[i + 1]);
+        assert(frachyperbolic >= 0);
+        assert(frachyperbolic <= 1);
     }
 
     if ((i = ArgPos((char *)"-size", argc, argv)) > 0)

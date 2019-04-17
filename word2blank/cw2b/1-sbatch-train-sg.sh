@@ -12,7 +12,7 @@ mkdir -p models/$FOLDERNAME
 mkdir -p slurm/
 
 make word2vec
-time ./word2vec -train text8 -metrictype psr -nhyperbolic 100 -output models/$FOLDERNAME/$GITNAME.bin -cbow 0 -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 
+time ./word2vec -train text8 -metrictype psr -frachyperbolic 0.5 -output models/$FOLDERNAME/$GITNAME.bin -cbow 0 -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 
 ./1-save-models.sh
 ./1-eval.sh models/$FOLDERNAME/$GITNAME.bin
 ./1-save-models.sh

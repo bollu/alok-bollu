@@ -2,7 +2,7 @@
 #SBATCH -p long
 #SBATCH --time=72:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name=w2m
+#SBATCH --job-name=w2m-psr
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
@@ -12,7 +12,7 @@ mkdir -p models/$FOLDERNAME
 mkdir -p slurm/
 
 make word2vec
-time ./word2vec -train text8 -metrictype psr -frachyperbolic 0.5 -output models/$FOLDERNAME/$GITNAME.bin -cbow 0 -size 10 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 
+time ./word2vec -train text8 -metrictype pr -frachyperbolic 0.5 -output models/$FOLDERNAME/$GITNAME.bin -cbow 0 -size 10 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 
 ./1-save-models.sh
 ./1-eval.sh models/$FOLDERNAME/$GITNAME.bin
 ./1-save-models.sh

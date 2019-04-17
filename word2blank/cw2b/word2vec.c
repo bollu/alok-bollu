@@ -1045,6 +1045,7 @@ int main(int argc, char **argv) {
         fflush(stderr);
         exit(0);
     }
+    fprintf(stdout, "metrictype: %s\n", mty == MetrictypeEuclid ? "euc" : "pr");
 
     if (mty == MetrictypePesudoreimann) {
         i = ArgPos((char *)"-frachyperbolic", argc, argv);
@@ -1052,10 +1053,13 @@ int main(int argc, char **argv) {
         frachyperbolic = atof(argv[i + 1]);
         assert(frachyperbolic >= 0);
         assert(frachyperbolic <= 1);
+        fprintf(stdout, "frachyperbolic: %3.2f\n", frachyperbolic);
     }
 
     if ((i = ArgPos((char *)"-size", argc, argv)) > 0)
         layer1_size = atoi(argv[i + 1]);
+    fprintf(stdout, "size: %lld\n", layer1_size);
+
     if ((i = ArgPos((char *)"-train", argc, argv)) > 0)
         strcpy(train_file, argv[i + 1]);
     if ((i = ArgPos((char *)"-save-vocab", argc, argv)) > 0)
@@ -1067,18 +1071,28 @@ int main(int argc, char **argv) {
     if ((i = ArgPos((char *)"-binary", argc, argv)) > 0)
         binary = atoi(argv[i + 1]);
     if ((i = ArgPos((char *)"-cbow", argc, argv)) > 0) cbow = atoi(argv[i + 1]);
+    fprintf(stdout, "cbow: %d\n", cbow);
+
     if (cbow) alpha = 0.05;
     if ((i = ArgPos((char *)"-alpha", argc, argv)) > 0)
         alpha = atof(argv[i + 1]);
+    fprintf(stdout, "alpha: %f\n", alpha);
+
     if ((i = ArgPos((char *)"-output", argc, argv)) > 0)
         strcpy(output_file, argv[i + 1]);
     if ((i = ArgPos((char *)"-window", argc, argv)) > 0)
         window = atoi(argv[i + 1]);
+    fprintf(stdout, "window: %d\n", window);
+
     if ((i = ArgPos((char *)"-sample", argc, argv)) > 0)
         sample = atof(argv[i + 1]);
     if ((i = ArgPos((char *)"-hs", argc, argv)) > 0) hs = atoi(argv[i + 1]);
+    fprintf(stdout, "hs: %d\n", hs);
+
     if ((i = ArgPos((char *)"-negative", argc, argv)) > 0)
         negative = atoi(argv[i + 1]);
+    fprintf(stdout, "negative: %d\n", negative);
+
     if ((i = ArgPos((char *)"-threads", argc, argv)) > 0)
         num_threads = atoi(argv[i + 1]);
     if ((i = ArgPos((char *)"-iter", argc, argv)) > 0) iter = atoi(argv[i + 1]);

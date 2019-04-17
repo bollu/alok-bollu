@@ -19,6 +19,6 @@ mkdir -p slurm/
 make word2vec
 time ./word2vec -train text8 -metrictype pr -frachyperbolic 0.25 -output models/$GITNAME.bin -cbow 0 -size 10 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 15 
 ./1-save-models.sh
-$(cd models; ln -s $GITNAME.bin word2blank/$NAME.bin; cd ../)
+$(cd models/word2blank; ln -s ../$GITNAME.bin $NAME.bin; cd ../)
 ./1-eval.sh models/word2blank/$NAME.bin
 ./1-save-models.sh

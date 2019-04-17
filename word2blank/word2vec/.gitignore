@@ -5,3 +5,6 @@ original
 distance
 word2vec
 compute-accuracy
+text8
+word2phrase
+word-analogy

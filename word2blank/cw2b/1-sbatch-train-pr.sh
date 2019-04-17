@@ -5,7 +5,11 @@
 #SBATCH --job-name=w2m-psr
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
+
+### SET NAME
 NAME=size=300-hfrac=0.5
+####
+
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
 GITNAME=$(git rev-parse --short HEAD)
 FOLDERNAME=$GITNAME

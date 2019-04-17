@@ -41,6 +41,7 @@ typedef struct cooccur_rec {
     real val;
 } CREC;
 
+real frachyperbolic = 0.5; // fraction of dimensions that are hyperbolic. 
 int write_header=0; //0=no, 1=yes; writes vocab_size/vector_size as first line for use with some libraries, such as gensim.
 int verbose = 2; // 0, 1, or 2
 int use_unk_vec = 1; // 0 or 1
@@ -53,7 +54,7 @@ int model = 2; // For text file output only. 0: concatenate word and context vec
 int checkpoint_every = 0; // checkpoint the model for every checkpoint_every iterations. Do nothing if checkpoint_every <= 0
 real eta = 0.05; // Initial learning rate
 real alpha = 0.75, x_max = 100.0; // Weighting function parameters, not extremely sensitive to corpus, though may need adjustment for very small or very large corpora
-real *W, *gradsq, *cost;
+real *W, *gradsq, *cost, *M;
 long long num_lines, *lines_per_thread, vocab_size;
 char *vocab_file, *input_file, *save_W_file, *save_gradsq_file;
 
@@ -78,6 +79,12 @@ void initialize_parameters() {
         fprintf(stderr, "Error allocating memory for gradsq\n");
         exit(1);
     }
+    a = posix_memalign((void **)&M, 128, vector_size * sizeof(real)); // Might perform better than malloc
+    if (M == NULL) {
+        fprintf(stderr, "Error allocating memory for M\n");
+        exit(1);
+    }
+    for(b = 0; b < vector_size; b++) M[b] = b > (int)(vector_size * frachyperbolic)? 1 : -1;
     for (b = 0; b < vector_size; b++) {
         for (a = 0; a < 2 * vocab_size; a++) {
             W[a * vector_size + b] = (rand() / (real)RAND_MAX - 0.5) / vector_size;
@@ -124,7 +131,7 @@ void *glove_thread(void *vid) {
         
         /* Calculate cost, save diff for gradients */
         diff = 0;
-        for (b = 0; b < vector_size; b++) diff += W[b + l1] * W[b + l2]; // dot product of word and context word vector
+        for (b = 0; b < vector_size; b++) diff += W[b + l1] * W[b + l2] *M[b]; // dot product of word and context word vector
         diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
 
@@ -142,8 +149,8 @@ void *glove_thread(void *vid) {
         real W_updates2_sum = 0;
         for (b = 0; b < vector_size; b++) {
             // learning rate times gradient for word vectors
-            temp1 = fdiff * W[b + l2];
-            temp2 = fdiff * W[b + l1];
+            temp1 = fdiff * M[b] * W[b + l2];
+            temp2 = fdiff * M[b] * W[b + l1];
             // adaptive updates
             W_updates1[b] = temp1 / sqrt(gradsq[b + l1]);
             W_updates2[b] = temp2 / sqrt(gradsq[b + l2]);
@@ -174,6 +181,15 @@ void *glove_thread(void *vid) {
     pthread_exit(NULL);
 }
 
+/* TODO: read how this model is used for testing.
+ * If the model throws away the context vectors and simply
+ * uses the focus vectors, then we don't need to save the metric,
+ * since this strategy works forword2vec: train using metric, test using
+ * regular dot product. 
+ *
+ * However, if the context vector is actually used in the testing
+ * phase, then we need to think about how this should work
+ */
 /* Save params to file */
 int save_params(int nb_iter) {
     /*
@@ -383,6 +399,8 @@ int main(int argc, char **argv) {
         printf("\t\tIf 1, write vocab_size/vector_size as first line. Do nothing if 0 (default).\n");
         printf("\t-vector-size <int>\n");
         printf("\t\tDimension of word vector representations (excluding bias term); default 50\n");
+        printf("\t-frachyperbolic <0.0 - 1.0>\n");
+        printf("\t\tFraction of dimensions that will be hyperbolic. 0 = original training scheme");
         printf("\t-threads <int>\n");
         printf("\t\tNumber of threads; default 8\n");
         printf("\t-iter <int>\n");
@@ -418,6 +436,7 @@ int main(int argc, char **argv) {
     } else {
         if ((i = find_arg((char *)"-write-header", argc, argv)) > 0) write_header = atoi(argv[i + 1]);
         if ((i = find_arg((char *)"-verbose", argc, argv)) > 0) verbose = atoi(argv[i + 1]);
+        if ((i = find_arg((char *)"-frachyperbolic", argc, argv)) > 0) frachyperbolic = atof(argv[i + 1]);
         if ((i = find_arg((char *)"-vector-size", argc, argv)) > 0) vector_size = atoi(argv[i + 1]);
         if ((i = find_arg((char *)"-iter", argc, argv)) > 0) num_iter = atoi(argv[i + 1]);
         if ((i = find_arg((char *)"-threads", argc, argv)) > 0) num_threads = atoi(argv[i + 1]);

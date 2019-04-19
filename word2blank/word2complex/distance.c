@@ -72,11 +72,11 @@ void cosine() {
         for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
     }
     // normalize
-    len = 0;
-    for (a = 0; a < size; a++) len += vec[a] * conj(vec[a]);
-    len = sqrt(len);
+    float lensq = 0;
+    for (a = 0; a < size; a++) lensq += vec[a] * conj(vec[a]);
+    len = sqrt(lensq);
     for (a = 0; a < size; a++) vec[a] /= len;
-    for (a = 0; a < N; a++) bestd[a] = -1;
+    for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
         a = 0;
@@ -84,7 +84,10 @@ void cosine() {
             if (bi[b] == c) a = 1;
         if (a == 1) continue;
         dist = 0;
-        for (a = 0; a < size; a++) dist += vec[a] * conj(M[a + c * size]);
+        for (a = 0; a < size; a++) {
+            complex float new = vec[a] * conj(M[a + c * size]);
+            dist += new;
+        }
         for (a = 0; a < N; a++) {
             if (cabs(dist) > cabs(bestd[a])) {
                 for (d = N - 1; d > a; d--) {
@@ -140,11 +143,11 @@ int main(int argc, char **argv) {
             // printf("%s[%lld] =  %f+%fi\n", &vocab[b * max_w], a, r, i);
         }
         //  getchar();
-        len = 0;
+        float complex lensq = 0;
         // normalize
         for (a = 0; a < size; a++)
-            len += M[a + b * size] * conj(M[a + b * size]);
-        len = sqrt(len);
+            lensq += M[a + b * size] * conj(M[a + b * size]);
+        len = sqrt(lensq);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);

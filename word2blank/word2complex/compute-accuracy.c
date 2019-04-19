@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
     char st1[max_size], st2[max_size], st3[max_size], st4[max_size],
         bestw[N][max_size], file_name[max_size];
     float complex dist, bestd[N];
+    complex float lensq;
     float len;
     // float dist, len, bestd[N];
     float complex vec[max_size];
@@ -56,7 +57,7 @@ int main(int argc, char **argv) {
         if (words > threshold) words = threshold;
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc(words * max_w * sizeof(char));
-    M = (float *)malloc(words * size * sizeof(float));
+    M = (float complex *)malloc(words * size * sizeof(float complex));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB\n",
                words * size * sizeof(float) / 1048576);
@@ -78,10 +79,10 @@ int main(int argc, char **argv) {
             fread(&i, sizeof(float), 1, f);
             M[a + b * size] = r + i * I;
         }
-        len = 0;
+        lensq = 0;
         for (a = 0; a < size; a++)
-            len += M[a + b * size] * conj(M[a + b * size]);
-        len = sqrt(len);
+            lensq += M[a + b * size] * conj(M[a + b * size]);
+        len = sqrt(lensq);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);
@@ -145,7 +146,7 @@ int main(int argc, char **argv) {
             dist = 0;
             for (a = 0; a < size; a++) dist += vec[a] * conj(M[a + c * size]);
             for (a = 0; a < N; a++) {
-                if (dist > bestd[a]) {
+                if (cabs(dist) > cabs(bestd[a])) {
                     for (d = N - 1; d > a; d--) {
                         bestd[d] = bestd[d - 1];
                         strcpy(bestw[d], bestw[d - 1]);

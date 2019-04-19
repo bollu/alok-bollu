@@ -1,0 +1,60 @@
+capital-common-countries:
+ACCURACY TOP1: 21.74 %  (110 / 506)
+Total accuracy: 21.74 %   Semantic accuracy: 21.74 %   Syntactic accuracy: -nan % 
+capital-world:
+ACCURACY TOP1: 9.40 %  (335 / 3564)
+Total accuracy: 10.93 %   Semantic accuracy: 10.93 %   Syntactic accuracy: -nan % 
+currency:
+ACCURACY TOP1: 7.55 %  (45 / 596)
+Total accuracy: 10.50 %   Semantic accuracy: 10.50 %   Syntactic accuracy: -nan % 
+city-in-state:
+ACCURACY TOP1: 4.85 %  (113 / 2330)
+Total accuracy: 8.62 %   Semantic accuracy: 8.62 %   Syntactic accuracy: -nan % 
+family:
+ACCURACY TOP1: 17.14 %  (72 / 420)
+Total accuracy: 9.10 %   Semantic accuracy: 9.10 %   Syntactic accuracy: -nan % 
+gram1-adjective-to-adverb:
+ACCURACY TOP1: 3.83 %  (38 / 992)
+Total accuracy: 8.48 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 3.83 % 
+gram2-opposite:
+ACCURACY TOP1: 3.04 %  (23 / 756)
+Total accuracy: 8.03 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 3.49 % 
+gram3-comparative:
+ACCURACY TOP1: 18.32 %  (244 / 1332)
+Total accuracy: 9.34 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 9.90 % 
+gram4-superlative:
+ACCURACY TOP1: 1.71 %  (17 / 992)
+Total accuracy: 8.68 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 7.91 % 
+gram5-present-participle:
+ACCURACY TOP1: 11.17 %  (118 / 1056)
+Total accuracy: 8.89 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 8.58 % 
+gram6-nationality-adjective:
+ACCURACY TOP1: 39.25 %  (597 / 1521)
+Total accuracy: 12.17 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 15.60 % 
+gram7-past-tense:
+ACCURACY TOP1: 6.67 %  (104 / 1560)
+Total accuracy: 11.62 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 13.90 % 
+gram8-plural:
+ACCURACY TOP1: 14.64 %  (195 / 1332)
+Total accuracy: 11.86 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 14.00 % 
+gram9-plural-verbs:
+ACCURACY TOP1: 7.70 %  (67 / 870)
+Total accuracy: 11.66 %   Semantic accuracy: 9.10 %   Syntactic accuracy: 13.48 % 
+Questions seen / total: 17827 19544   91.21 % 
+***PHRASES***
+newspapers:
+ACCURACY TOP1: 0.00 %  (0 / 1)
+Total accuracy: -nan %   Semantic accuracy: -nan %   Syntactic accuracy: -nan % 
+ice_hockey:
+ACCURACY TOP1: 0.00 %  (0 / 1)
+Total accuracy: -nan %   Semantic accuracy: -nan %   Syntactic accuracy: -nan % 
+basketball:
+ACCURACY TOP1: 0.00 %  (0 / 1)
+Total accuracy: -nan %   Semantic accuracy: -nan %   Syntactic accuracy: -nan % 
+airlines:
+ACCURACY TOP1: 25.00 %  (3 / 12)
+Total accuracy: 25.00 %   Semantic accuracy: 25.00 %   Syntactic accuracy: -nan % 
+people-companies:
+ACCURACY TOP1: 0.00 %  (0 / 1)
+Total accuracy: 25.00 %   Semantic accuracy: 25.00 %   Syntactic accuracy: -nan % 
+Questions seen / total: 12 3218   0.37 % 

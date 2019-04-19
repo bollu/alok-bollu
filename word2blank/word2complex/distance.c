@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#include <complex.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,9 +26,12 @@ FILE *f;
 char st1[max_size];
 char *bestw[N];
 char file_name[max_size], st[100][max_size];
-float dist, len, bestd[N], vec[max_size];
+// float dist, len, bestd[N];
+float complex dist, bestd[N];
+float len;
+float complex vec[max_size];
 long long words, size, a, b, c, d, cn, bi[100];
-float *M;
+float complex *M;
 char *vocab;
 
 // find dot product of two words
@@ -38,16 +42,17 @@ void dot() {
     }
 
     float d = 0;
-    for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] * size];
+    for (a = 0; a < size; a++)
+        d += M[a + bi[1] * size] * conj(M[a + bi[2] * size]);
 
     lensq = 0;
     for (a = 0; a < size; a++)
-        lensq += M[a + bi[2] * size] * M[a + bi[2] * size];
+        lensq += M[a + bi[2] * size] * conj(M[a + bi[2] * size]);
     d /= sqrt(lensq);
 
     lensq = 0;
     for (a = 0; a < size; a++)
-        lensq += M[a + bi[1] * size] * M[a + bi[1] * size];
+        lensq += M[a + bi[1] * size] * conj(M[a + bi[1] * size]);
     d /= sqrt(lensq);
     lensq = 0;
 
@@ -66,8 +71,9 @@ void cosine() {
         if (bi[b] == -1) continue;
         for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
     }
+    // normalize
     len = 0;
-    for (a = 0; a < size; a++) len += vec[a] * vec[a];
+    for (a = 0; a < size; a++) len += vec[a] * conj(vec[a]);
     len = sqrt(len);
     for (a = 0; a < size; a++) vec[a] /= len;
     for (a = 0; a < N; a++) bestd[a] = -1;
@@ -78,9 +84,9 @@ void cosine() {
             if (bi[b] == c) a = 1;
         if (a == 1) continue;
         dist = 0;
-        for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+        for (a = 0; a < size; a++) dist += vec[a] * conj(M[a + c * size]);
         for (a = 0; a < N; a++) {
-            if (dist > bestd[a]) {
+            if (cabs(dist) > cabs(bestd[a])) {
                 for (d = N - 1; d > a; d--) {
                     bestd[d] = bestd[d - 1];
                     strcpy(bestw[d], bestw[d - 1]);
@@ -91,7 +97,7 @@ void cosine() {
             }
         }
     }
-    for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], cabs(bestd[a]));
 }
 
 int main(int argc, char **argv) {
@@ -111,7 +117,8 @@ int main(int argc, char **argv) {
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
-    M = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    M = (float complex *)malloc((long long)words * (long long)size *
+                                sizeof(float complex));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);
@@ -125,9 +132,18 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+        for (a = 0; a < size; a++) {
+            float r, i;
+            fread(&r, sizeof(float), 1, f);
+            fread(&i, sizeof(float), 1, f);
+            M[a + b * size] = r + I * i;
+            // printf("%s[%lld] =  %f+%fi\n", &vocab[b * max_w], a, r, i);
+        }
+        //  getchar();
         len = 0;
-        for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+        // normalize
+        for (a = 0; a < size; a++)
+            len += M[a + b * size] * conj(M[a + b * size]);
         len = sqrt(len);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
     }

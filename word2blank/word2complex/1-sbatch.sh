@@ -7,7 +7,7 @@
 #SBATCH -o ./slurm/%j
 
 ### SET NAME (NO .bin) ###
-NAME=complex-size=100
+NAME=complex-size=10-iter=40
 ########
 ########
 
@@ -21,7 +21,7 @@ mkdir -p slurm/
 set -e
 set -o xtrace
 make word2vec
-time ./word2vec -train text8 -output models/$GITNAME.bin -cbow 0 -size 100 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 20 -binary 1 -iter 15 
+time ./word2vec -train text8 -output models/$GITNAME.bin -cbow 0 -size 10 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 20 -binary 1 -iter 40
 ./1-save-models.sh
 $(cd models; ln -s $GITNAME.bin $NAME.bin; cd ../)
 ./1-eval.sh models/$NAME.bin

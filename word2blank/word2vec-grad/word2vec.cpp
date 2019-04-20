@@ -12,11 +12,19 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#include <arrayfire.h>
+#include <assert.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "flashlight/autograd/autograd.h"
+#include "flashlight/common/common.h"
+#include "flashlight/dataset/datasets.h"
+#include "flashlight/distributed/distributed.h"
+#include "flashlight/meter/meters.h"
+#include "flashlight/nn/nn.h"
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -45,7 +53,8 @@ long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0,
           classes = 0;
 real alpha = 0.025, starting_alpha, sample = 1e-3;
-real *syn0, *syn1, *syn1neg, *expTable;
+af::array syn0, syn1, syn1neg;
+real *expTable;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -368,38 +377,47 @@ void ReadVocab() {
 void InitNet() {
     long long a, b;
     unsigned long long next_random = 1;
-    a = posix_memalign((void **)&syn0, 128,
-                       (long long)vocab_size * layer1_size * sizeof(real));
-    if (syn0 == NULL) {
-        printf("Memory allocation failed\n");
-        exit(1);
-    }
-    if (hs) {
-        a = posix_memalign((void **)&syn1, 128,
-                           (long long)vocab_size * layer1_size * sizeof(real));
-        if (syn1 == NULL) {
-            printf("Memory allocation failed\n");
-            exit(1);
-        }
-        for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
-    }
-    if (negative > 0) {
-        a = posix_memalign((void **)&syn1neg, 128,
-                           (long long)vocab_size * layer1_size * sizeof(real));
-        if (syn1neg == NULL) {
-            printf("Memory allocation failed\n");
-            exit(1);
-        }
-        for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
-    }
-    for (a = 0; a < vocab_size; a++)
-        for (b = 0; b < layer1_size; b++) {
-            next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a * layer1_size + b] =
-                (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
-        }
+    printf("filling up syn0...");
+    syn0 = af::randu(vocab_size, layer1_size) - 0.5;
+    printf("DONE.\n");
+    printf("filling up syn1neg...");
+    syn1neg = af::constant(0, af::dim4(vocab_size, layer1_size));
+    printf("DONE.\n");
+    // a = posix_memalign((void **)&syn0, 128,
+    //                    (long long)vocab_size * layer1_size * sizeof(real));
+    // if (syn0 == NULL) {
+    //     printf("Memory allocation failed\n");
+    //     exit(1);
+    // }
+    // if (hs) {
+    //     a = posix_memalign((void **)&syn1, 128,
+    //                        (long long)vocab_size * layer1_size *
+    //                        sizeof(real));
+    //     if (syn1 == NULL) {
+    //         printf("Memory allocation failed\n");
+    //         exit(1);
+    //     }
+    //     for (a = 0; a < vocab_size; a++)
+    //         for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
+    // }
+    // if (negative > 0) {
+    //     a = posix_memalign((void **)&syn1neg, 128,
+    //                        (long long)vocab_size * layer1_size *
+    //                        sizeof(real));
+    //     if (syn1neg == NULL) {
+    //         printf("Memory allocation failed\n");
+    //         exit(1);
+    //     }
+    //     for (a = 0; a < vocab_size; a++)
+    //         for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] =
+    //         0;
+    // }
+    // for (a = 0; a < vocab_size; a++)
+    //     for (b = 0; b < layer1_size; b++) {
+    //         next_random = next_random * (unsigned long long)25214903917 + 11;
+    //         syn0[a * layer1_size + b] =
+    //             (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+    //     }
     CreateBinaryTree();
 }
 
@@ -410,10 +428,14 @@ void *TrainModelThread(void *id) {
     long long l1, l2, c, target, label, local_iter = iter;
     unsigned long long next_random = (long long)id;
     char eof = 0;
-    real f, g;
     clock_t now;
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
-    real *neu1e = (real *)calloc(layer1_size, sizeof(real));
+    printf("filling up neu1e...\n");
+    af::array neu1e = af::constant(0, 1, layer1_size);
+    printf("%d | layer1_size: %d | neu1e dims: %d %d %d %d\n", __LINE__,
+           layer1_size, neu1e.dims(0), neu1e.dims(1), neu1e.dims(2),
+           neu1e.dims(3));
+    printf("DONE.\n");
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
@@ -471,171 +493,113 @@ void *TrainModelThread(void *id) {
         }
         word = sen[sentence_position];
         if (word == -1) continue;
-        for (c = 0; c < layer1_size; c++) neu1[c] = 0;
-        for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+        // for (c = 0; c < layer1_size; c++) neu1[c] = 0;
+        printf("-> %d\n", __LINE__);
+        neu1e(af::span) = 0;
+        printf("-> %d\n", __LINE__);
+        // for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
         next_random = next_random * (unsigned long long)25214903917 + 11;
         b = next_random % window;
-        if (cbow) {  // train the cbow architecture
-            // in -> hidden
-            cw = 0;
-            for (a = b; a < window * 2 + 1 - b; a++)
-                if (a != window) {
-                    c = sentence_position - window + a;
-                    if (c < 0) continue;
-                    if (c >= sentence_length) continue;
-                    last_word = sen[c];
-                    if (last_word == -1) continue;
-                    for (c = 0; c < layer1_size; c++)
-                        neu1[c] += syn0[c + last_word * layer1_size];
-                    cw++;
+        for (a = b; a < window * 2 + 1 - b; a++)
+            if (a != window) {
+                c = sentence_position - window + a;
+                if (c < 0) continue;
+                if (c >= sentence_length) continue;
+                last_word = sen[c];
+                if (last_word == -1) continue;
+                l1 = last_word * layer1_size;
+                // for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+                printf("-> %d\n", __LINE__);
+                neu1e(af::span) = 0;
+                printf("-> %d\n", __LINE__);
+
+                for (d = 0; d < negative + 1; d++) {
+                    if (d == 0) {
+                        target = word;
+                        label = 1;
+                    } else {
+                        next_random =
+                            next_random * (unsigned long long)25214903917 + 11;
+                        target = table[(next_random >> 16) % table_size];
+                        if (target == 0)
+                            target = next_random % (vocab_size - 1) + 1;
+                        if (target == word) continue;
+                        label = 0;
+                    }
+                    // l1 = last_wod
+                    // l2 = target
+                    l2 = target * layer1_size;
+                    printf("-> %d\n", __LINE__);
+                    // af::array f =
+                    //     af::dot(syn0.row(last_word), syn1neg.row(target));
+                    auto syn0_at_lw = syn0.row(last_word);
+                    printf("layer1_size: %d | syn0 dims: %d %d %d %d\n",
+                           layer1_size, syn0_at_lw.dims(0), syn0_at_lw.dims(1),
+                           syn0_at_lw.dims(2), syn0_at_lw.dims(3));
+                    assert(syn0_at_lw.dims(0) == 1);
+                    assert(syn0_at_lw.dims(1) == layer1_size);
+                    auto syn1neg_at_target = af::transpose(syn1neg.row(target));
+                    assert(syn1neg_at_target.dims(0) == layer1_size);
+                    assert(syn1neg_at_target.dims(1) == 1);
+
+                    fflush(stdout);
+                    af::array f = af::matmul(syn0_at_lw, syn1neg_at_target);
+                    assert(f.dims(0) == 1);
+                    assert(f.dims(1) == 1);
+                    assert(f.dims(2) == 1);
+                    continue;
+
+                    printf("-> %d\n", __LINE__);
+                    auto g = (label - af::sigmoid(f)) * alpha;
+                    assert(g.dims(0) == 1);
+                    assert(g.dims(1) == 1);
+                    assert(g.dims(2) == 1);
+
+                    printf("-> %d\n", __LINE__);
+                    printf("%d | layer1_size: %d | neu1e dims: %d %d %d %d\n",
+                           __LINE__, layer1_size, neu1e.dims(0), neu1e.dims(1),
+                           neu1e.dims(2), neu1e.dims(3));
+                    neu1e += g.scalar<float>() * syn1neg.row(target);
+                    printf("%d | layer1_size: %d | neu1e dims: %d %d %d %d\n",
+                           __LINE__, layer1_size, neu1e.dims(0), neu1e.dims(1),
+                           neu1e.dims(2), neu1e.dims(3));
+
+                    printf("-> %d\n", __LINE__);
+                    syn1neg.row(target) += g * syn0.row(last_word);
+
+                    printf("-> %d\n", __LINE__);
+                    // for (c = 0; c < layer1_size; c++)
+                    //     f += syn0[c + l1] * syn1neg[c + l2];
+                    // if (f > MAX_EXP)
+                    //     g = (label - 1) * alpha;
+                    // else if (f < -MAX_EXP)
+                    //     g = (label - 0) * alpha;
+                    // else
+                    //     g = (label -
+                    //          expTable[(int)((f + MAX_EXP) *
+                    //                        (EXP_TABLE_SIZE / MAX_EXP / 2))])
+                    //                        *
+                    //        alpha;
+                    //  for (c = 0; c < layer1_size; c++)
+                    //      neu1e[c] += g * syn1neg[c + l2];
+                    //  for (c = 0; c < layer1_size; c++)
+                    //      syn1neg[c + l2] += g * syn0[c + l1];
                 }
-            if (cw) {
-                for (c = 0; c < layer1_size; c++) neu1[c] /= cw;
-                if (hs)
-                    for (d = 0; d < vocab[word].codelen; d++) {
-                        f = 0;
-                        l2 = vocab[word].point[d] * layer1_size;
-                        // Propagate hidden -> output
-                        for (c = 0; c < layer1_size; c++)
-                            f += neu1[c] * syn1[c + l2];
-                        if (f <= -MAX_EXP)
-                            continue;
-                        else if (f >= MAX_EXP)
-                            continue;
-                        else
-                            f = expTable[(int)((f + MAX_EXP) *
-                                               (EXP_TABLE_SIZE / MAX_EXP / 2))];
-                        // 'g' is the gradient multiplied by the learning rate
-                        g = (1 - vocab[word].code[d] - f) * alpha;
-                        // Propagate errors output -> hidden
-                        for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1[c + l2];
-                        // Learn weights hidden -> output
-                        for (c = 0; c < layer1_size; c++)
-                            syn1[c + l2] += g * neu1[c];
-                    }
-                // NEGATIVE SAMPLING
-                if (negative > 0)
-                    for (d = 0; d < negative + 1; d++) {
-                        if (d == 0) {
-                            target = word;
-                            label = 1;
-                        } else {
-                            next_random =
-                                next_random * (unsigned long long)25214903917 +
-                                11;
-                            target = table[(next_random >> 16) % table_size];
-                            if (target == 0)
-                                target = next_random % (vocab_size - 1) + 1;
-                            if (target == word) continue;
-                            label = 0;
-                        }
-                        l2 = target * layer1_size;
-                        f = 0;
-                        for (c = 0; c < layer1_size; c++)
-                            f += neu1[c] * syn1neg[c + l2];
-                        if (f > MAX_EXP)
-                            g = (label - 1) * alpha;
-                        else if (f < -MAX_EXP)
-                            g = (label - 0) * alpha;
-                        else
-                            g = (label - expTable[(int)((f + MAX_EXP) *
-                                                        (EXP_TABLE_SIZE /
-                                                         MAX_EXP / 2))]) *
-                                alpha;
-                        for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1neg[c + l2];
-                        for (c = 0; c < layer1_size; c++)
-                            syn1neg[c + l2] += g * neu1[c];
-                    }
-                // hidden -> in
-                for (a = b; a < window * 2 + 1 - b; a++)
-                    if (a != window) {
-                        c = sentence_position - window + a;
-                        if (c < 0) continue;
-                        if (c >= sentence_length) continue;
-                        last_word = sen[c];
-                        if (last_word == -1) continue;
-                        for (c = 0; c < layer1_size; c++)
-                            syn0[c + last_word * layer1_size] += neu1e[c];
-                    }
+                printf("-> %d\n", __LINE__);
+
+                printf("layer1_size: %d | neu1e dims: %d %d %d %d\n",
+                       layer1_size, neu1e.dims(0), neu1e.dims(1), neu1e.dims(2),
+                       neu1e.dims(3));
+                assert(neu1e.dims(0) == 1);
+                assert(neu1e.dims(1) == layer1_size);
+                assert(syn0.row(last_word).dims(0) == 1);
+                assert(syn0.row(last_word).dims(1) == layer1_size);
+                syn0.row(last_word) += neu1e;
+                printf("-> %d\n", __LINE__);
+                // Learn weights input -> hidden
+                // for (c = 0; c < layer1_size; c++) syn0[c + l1] +=
+                // neu1e[c];
             }
-        } else {  // train skip-gram
-            for (a = b; a < window * 2 + 1 - b; a++)
-                if (a != window) {
-                    c = sentence_position - window + a;
-                    if (c < 0) continue;
-                    if (c >= sentence_length) continue;
-                    last_word = sen[c];
-                    if (last_word == -1) continue;
-                    l1 = last_word * layer1_size;
-                    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
-                    // HIERARCHICAL SOFTMAX
-                    if (hs)
-                        for (d = 0; d < vocab[word].codelen; d++) {
-                            f = 0;
-                            l2 = vocab[word].point[d] * layer1_size;
-                            // Propagate hidden -> output
-                            for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1[c + l2];
-                            if (f <= -MAX_EXP)
-                                continue;
-                            else if (f >= MAX_EXP)
-                                continue;
-                            else
-                                f = expTable[(
-                                    int)((f + MAX_EXP) *
-                                         (EXP_TABLE_SIZE / MAX_EXP / 2))];
-                            // 'g' is the gradient multiplied by the learning
-                            // rate
-                            g = (1 - vocab[word].code[d] - f) * alpha;
-                            // Propagate errors output -> hidden
-                            for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1[c + l2];
-                            // Learn weights hidden -> output
-                            for (c = 0; c < layer1_size; c++)
-                                syn1[c + l2] += g * syn0[c + l1];
-                        }
-                    // NEGATIVE SAMPLING
-                    if (negative > 0)
-                        for (d = 0; d < negative + 1; d++) {
-                            if (d == 0) {
-                                target = word;
-                                label = 1;
-                            } else {
-                                next_random =
-                                    next_random *
-                                        (unsigned long long)25214903917 +
-                                    11;
-                                target =
-                                    table[(next_random >> 16) % table_size];
-                                if (target == 0)
-                                    target = next_random % (vocab_size - 1) + 1;
-                                if (target == word) continue;
-                                label = 0;
-                            }
-                            l2 = target * layer1_size;
-                            f = 0;
-                            for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1neg[c + l2];
-                            if (f > MAX_EXP)
-                                g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
-                                g = (label - 0) * alpha;
-                            else
-                                g = (label - expTable[(int)((f + MAX_EXP) *
-                                                            (EXP_TABLE_SIZE /
-                                                             MAX_EXP / 2))]) *
-                                    alpha;
-                            for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1neg[c + l2];
-                            for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0[c + l1];
-                        }
-                    // Learn weights input -> hidden
-                    for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
-                }
-        }
         sentence_position++;
         if (sentence_position >= sentence_length) {
             sentence_length = 0;
@@ -644,7 +608,6 @@ void *TrainModelThread(void *id) {
     }
     fclose(fi);
     free(neu1);
-    free(neu1e);
     pthread_exit(NULL);
 }
 
@@ -673,11 +636,13 @@ void TrainModel() {
         for (a = 0; a < vocab_size; a++) {
             fprintf(fo, "%s ", vocab[a].word);
             if (binary)
-                for (b = 0; b < layer1_size; b++)
-                    fwrite(&syn0[a * layer1_size + b], sizeof(real), 1, fo);
+                for (b = 0; b < layer1_size; b++) {
+                    real f = syn0(a, b).scalar<float>();
+                    fwrite(&f, sizeof(real), 1, fo);
+                }
             else
                 for (b = 0; b < layer1_size; b++)
-                    fprintf(fo, "%lf ", syn0[a * layer1_size + b]);
+                    fprintf(fo, "%lf ", syn0(a, b).scalar<float>());
             fprintf(fo, "\n");
         }
     } else {
@@ -693,7 +658,7 @@ void TrainModel() {
             for (b = 0; b < clcn; b++) centcn[b] = 1;
             for (c = 0; c < vocab_size; c++) {
                 for (d = 0; d < layer1_size; d++)
-                    cent[layer1_size * cl[c] + d] += syn0[c * layer1_size + d];
+                    cent[layer1_size * cl[c] + d] += syn0(c, d).scalar<float>();
                 centcn[cl[c]]++;
             }
             for (b = 0; b < clcn; b++) {
@@ -714,7 +679,7 @@ void TrainModel() {
                     x = 0;
                     for (b = 0; b < layer1_size; b++)
                         x += cent[layer1_size * d + b] *
-                             syn0[c * layer1_size + b];
+                             syn0(c, b).scalar<float>();
                     if (x > closev) {
                         closev = x;
                         closeid = d;
@@ -764,16 +729,19 @@ int main(int argc, char **argv) {
         printf("\t\tSet max skip length between words; default is 5\n");
         printf("\t-sample <float>\n");
         printf(
-            "\t\tSet threshold for occurrence of words. Those that appear with "
+            "\t\tSet threshold for occurrence of words. Those that appear "
+            "with "
             "higher frequency in the training data\n");
         printf(
-            "\t\twill be randomly down-sampled; default is 1e-3, useful range "
+            "\t\twill be randomly down-sampled; default is 1e-3, useful "
+            "range "
             "is (0, 1e-5)\n");
         printf("\t-hs <int>\n");
         printf("\t\tUse Hierarchical Softmax; default is 0 (not used)\n");
         printf("\t-negative <int>\n");
         printf(
-            "\t\tNumber of negative examples; default is 5, common values are "
+            "\t\tNumber of negative examples; default is 5, common values "
+            "are "
             "3 - 10 (0 = not used)\n");
         printf("\t-threads <int>\n");
         printf("\t\tUse <int> threads (default 12)\n");
@@ -781,7 +749,8 @@ int main(int argc, char **argv) {
         printf("\t\tRun more training iterations (default 5)\n");
         printf("\t-min-count <int>\n");
         printf(
-            "\t\tThis will discard words that appear less than <int> times; "
+            "\t\tThis will discard words that appear less than <int> "
+            "times; "
             "default is 5\n");
         printf("\t-alpha <float>\n");
         printf(
@@ -789,7 +758,8 @@ int main(int argc, char **argv) {
             "skip-gram and 0.05 for CBOW\n");
         printf("\t-classes <int>\n");
         printf(
-            "\t\tOutput word classes rather than word vectors; default number "
+            "\t\tOutput word classes rather than word vectors; default "
+            "number "
             "of classes is 0 (vectors are written)\n");
         printf("\t-debug <int>\n");
         printf(
@@ -803,15 +773,18 @@ int main(int argc, char **argv) {
         printf("\t\tThe vocabulary will be saved to <file>\n");
         printf("\t-read-vocab <file>\n");
         printf(
-            "\t\tThe vocabulary will be read from <file>, not constructed from "
+            "\t\tThe vocabulary will be read from <file>, not constructed "
+            "from "
             "the training data\n");
         printf("\t-cbow <int>\n");
         printf(
-            "\t\tUse the continuous bag of words model; default is 1 (use 0 "
+            "\t\tUse the continuous bag of words model; default is 1 (use "
+            "0 "
             "for skip-gram model)\n");
         printf("\nExamples:\n");
         printf(
-            "./word2vec -train data.txt -output vec.txt -size 200 -window 5 "
+            "./word2vec -train data.txt -output vec.txt -size 200 -window "
+            "5 "
             "-sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3\n\n");
         return 0;
     }

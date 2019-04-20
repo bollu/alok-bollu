@@ -1,11 +1,17 @@
 CC = gcc
 #Using -Ofast instead of -O3 might result in faster code, but is supported only by newer GCC versions
-CFLAGS = -lm -std=c++11 -pthread -O3 -march=native -Wall -funroll-loops -Wno-unused-result -lflashlight -L/home/bollu/.local/lib/ -I/home/bollu/.local/include/
+CFLAGS = -lm -std=c++11 -pthread -O3 -march=native -Wall -funroll-loops -Wno-unused-result \
+		 -lflashlight \
+		 -L/home/bollu/.local/lib/ -I/home/bollu/.local/include/ \
+		 -I/home/bollu/arrayfire/include \
+		 -I/home/bollu/.local/include/flashlight/cereal/cereal \
+		 -I/home/bollu/.local/include/flashlight/cereal \
+		 -L/home/bollu/arrayfire/lib64
 
 all: word2vec word2phrase distance word-analogy compute-accuracy
 
 word2vec : word2vec.cpp
-	$(CC) word2vec.cpp -o word2vec $(CFLAGS)
+	make -C build/
 word2phrase : word2phrase.c
 	$(CC) word2phrase.c -o word2phrase $(CFLAGS)
 distance : distance.c

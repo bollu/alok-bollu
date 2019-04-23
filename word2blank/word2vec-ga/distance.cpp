@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "vec.h"
 
 #define max_size 2000
 #define N 40
@@ -25,9 +26,10 @@ FILE *f;
 char st1[max_size];
 char *bestw[N];
 char file_name[max_size], st[100][max_size];
-float dist, len, bestd[N], vec[max_size];
+float dist, len, bestd[N];
+Vec vec;
 long long words, size, a, b, c, d, cn, bi[100];
-float *M;
+Vec *M;
 char *vocab;
 
 // find dot product of two words
@@ -38,18 +40,16 @@ void dot() {
     }
 
     float d = 0;
-    for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] * size];
+    // for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] *
+    // size];
+    d = M[bi[1]].dot(M[bi[2]]);
 
-    lensq = 0;
-    for (a = 0; a < size; a++)
-        lensq += M[a + bi[2] * size] * M[a + bi[2] * size];
-    d /= sqrt(lensq);
-
-    lensq = 0;
-    for (a = 0; a < size; a++)
-        lensq += M[a + bi[1] * size] * M[a + bi[1] * size];
-    d /= sqrt(lensq);
-    lensq = 0;
+    // lensq = 0;
+    // for (a = 0; a < size; a++)
+    //     lensq += M[a + bi[2] * size] * M[a + bi[2] * size];
+    // d /= sqrt(lensq);
+    d /= sqrt(M[bi[1]].lensq());
+    d /= sqrt(M[bi[2]].lensq());
 
     printf("dot: %f\n", d);
 }
@@ -61,15 +61,18 @@ void cosine() {
         "distance\n----------------------------------------------------"
         "----"
         "----------------\n");
-    for (a = 0; a < size; a++) vec[a] = 0;
+    // for (a = 0; a < size; a++) vec[a] = 0;
+    vec.fillzero();
     for (b = 0; b < cn; b++) {
         if (bi[b] == -1) continue;
-        for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
+        vec.accumscaleadd(1.0, M[bi[b]]);
+        // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
     }
     len = 0;
-    for (a = 0; a < size; a++) len += vec[a] * vec[a];
-    len = sqrt(len);
-    for (a = 0; a < size; a++) vec[a] /= len;
+    // for (a = 0; a < size; a++) len += vec[a] * vec[a];
+    // len = sqrt(len);
+    // for (a = 0; a < size; a++) vec[a] /= len;
+    vec.normalize();
     for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
@@ -77,8 +80,9 @@ void cosine() {
         for (b = 0; b < cn; b++)
             if (bi[b] == c) a = 1;
         if (a == 1) continue;
-        dist = 0;
-        for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+        // dist = 0;
+        // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+        dist = vec.dot(M[c]);
         for (a = 0; a < N; a++) {
             if (dist > bestd[a]) {
                 for (d = N - 1; d > a; d--) {
@@ -111,7 +115,9 @@ int main(int argc, char **argv) {
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
-    M = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    M = (Vec *)malloc((long long)words * sizeof(Vec));
+    vec.alloc(size);
+    // (long long)size * sizeof(float));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);
@@ -125,12 +131,21 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-        len = 0;
-        for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
-        len = sqrt(len);
-        for (a = 0; a < size; a++) M[a + b * size] /= len;
+        M[b].alloc(size);
+        readvec(f, M[b]);
+        M[b].normalize();
+        printf("%s:", vocab + b * max_w);
+        printf(" lensq: %f  ", M[b].lensq());
+        for (int i = 0; i < 10; i++) {
+            printf("%f ", M[b].ix(i));
+        }
+        printf("\n");
+        // for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1,
+        // f); len = 0; for (a = 0; a < size; a++) len += M[a + b * size] * M[a
+        // + b * size]; len = sqrt(len); for (a = 0; a < size; a++) M[a + b *
+        // size] /= len;
     }
+
     fclose(f);
     while (1) {
         for (a = 0; a < N; a++) bestd[a] = 0;

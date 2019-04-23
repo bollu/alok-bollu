@@ -25,6 +25,7 @@ import tabulate
 from nltk.corpus import wordnet
 from random import sample
 import operator
+import numba
 
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves",
@@ -85,33 +86,30 @@ def load_corpus(LOGGER, CORPUS_NAME):
         LOGGER.end()
     return corpus
 
+def flatten(ls):
+    return [item for sublist in ls for item in sublist]
+
+def get_freq_cutoff(freqs, cutoff):
+    """Get the frequency below which the data accounts for < cutoff
+    freqs: list of frequencies
+    0 <= cutoff <= 1
+    """
+    freqs = list(freqs)
+    TOTFREQ = sum(freqs)
+    freqs.sort()
+
+    tot = 0
+    i = 0
+    # accumulate till where we reach cutoff
+    while tot < TOTFREQ * cutoff and i < len(freqs): i += 1; tot += freqs[i]
+    return freqs[i]
 def preprocess_doc(LOGGER, corpus):
     """load the corpus, and pull NDOCS from the corpus if it's not None"""
-    def flatten(ls):
-        return [item for sublist in ls for item in sublist]
-
-    def get_freq_cutoff(freqs, cutoff):
-        """Get the frequency below which the data accounts for < cutoff
-        freqs: list of frequencies
-        0 <= cutoff <= 1
-        """
-        freqs = list(freqs)
-        TOTFREQ = sum(freqs)
-        freqs.sort()
-
-        tot = 0
-        i = 0
-        # accumulate till where we reach cutoff
-        while tot < TOTFREQ * cutoff and i < len(freqs): i += 1; tot += freqs[i]
-        return freqs[i]
 
     # corpus = flatten(corpus)
     LOGGER.log("number of words in corpus (original): %s" % (len(corpus), ))
 
     # LOGGER.start("filtering stopwords")
-    corpus = list(filter(lambda w: w not in STOPWORDS, corpus))
-    # LOGGER.end("#words in corpus after filtering: %s" % (len(corpus), ))
-
 
 
     FREQ_CUTOFF = 0.2
@@ -119,7 +117,7 @@ def preprocess_doc(LOGGER, corpus):
     w2f = mk_word_histogram(corpus, set(corpus))
     origlen = len(corpus)
     cutoff_freq = get_freq_cutoff(w2f.values(), FREQ_CUTOFF)
-    corpus = list(filter(lambda w: w2f[w] > cutoff_freq, corpus))
+    # corpus = list(filter(lambda w: w2f[w] > cutoff_freq, corpus))
     filtlen = len(corpus)
     LOGGER.end("filtered #%s (%s percent) words. New corpus size: %s (%s percent of original)" %
                (origlen - filtlen,
@@ -666,8 +664,7 @@ class Parameters:
                 (metric_state_dict is not None and word2man_state_dict is not None
                  and optimizer_state_dict is not None))
 
-        self.corpus = corpus
-        self.NDOCS = int(NDOCS)
+        self.corpus = list(corpus)
         self.DEVICE = DEVICE
         self.EPOCHS = int(EPOCHS)
         self.BATCHSIZE = int(BATCHSIZE)
@@ -678,11 +675,16 @@ class Parameters:
         self.metrictype = metrictype
         self.traintype = traintype
 
-        if (self.NDOCS is not None):
+        if (NDOCS is not None):
+            self.NDOCS = int(NDOCS)
             print("NDOCS:", self.NDOCS)
             self.corpus = list(self.corpus)[:self.NDOCS]
 
-        self.TEXT = [preprocess_doc(LOGGER, doc) for doc in self.corpus]
+        # self.TEXT = [preprocess_doc(LOGGER, doc) for doc in self.corpus]
+        self.TEXT = []
+        for doc in corpus:
+            self.TEXT += list(doc) # [list(doc) for doc in self.corpus]
+        return 
 
 
         LOGGER.start("building vocabulary")
@@ -941,15 +943,16 @@ def replcli(PARAMS, LOGGER, DEVICE):
             except KeyError as e:
                 print_formatted_text("exception:\n%s" % (e, ))
 
+def save(LOGGER, savepath, PARAMS):
+    if savepath is None: return
+    LOGGER.start("\nsaving model to: %s" % (savepath))
+    with open(savepath, "wb") as sf:
+        state_dict =  PARAMS.get_model_state_dict()
+        torch.save(state_dict, sf)
 
 # @EXPERIMENT.capture
+@numba.jit()
 def traincli(savepath, savetimesecs, PARAMS, LOGGER, DEVICE):
-    def save():
-        if savepath is None: return
-        LOGGER.start("\nsaving model to: %s" % (savepath))
-        with open(savepath, "wb") as sf:
-            state_dict =  PARAMS.get_model_state_dict()
-            torch.save(state_dict, sf)
 
 
     # Notice that we do not normalize the vectors in the hidden layer
@@ -958,49 +961,64 @@ def traincli(savepath, savetimesecs, PARAMS, LOGGER, DEVICE):
     # normalize them.
     # Read also: what is the meaning of the length of a vector in word2vec?
     # https://stackoverflow.com/questions/36034454/what-meaning-does-the-length-of-a-word2vec-vector-have
+    NUMNEGSAMPLES = 25
     loss_sum = 0
     ix = 0
     time_last_save = datetime.datetime.now()
     time_last_print = datetime.datetime.now()
     tbegin = datetime.datetime.now()
-    last_print_ix = 0
+
+    total = PARAMS.EPOCHS * len(PARAMS.corpus) * len(PARAMS.corpus[0]) * PARAMS.WINDOWSIZE * 2 * NUMNEGSAMPLES
     for epoch in range(PARAMS.EPOCHS):
-        for traindata in PARAMS.DATALOADER:
-            ix += 1
-            PARAMS.optimizer.zero_grad()   # zero the gradient buffers
-            l = PARAMS.WORD2MAN.runtrain(traindata, PARAMS.METRIC.mat, DEVICE)
-            loss_sum += l.item()
-            l.backward()
-            PARAMS.optimizer.step()
-            # updating data
-            now = datetime.datetime.now()
-            # num units / unit time
-            ratesec = (now - tbegin) / ix
-            # time left
-            tleft = ratesec * (len(PARAMS.DATALOADER) * PARAMS.EPOCHS - ix)
+        for doc in PARAMS.corpus:
+            for w in doc:
+                for windowix in range(-PARAMS.WINDOWSIZE, PARAMS.WINDOWSIZE):
+                    for _ in range(NUMNEGSAMPLES):
+                        ix += 1
+
+                        if ix % 100000 == 0:
+                            print("ix: %s | total: %s | ix / total: %s%%" %
+                                   (ix, total, float(ix) / total * 100))
+
+                        continue
+
+                        # PARAMS.optimizer.zero_grad()   # zero the gradient buffers
+                        # l = PARAMS.WORD2MAN.runtrain(traindata, PARAMS.METRIC.mat, DEVICE)
+                        # loss_sum += l.item()
+                        # l.backward()
+                        # PARAMS.optimizer.step()
+                        # # updating data
+                        # now = datetime.datetime.now()
+                        # # num units / unit time
+                        # ratesec = (now - tbegin) / ix
+                        # # time left
+                        # tleft = ratesec * (len(PARAMS.DATALOADER) * PARAMS.EPOCHS - ix)
 
 
-            # printing
-            TARGET_PRINT_TIME_IN_S = 1
-            if (now - time_last_print).seconds >= TARGET_PRINT_TIME_IN_S:
-                nbatches = ix - last_print_ix
-                print("LOSSES sum: %0.2f | avg per batch(#batch=%s): %0.2f | avg per elements(#elems=%s): %0.2f | eta: %s" %
-                      (loss_sum,
-                       nbatches,
-                       loss_sum / nbatches,
-                       nbatches * PARAMS.BATCHSIZE,
-                       loss_sum / (nbatches * PARAMS.BATCHSIZE),
-                      tleft))
-                loss_sum = 0
-                time_last_print = now
-                last_print_ix = ix
+                        # # printing
+                        # TARGET_PRINT_TIME_IN_S = 1
+                        # if (now - time_last_print).seconds >= TARGET_PRINT_TIME_IN_S:
+                        #     nbatches = ix - last_print_ix
+                        #     print("LOSSES sum: %0.2f | avg per batch(#batch=%s): %0.2f | avg per elements(#elems=%s): %0.2f | eta: %s" %
+                        #           (loss_sum,
+                        #            nbatches,
+                        #            loss_sum / nbatches,
+                        #            nbatches * PARAMS.BATCHSIZE,
+                        #            loss_sum / (nbatches * PARAMS.BATCHSIZE),
+                        #           tleft))
+                        #     loss_sum = 0
+                        #     time_last_print = now
+                        #     last_print_ix = ix
 
-            # saving
-            TARGET_SAVE_TIME_IN_S = savetimesecs # save every X minutes
-            if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
-                save()
-                time_last_save = now
-    save()
+                        # # saving
+                        # TARGET_SAVE_TIME_IN_S = savetimesecs # save every X minutes
+                        # if (now - time_last_save).seconds > TARGET_SAVE_TIME_IN_S:
+                        #     save()
+                        #     time_last_save = now
+        # END DIX LOOP
+        epoch += 1    
+    # END EPOCH LOOP
+    save(LOGGER, savepath, PARAMS)
 
 
 def wordnet_evaluate(PARAMS, LOGGER, DEVICE):
@@ -1138,12 +1156,12 @@ def main():
         PARAMS = Parameters(LOGGER,
                             DEVICE,
                             corpus=corpus,
-                            NDOCS=1,
+                            NDOCS=None,
                             EPOCHS=15,
                             BATCHSIZE=32,
-                            EMBEDSIZE=3,
+                            EMBEDSIZE=300,
                             LEARNING_RATE=0.025,
-                            WINDOWSIZE=2,
+                            WINDOWSIZE=8,
                             create_time=current_time_str(),
                             metrictype="euclid",
                             traintype="skipgramnegsampling")

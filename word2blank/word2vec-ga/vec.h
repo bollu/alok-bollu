@@ -5,8 +5,27 @@
 #include <math.h>
 typedef float real;  // Precision of float numbers
 
+// let the dimensionality of the space be n. We have:
+// 1 -- 0D component
+// n -- 1D components
+// n (n - 1)/2 -- 2D components
+// n -- (n-1)D components
+// 1 -- nD  component
+// In [28]: (n, y) = symbols("n y"); p = 1+n+n*(n-1)/2+n+1-y; solve(p, n)
+// Out[28]: [-sqrt(8*y + 1)/2 - 3/2, sqrt(8*y + 1)/2 - 3/2]
+
+// if dim > 3, then the 2D and (n-1)D objects are different objects
+// so roughly, we can support floor(sqrt(8y-7)/2 - 3.0/2) number of dimensions
+// For length:
+// len = 100, we get 12 dimensions as the answer.
+// 1 + 12 + 12*11/2 + 12 + 1 = 24 + 66 + 1 = 92
+//
+// We can probably look into fancier structurings of the subspaces with respect
+// to sparsity by perhaps pulling tricks from compressed sensing? This is a
+// longshot, though.
 struct Vec {
     int len;
+    int ndims;
     real *v;
 
    public:
@@ -16,6 +35,9 @@ struct Vec {
     static long int alloc_size_for_dim(int d) { return d * sizeof(real); }
     inline void alloc(int len) {
         this->len = len;
+        this->ndims = floor(sqrt((8.0 * len + 1)) / 2.0 - 1.5);
+        assert(ndims + ndims * (ndims - 1) / 2 + ndims + 1 <= len);
+
         int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
         assert(v != nullptr && "memory allocation failed");
         (void)a;

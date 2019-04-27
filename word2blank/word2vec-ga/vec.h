@@ -75,7 +75,9 @@ struct Vec {
         // make sure that the length given is a power of two.
         assert(pow2(ndims) == len && "dimension number is not powr of 2!");
 
-        int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
+        // allocate len+2 so we can 1-index
+        int a = posix_memalign((void **)&v, 128,
+                               ((long long)len + 2) * sizeof(real));
         assert(v != nullptr && "memory allocation failed");
         (void)a;
     }
@@ -152,26 +154,33 @@ struct Vec {
     inline real dotContainment(const Vec &v2) {
         real dot = 0;
         // the r in nCr
-        for (int sd = 0; sd < this->ndims; ++sd) {
+        // printf("===\n");
+        for (int sd = 0; sd < ndims; ++sd) {
+            // printf("---\n");
+            // printf("sd: %4d\n", sd);
             // number of elements in this s dimension = 2^s
-            const int ns = sd == 0 ? 1 : C[ndims][sd];
+            const int ns = C[ndims][sd];
             // 1 + nC0 + nC1 + .. nCs.
-            const int sbase = sd == 0 ? 0 : pow2(sd - 1);
+            const int sbase = pow2(sd);
             for (int rd = 0; rd <= sd; ++rd) {
-                const int nr = rd == 0 ? 1 : C[ndims][rd];
-                const int rbase = rd == 0 ? 0 : pow2(rd - 1);
+                // printf("\trd: %4d\n", rd);
+                const int nr = C[ndims][rd];
+                const int rbase = pow2(rd);
 
                 for (int s = 0; s < ns; ++s) {
+                    // printf("\t\ts: %4d |six: %4d\n", s, sbase + s);
                     for (int r = 0; r < nr; ++r) {
+                        // printf("\t\t\tr: %4d |rix: %4d\n", r, rbase + r);
                         // r \subset s
                         // r / (r \cap s) == emptyset
                         // r ^ (r & s) == emptyset
                         if ((r ^ (r & s)) != 0) continue;
-                        dot += v[sbase + s] * v2.v[rbase + r];
+                        dot += v[rbase + r] * v2.v[sbase + s];
                     }
                 }
             }
         }
+        // getchar();
         return dot;
     }
 

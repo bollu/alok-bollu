@@ -44,7 +44,7 @@ int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0,
           classes = 0;
-real alpha = 0.025, starting_alpha, sample = 1e-3;
+real alpha = 0.01, starting_alpha, sample = 1e-3;
 Vec *syn0, *syn1, *syn1neg;
 real *expTable;
 clock_t start;

@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
         vocab[b * max_w + a] = 0;
         M[b].alloc(size);
         readvec(f, M[b]);
-        M[b].normalize();
+        // M[b].normalize();
         printf("%s:", vocab + b * max_w);
         printf(" lensq: %f  ", M[b].lensq());
         for (int i = 0; i < 10; i++) {

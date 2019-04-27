@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <math.h>
 typedef float real;  // Precision of float numbers
+#define min(x, y) ((x) < (y) ? (x) : (y))
 
 // let the dimensionality of the space be n. We have:
 // 1 -- 0D component
@@ -166,7 +167,7 @@ struct Vec {
                         // r / (r \cap s) == emptyset
                         // r ^ (r & s) == emptyset
                         if ((r ^ (r & s)) != 0) continue;
-                        dot += v[sbase + s] * v[rbase + r];
+                        dot += v[sbase + s] * v2.v[rbase + r];
                     }
                 }
             }
@@ -182,6 +183,15 @@ struct Vec {
     //     return d;
     // }
 };
+
+void printvec(const Vec &v, int n) {
+    printf("|");
+    for (int a = 0; a < min(n, v.getlen()); a++) {
+        printf("%5.2f", v.ix(a));
+        if (a != min(n, v.getlen()) - 1) printf(" ");
+    }
+    printf("|\n");
+}
 
 void writevec(FILE *f, Vec &v) {
     for (int a = 0; a < v.getlen(); a++) {

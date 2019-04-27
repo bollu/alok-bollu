@@ -1112,6 +1112,7 @@ int main(int argc, char **argv) {
         expTable[i] =
             expTable[i] / (expTable[i] + 1);  // Precompute f(x) = x / (x + 1)
     }
+    initCTable();
     TrainModel();
     return 0;
 }

@@ -383,8 +383,9 @@ void InitNet() {
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
-                               layer1_size);
+            syn0[a].set(
+                b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
+                       ((real)layer1_size * ((real)layer1_size - 1.0) / 2.0));
         }
     }
     printf("%callocated syn0.\t\t\t\t\n", 13);
@@ -441,12 +442,20 @@ void *TrainModelThread(void *id) {
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: "
-                    "%.2fk  ",
-                    13, alpha,
+                    "Alpha: %f  Progress: %.2f%%  Words/thread/sec: "
+                    "%.2fk\n",
+                    alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
                                          (real)CLOCKS_PER_SEC * 1000));
+
+                for (int i = 0; i < 5; ++i) {
+                    printvec(syn0[i], 5);
+                }
+                printf("^-pos-^---v-neg-v---\n");
+                for (int i = 0; i < 5; ++i) {
+                    printvec(syn1neg[i], 5);
+                }
                 fflush(stdout);
             }
             alpha = starting_alpha *
@@ -645,20 +654,21 @@ void *TrainModelThread(void *id) {
                         //     f += syn0[c + l1] * syn1neg[c + l2];
                         // ****
                         // ****
-                        // HERE IS AN INDEXING ERROR IN THE ORIGINAL WORD2VEC.
-                        // IF F IS VERY LARGE, THIS CAN GIVE WRONG INDECES!!!
-                        // THIS CODE HAS BEEN FIXED BY ME (SIDDHARTH BHAT)
-                        // <siddu.druid@gmail.com>
+                        // HERE IS AN INDEXING ERROR IN THE ORIGINAL
+                        // WORD2VEC. IF F IS VERY LARGE, THIS CAN GIVE WRONG
+                        // INDECES!!! THIS CODE HAS BEEN FIXED BY ME
+                        // (SIDDHARTH BHAT) <siddu.druid@gmail.com>
                         // ******
                         // ******
                         const int index =
                             ((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2));
-                        if (index >= MAX_EXP)
+                        if (index >= EXP_TABLE_SIZE)
                             g = (label - 1) * alpha;
                         else if (index < 0)
                             g = (label - 0) * alpha;
                         else
                             g = (label - expTable[index]) * alpha;
+
                         neu1e.accumscaleadd(g, *syn1negv);
                         syn1negv->accumscaleadd(g, *syn0v);
                         // for (c = 0; c < layer1_size; c++)
@@ -916,6 +926,7 @@ int main(int argc, char **argv) {
         expTable[i] =
             expTable[i] / (expTable[i] + 1);  // Precompute f(x) = x / (x + 1)
     }
+    initCTable();
     TrainModel();
     return 0;
 }

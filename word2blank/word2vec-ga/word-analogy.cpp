@@ -152,7 +152,7 @@ int main(int argc, char **argv) {
             if (a == 1) continue;
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            dist = v.dot(M[c]);
+            dist = v.dotContainment(M[c]);
             for (a = 0; a < N; a++) {
                 if (dist > bestd[a]) {
                     for (d = N - 1; d > a; d--) {

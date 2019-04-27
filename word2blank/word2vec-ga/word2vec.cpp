@@ -640,7 +640,7 @@ void *TrainModelThread(void *id) {
                         l2 = target * layer1_size;
                         Vec *syn0v = &syn0[last_word];
                         Vec *syn1negv = &syn1neg[target];
-                        f = syn0v->dot(*syn1negv);
+                        f = syn0v->dotContainment(*syn1negv);
                         // for (c = 0; c < layer1_size; c++)
                         //     f += syn0[c + l1] * syn1neg[c + l2];
                         // ****

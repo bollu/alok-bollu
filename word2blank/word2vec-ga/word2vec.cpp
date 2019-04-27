@@ -643,15 +643,22 @@ void *TrainModelThread(void *id) {
                         f = syn0v->dot(*syn1negv);
                         // for (c = 0; c < layer1_size; c++)
                         //     f += syn0[c + l1] * syn1neg[c + l2];
-                        if (f > MAX_EXP)
+                        // ****
+                        // ****
+                        // HERE IS AN INDEXING ERROR IN THE ORIGINAL WORD2VEC.
+                        // IF F IS VERY LARGE, THIS CAN GIVE WRONG INDECES!!!
+                        // THIS CODE HAS BEEN FIXED BY ME (SIDDHARTH BHAT)
+                        // <siddu.druid@gmail.com>
+                        // ******
+                        // ******
+                        const int index =
+                            ((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2));
+                        if (index >= MAX_EXP)
                             g = (label - 1) * alpha;
-                        else if (f < -MAX_EXP)
+                        else if (index < 0)
                             g = (label - 0) * alpha;
                         else
-                            g = (label - expTable[(int)((f + MAX_EXP) *
-                                                        (EXP_TABLE_SIZE /
-                                                         MAX_EXP / 2))]) *
-                                alpha;
+                            g = (label - expTable[index]) * alpha;
                         neu1e.accumscaleadd(g, *syn1negv);
                         syn1negv->accumscaleadd(g, *syn0v);
                         // for (c = 0; c < layer1_size; c++)

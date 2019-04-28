@@ -1,8 +1,11 @@
 #pragma once
 #ifndef VEC_H
 #define VEC_H
+#include <adept/Stack.h>
+#include <adept/scalar_shortcuts.h>
 #include <assert.h>
 #include <math.h>
+using adept::adouble;
 typedef float real;  // Precision of float numbers
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
@@ -26,17 +29,17 @@ typedef float real;  // Precision of float numbers
 // longshot, though.
 
 // dumb implementation of log2
-int log2(int n) {
-    int l = 0;
-    int i = 1;
+long long log2(long long n) {
+    long long l = 0;
+    long long i = 1;
     while (i < n) {
         i = i * 2;
         l += 1;
     }
     return l;
 }
-int pow2(int n) {
-    int p = 1;
+long long pow2(long long n) {
+    long long p = 1;
     while (n-- > 0) p *= 2;
     return p;
 }
@@ -59,10 +62,11 @@ void initCTable() {
 }
 
 // dumb encoding of GA. uses log2(n)elements.
-struct Vec {
+template <typename T>
+struct VecT {
     int len;
     int ndims;
-    real *v;
+    T *v;
 
    public:
     inline void freemem() { free(v); }
@@ -70,42 +74,44 @@ struct Vec {
     // return the allocation size needed for a vector of dimension len
     static long int alloc_size_for_dim(int d) { return d * sizeof(real); }
     inline void alloc(int len) {
-        this->len = len;
-        this->ndims = log2(len);
+        // set len to be larger so we can start indexing from 1.
+        this->ndims = log2((long long)len);
         // make sure that the length given is a power of two.
         assert(pow2(ndims) == len && "dimension number is not powr of 2!");
 
+        this->len = len + 2;
         // allocate len+2 so we can 1-index
-        int a = posix_memalign((void **)&v, 128,
-                               ((long long)len + 2) * sizeof(real));
-        assert(v != nullptr && "memory allocation failed");
-        (void)a;
+        v = new T[len + 2];
+        // int a = posix_memalign((void **)&v, 128,
+        //                        ((long long)len + 2) * sizeof(real));
+        // assert(v != nullptr && "memory allocation failed");
+        // (void)a;
     }
 
     inline int getlen() const { return len; }
     inline void alloczero(int len) {
-        this->len = len;
-        this->v = (real *)calloc(len, sizeof(real));
+        alloc(len);
+        for (int i = 0; i < this->len; ++i) v[i] = 0;
     }
 
-    inline void set(int i, real val) { v[i] = val; }
-    inline real ix(int i) const { return v[i]; }
+    inline void set(int i, T val) { v[i] = val; }
+    inline T ix(int i) const { return v[i]; }
     inline void fillzero() const {
         for (int i = 0; i < len; ++i) v[i] = 0;
     }
 
     // return 1?
     // inline real lensq() const { return dot(*this); }
-    inline real lensq() const { return 1; }
+    inline T lensq() const { return T(1); }
 
     inline void normalize() { scale(1.0 / sqrt(lensq())); }
 
-    inline void scale(real f) {
-        for (int i = 0; i < len; ++i) v[i] *= f;
+    inline void scale(T f) {
+        for (int i = 0; i <= len; ++i) v[i] *= f;
     }
 
-    inline void accumscaleadd(float f, const Vec &v2) {
-        for (int i = 0; i < len; ++i) v[i] += f * v2.v[i];
+    inline void accumscaleadd(T f, const VecT<T> &v2) {
+        for (int i = 0; i <= len; ++i) v[i] += f * v2.v[i];
     }
 
     // scalar product is useless!
@@ -151,8 +157,8 @@ struct Vec {
     // __non symmetric__. For example,
     // 1. scalar * space = scalar (since the space contains the scalar)
     // 2. space * scalar = 0 (since the scalar does NOT contain the space)
-    inline real dotContainment(const Vec &v2) {
-        real dot = 0;
+    inline T dotContainment(const VecT<T> &v2) {
+        T dot = T(0);
         // the r in nCr
         // printf("===\n");
         for (int sd = 0; sd < ndims; ++sd) {
@@ -174,8 +180,11 @@ struct Vec {
                         // r \subset s
                         // r / (r \cap s) == emptyset
                         // r ^ (r & s) == emptyset
-                        if ((r ^ (r & s)) != 0) continue;
-                        dot += v[rbase + r] * v2.v[sbase + s];
+
+                        // HACK: we need a condition that checks
+                        // if they share bases!
+                        // if ((r ^ (r & s)) != 0) continue;
+                        dot += this->v[rbase + r] * v2.v[sbase + s];
                     }
                 }
             }
@@ -186,17 +195,29 @@ struct Vec {
 
     // what should this do?
     // this is returning the scalar product!
-    // inline real dot(const Vec &v2) const {
-    //     real d = 0;
-    //     for (int i = 0; i < len; ++i) d += v[i] * v2.v[i];
-    //     return d;
-    // }
+    inline T dot(const VecT<T> &v2) const {
+        T d = T(0);
+        for (int i = 0; i < len; ++i) d += v[i] * v2.v[i];
+        return d;
+    }
 };
+
+using Vec = VecT<real>;
+using VecDiff = VecT<adept::adouble>;
 
 void printvec(const Vec &v, int n) {
     printf("|");
     for (int a = 0; a < min(n, v.getlen()); a++) {
         printf("%5.2f", v.ix(a));
+        if (a != min(n, v.getlen()) - 1) printf(" ");
+    }
+    printf("|\n");
+}
+
+void printvecdiff(const VecDiff &v, int n) {
+    printf("|");
+    for (int a = 0; a < min(n, v.getlen()); a++) {
+        printf("%5.2f", (real)v.ix(a).value());
         if (a != min(n, v.getlen()) - 1) printf(" ");
     }
     printf("|\n");
@@ -210,6 +231,20 @@ void writevec(FILE *f, Vec &v) {
 }
 
 void readvec(FILE *f, Vec &v) {
+    for (int a = 0; a < v.getlen(); a++) {
+        real r;
+        fread(&r, sizeof(real), 1, f);
+        v.set(a, r);
+    }
+}
+void writevecdiff(FILE *f, VecDiff &v) {
+    for (int a = 0; a < v.getlen(); a++) {
+        real r = v.ix(a).value();
+        fwrite(&r, sizeof(real), 1, f);
+    }
+}
+
+void readvecdiff(FILE *f, VecDiff &v) {
     for (int a = 0; a < v.getlen(); a++) {
         real r;
         fread(&r, sizeof(real), 1, f);

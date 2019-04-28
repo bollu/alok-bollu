@@ -12,6 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#include <adept.h>
+#include <adept/Stack.h>
+#include <adept/scalar_shortcuts.h>
 #include <assert.h>
 #include <math.h>
 #include <pthread.h>
@@ -19,6 +22,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "vec.h"
+
+using adept::adouble;
+
+// we ALWAYS need to have a stack for the allocation to work...
+// This is so retarded
+adept::Stack GlobalStack;
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -44,8 +53,8 @@ int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0,
           classes = 0;
-real alpha = 0.01, starting_alpha, sample = 1e-3;
-Vec *syn0, *syn1, *syn1neg;
+real alpha = 0.025, starting_alpha, sample = 1e-3;
+VecDiff *syn0, *syn1, *syn1neg;
 real *expTable;
 clock_t start;
 
@@ -371,24 +380,34 @@ void InitNet() {
     long long a, b;
     unsigned long long next_random = 1;
 
+    printf("allocating raw syn0 memory...");
+    fflush(stdout);
     a = posix_memalign((void **)&syn0, 128,
-                       (long long)vocab_size * sizeof(Vec));
+                       (long long)vocab_size * sizeof(VecDiff));
     if (syn0 == NULL) {
         printf("Memory allocation failed\n");
         exit(1);
     }
-    printf("allocating syn0...");
+    printf("%callocated syn0 memory.\n", 13);
+    printf("initializing syn0...");
+    fflush(stdout);
+    // sum = max value of dot product possible of:
+    // dotConttainment([1 1 1..], [1 1 1...])
+    int sum = 0;
+    for (a = 0; a < log2(layer1_size); ++a) {
+        sum += pow2(a) * (pow2(a + 1) - 1);
+    }
+
     for (a = 0; a < vocab_size; ++a) {
-        new (Vec)(syn0[a]);
+        new (VecDiff)(syn0[a]);
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].set(
-                b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
-                       ((real)layer1_size * ((real)layer1_size - 1.0) / 2.0));
+            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
+                               ((real)(sum)));
         }
     }
-    printf("%callocated syn0.\t\t\t\t\n", 13);
+    printf("%initialized syn0.\t\t\t\t\n", 13);
     // if (hs) {
     //     a = posix_memalign((void **)&syn1, 128,
     //                        (long long)vocab_size * layer1_size *
@@ -403,14 +422,14 @@ void InitNet() {
     printf("allocating syn1neg...");
     if (negative > 0) {
         a = posix_memalign((void **)&syn1neg, 128,
-                           (long long)vocab_size * sizeof(Vec));
+                           (long long)vocab_size * sizeof(VecDiff));
         if (syn1neg == NULL) {
             printf("Memory allocation failed\n");
             exit(1);
         }
 
         for (a = 0; a < vocab_size; a++) {
-            new (Vec)(syn1neg[a]);
+            new (VecDiff)(syn1neg[a]);
             syn1neg[a].alloc(layer1_size);
             for (b = 0; b < layer1_size; b++) syn1neg[a].set(b, 0);
         }
@@ -419,19 +438,29 @@ void InitNet() {
     CreateBinaryTree();
 }
 
+template <typename T>
+T sigmoid(T v) {
+    return 1.0 / (1 + exp(-v));
+}
+
 void *TrainModelThread(void *id) {
+    adept::Stack stack;
     long long a, b, d, cw, word, last_word, sentence_length = 0,
                                             sentence_position = 0;
     long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
     long long l1, l2, c, target, label, local_iter = iter;
     unsigned long long next_random = (long long)id;
     char eof = 0;
-    real f, g;
+    adept::adouble f, g;
     clock_t now;
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
     // real *neu1e = (real *)calloc(layer1_size, sizeof(real));
-    Vec neu1e;
+
+    printf("allocating neu1e...\n");
+    VecDiff neu1e;
     neu1e.alloczero(layer1_size);
+    printf("allocated neu1e.");
+    fflush(stdout);
 
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
@@ -450,11 +479,11 @@ void *TrainModelThread(void *id) {
                                          (real)CLOCKS_PER_SEC * 1000));
 
                 for (int i = 0; i < 5; ++i) {
-                    printvec(syn0[i], 5);
+                    printvecdiff(syn0[i], 32);
                 }
                 printf("^-pos-^---v-neg-v---\n");
                 for (int i = 0; i < 5; ++i) {
-                    printvec(syn1neg[i], 5);
+                    printvecdiff(syn1neg[i], 34);
                 }
                 fflush(stdout);
             }
@@ -631,7 +660,8 @@ void *TrainModelThread(void *id) {
                     }
                 */
                 // NEGATIVE SAMPLING
-                if (negative > 0)
+                stack.new_recording();
+                if (negative > 0) {
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;
@@ -647,9 +677,10 @@ void *TrainModelThread(void *id) {
                             label = 0;
                         }
                         l2 = target * layer1_size;
-                        Vec *syn0v = &syn0[last_word];
-                        Vec *syn1negv = &syn1neg[target];
+                        VecDiff *syn0v = &syn0[last_word];
+                        VecDiff *syn1negv = &syn1neg[target];
                         f = syn0v->dotContainment(*syn1negv);
+                        f = syn0v->dot(*syn1negv);
                         // for (c = 0; c < layer1_size; c++)
                         //     f += syn0[c + l1] * syn1neg[c + l2];
                         // ****
@@ -660,14 +691,20 @@ void *TrainModelThread(void *id) {
                         // (SIDDHARTH BHAT) <siddu.druid@gmail.com>
                         // ******
                         // ******
-                        const int index =
-                            ((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2));
-                        if (index >= EXP_TABLE_SIZE)
-                            g = (label - 1) * alpha;
-                        else if (index < 0)
-                            g = (label - 0) * alpha;
-                        else
-                            g = (label - expTable[index]) * alpha;
+                        g = (label - sigmoid(f));
+                        // const int index =
+                        //     ((f + adept::adouble(MAX_EXP)) *
+                        //      adept::adouble(EXP_TABLE_SIZE / MAX_EXP / 2));
+                        // if (index >= EXP_TABLE_SIZE ||
+                        //     f > adept::adouble(MAX_EXP))
+                        //     g = (label - 1) * alpha;
+                        // else if (index < 0 || f < adept::adouble(-MAX_EXP))
+                        //     g = (label - 0) * alpha;
+                        // else
+                        //     g = (label - expTable[index]) * alpha;
+
+                        g.set_gradient(1.0);
+                        stack.compute_adjoint();
 
                         neu1e.accumscaleadd(g, *syn1negv);
                         syn1negv->accumscaleadd(g, *syn0v);
@@ -676,6 +713,7 @@ void *TrainModelThread(void *id) {
                         // for (c = 0; c < layer1_size; c++)
                         //     syn1neg[c + l2] += g * syn0[c + l1];
                     }
+                }
                 // Learn weights input -> hidden
                 // for (c = 0; c < layer1_size; c++) syn0[c + l1] +=
                 // neu1e[c];
@@ -720,12 +758,12 @@ void TrainModel() {
             fprintf(fo, "%s ", vocab[a].word);
             if (binary)
                 for (b = 0; b < layer1_size; b++) {
-                    real r = syn0[a].ix(b);
+                    real r = syn0[a].ix(b).value();
                     fwrite(&r, sizeof(real), 1, fo);
                 }
             else
                 for (b = 0; b < layer1_size; b++)
-                    fprintf(fo, "%lf ", syn0[a].ix(b));
+                    fprintf(fo, "%lf ", syn0[a].ix(b).value());
             fprintf(fo, "\n");
         }
     } else {
@@ -741,7 +779,7 @@ void TrainModel() {
             for (b = 0; b < clcn; b++) centcn[b] = 1;
             for (c = 0; c < vocab_size; c++) {
                 for (d = 0; d < layer1_size; d++)
-                    cent[layer1_size * cl[c] + d] += syn0[c].ix(d);
+                    cent[layer1_size * cl[c] + d] += syn0[c].ix(d).value();
                 centcn[cl[c]]++;
             }
             for (b = 0; b < clcn; b++) {
@@ -761,7 +799,7 @@ void TrainModel() {
                 for (d = 0; d < clcn; d++) {
                     x = 0;
                     for (b = 0; b < layer1_size; b++)
-                        x += cent[layer1_size * d + b] * syn0[c].ix(b);
+                        x += cent[layer1_size * d + b] * syn0[c].ix(b).value();
                     if (x > closev) {
                         closev = x;
                         closeid = d;
@@ -916,6 +954,7 @@ int main(int argc, char **argv) {
         min_count = atoi(argv[i + 1]);
     if ((i = ArgPos((char *)"-classes", argc, argv)) > 0)
         classes = atoi(argv[i + 1]);
+
     vocab =
         (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
     vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));

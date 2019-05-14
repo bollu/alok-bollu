@@ -49,6 +49,7 @@ space embeddings.
 # To investigate for data handling:
 - [sacred](https://sacred.readthedocs.io/en/latest/experiment.html)
 - [DVC](https://dvc.org/doc/get-started)
+- [MLFlow](https://www.mlflow.org/docs/latest/index.html)
 
 # References
 - [ipynb with sample implementation of skip gram](https://github.com/jojonki/word2vec-pytorch/blob/master/word2vec.ipynb)

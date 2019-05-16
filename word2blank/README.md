@@ -49,20 +49,25 @@ the random vectors quickly force the metric to become degenerate,
 or the metric grows to strongly favour a small number of
 dimensions. I do not know how to stabilize this training
 
-Perhaps something like fixing the weights of either the vecoyds
-Or the manifold for a batch might work.
+Perhaps something like fixing the weights of either the vectors
+or the manifold for a batch might work.
 
 Otherwise, read the literature from GAN training
 
 There is the other fact that the repo is fast because the
 gradient descent is hand written: the gradient computation
 is done by hand, and no automatic differentiation library is used 
-I tried to use ATEN, but it imposes an order of magnitude performance
-cost which is very steep.
+I tried to use ATEN because I don't know how to
+implement reimannian SGD, but it imposes an order of magnitude performance
+cost which is very steep. Unfortunately, I can find no
+accessible explanation of reimannian stochastic gradient
+descent `:/` I am hoping to be able to read enough diffgeo
+so I can implement a version of the algorithm that I
+understand.
 
 Similarly, trying to exploit GPU parallelism with
 Arrayfire was also useless, since the overhead of
-Synchronisation kills any performance gains 
+synchronisation kills any performance gains 
 
 In general, the code is written in a style that is extremely
 race heavy into its main data structures, which makes adapting

@@ -4,7 +4,13 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <cmath>
 typedef float real;  // Precision of float numbers
+
+template <typename T>
+T min(T x, T y) {
+    return x < y ? x : y;
+}
 
 // let the dimensionality of the space be n. We have:
 // 1 -- 0D component
@@ -183,11 +189,25 @@ struct Vec {
                 // check if J is subset of I
                 const bool subset = (j & i) == j;
                 if (!subset) continue;
-                dot += v[i] * other.v[j];
+
+                // provide larger dot products for more dimensions they
+                // share accurately in common
+                const real weight = [&]() {
+                    const int delta = __builtin_popcount(i) -  __builtin_popcount(j);
+                    assert(delta >= 0);
+
+                    return 1.0 / pow2(delta);
+                }();
+
+                dot += weight * v[i] * other.v[j];
                 if (!grad) continue;
 
-                if(gbufthis) gbufthis[i] += other.v[j];
-                if(gbufother) gbufother[j] += this->v[i];
+                // make the gradients of larger dimensions expoentnially
+                // much larger, thereby forcing them to only be used
+                // if they truly exist. Otherwise, they will be squashed towards
+                // 0
+                if (gbufthis) gbufthis[i] += other.v[j] * weight;
+                if (gbufother) gbufother[j] += this->v[i] * weight;
             }
         }
 

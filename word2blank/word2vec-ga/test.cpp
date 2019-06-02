@@ -82,36 +82,46 @@ void learnline() {
     printf("LEARNING TO BE NORMAL TO A HYPERPLANE\n");
     Vec normal;
     normal.alloczero(4);
+    normal.v[0] = 1;
     normal.v[1] = 1;
-    normal.v[2] = 2;
+    normal.v[2] = 1;
+    normal.v[3] = 1;
 
     Vec random;
     random.alloc(4);
-    for (int i = 0; i < 4; ++i) random.v[i] = ((rand() % 8) - 4) / 4.0;
-
-    printvec(normal, "normal", nullptr);
-    printvec(random, "random", nullptr);
+    for (int i = 0; i < 4; ++i)
+        random.v[i] = real(((rand() % 10) - 5.0) / 5.0);
+    printvec(random, "random_init", nullptr);
 
     real *grad = (float *)malloc(4 * sizeof(real));
 
     float dot = 1.0;
     int round = 1;
-    for (; fabs(dot) > 0.001 && round < 1000; ++round) {
+    for (; fabs(dot) > 0.001 && round < 10000; ++round) {
         for (int i = 0; i < 4; ++i) grad[i] = 0;
 
         dot = 0;
-        // dot += random.dotContainment(normal, true, grad, nullptr);
-        // take the other direction of dot product as well?
-        dot += normal.dotContainment(random, true, nullptr, grad);
-        printf("#%d  ", round);
-        printf("dot: %.5f\n", dot);
-        printvec(random, "", grad);
+        // Uniformly sample from {00, 01, 10, 11} and then pick the number
+        // of dimensions as the number of 1s.
+        const int r = rand() % 4;
+        const int curdim = __builtin_popcount(r);
+        // dot += normal.dotContainment(random, true, nullptr, grad);
+        dot += random.dotContainment(normal, true, grad, nullptr);
         for (int i = 0; i < 4; ++i)
             random.v[i] += -1.0 * learning_rate * dot * grad[i];
     }
+
+    // take the other direction of dot product as well?
+    // dot += normal.dotContainment(random, true, nullptr, grad);
+    printf("#%d  ", round);
+    printf("dot: %.5f\n", dot);
+    printvec(normal, "normal", grad);
+    printf("--\n");
+    printvec(random, "random", grad);
 }
 
 int main(int argc, char **argv) {
+    srand(time(NULL));
     testdot();
     testgradient();
     learnline();

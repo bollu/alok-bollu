@@ -678,6 +678,12 @@ void *TrainModelThread(void *id) {
                         else
                             err = (label - expTable[index]) * alpha;
 
+
+
+                        // update error by learning rate
+                        const real learning_rate = 0.01;
+                        err *= learning_rate;
+
                         // neu1e.accumscaleadd(g, *syn1negv, /*gradient=*/false);
                         // syn1negv->accumscaleadd(g, *syn0v, /*gradient=*/false);
                         // for (c = 0; c < layer1_size; c++)
@@ -958,12 +964,9 @@ int mainw2v(int argc, char **argv) {
     return 0;
 }
 
-int word2vecmain(int argc, char *argv[]) {
-    return 0;
-}
 
 int main(int argc, char *argv[]) {
-    // experiment here.
+    main2v(argc, argv);
     return 0;
 
 }

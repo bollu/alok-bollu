@@ -46,6 +46,9 @@ static const int MAXC = 1000;
 int C[MAXC][MAXC];
 
 // init the table of C[n][r]
+
+
+__attribute__((constructor))
 void initCTable() {
     C[0][0] = 1;
     C[1][0] = C[1][1] = 1;
@@ -57,6 +60,7 @@ void initCTable() {
         }
     }
 }
+
 
 // dumb encoding of GA. uses log2(n)elements.
 struct Vec {
@@ -180,21 +184,33 @@ struct Vec {
             float *gbufthis,
             float *gbufother) const {
         real dot = 0;
+        for(unsigned int i = 0; i < pow2(ndims); i++) {
+            for(unsigned int j = 0; j < pow2(ndims); j++) {
+                // check if J is subset of I
+                const bool subset = (j & i) == j;
+                if (!subset) continue;
+                dot += v[i] * other.v[j];
+            }
+        }
         // the r in nCr
-        for (int sd = 0; sd < this->ndims; ++sd) {
+        /*
+        for (int sd = 0; sd <= ndims; ++sd) {
             // number of elements in this s dimension = 2^s
-            const int ns = sd == 0 ? 1 : C[ndims][sd];
-            // 1 + nC0 + nC1 + .. nCs.
-            const int sbase = sd == 0 ? 0 : pow2(sd - 1);
+            const int ns = C[ndims][sd];
+            // nC0 + nC1 + .. nCs.
+            const int sbase = pow2(sd) - 1;
             for (int rd = 0; rd <= sd; ++rd) {
-                const int nr = rd == 0 ? 1 : C[ndims][rd];
-                const int rbase = rd == 0 ? 0 : pow2(rd - 1);
+                const int nr =  C[ndims][rd];
+                const int rbase =  pow2(rd) - 1;
 
                 for (int s = 0; s < ns; ++s) {
                     for (int r = 0; r < nr; ++r) {
                         // r \subset s
                         // (r^c \cap s != emptyset) || r == s
-                        const bool subset = r == s || (((!r) & s) != 0);
+                        const bool subset = (r == s) || (((!r) & s) != 0);
+
+                        // printf("%4d  %4d  %4d  %4d  %4d\n", sd, s, rd, r, subset);
+                        printf("%4d %4d   %2d\n", sbase + s, rbase + r, subset);
                         if (!subset) continue;
                         dot += v[sbase + s] * other.v[rbase + r];
 
@@ -207,6 +223,7 @@ struct Vec {
                 }
             }
         }
+        */
 
         return dot;
     }

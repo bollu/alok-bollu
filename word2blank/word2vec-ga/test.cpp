@@ -1,35 +1,46 @@
 // Run tests on the implementation of geometric algebra and ensure that
 // we have implemented this correctly
-#include "vec.h"
 #include <assert.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <map>
+#include "vec.h"
 
-int testdot() {
-    Vec scalar, x, y, xy;
+void testdot() {
+    std::map<std::string, Vec> vs;
 
-    scalar.alloczero(4);
-    x.alloczero(4);
-    y.alloczero(4);
-    xy.alloczero(4);
+    vs["scalar"].alloczero(4);
+    vs["x"].alloczero(4);
+    vs["y"].alloczero(4);
+    vs["xy"].alloczero(4);
 
-    scalar.v[0] = 11;
-    x.v[1] = 3;
-    y.v[2] = 5;
-    xy.v[3] = 7;
+    vs["scalar"].v[0] = 11;
+    vs["x"].v[1] = 3;
+    vs["y"].v[2] = 5;
+    vs["xy"].v[3] = 7;
 
+    for (auto it : vs) {
+        std::string name = it.first;
+        printvec(it.second, name.c_str(), nullptr);
+        printf("\n");
+    }
 
-    printvec(scalar, "scalar", nullptr);
-    printvec(x, "x", nullptr);
-    printvec(y, "y", nullptr);
-    printvec(xy, "xy", nullptr);
-
-
+    printf("***dot products***\n");
+    for (auto it : vs) {
+        const std::string name = it.first;
+        for (auto it2 : vs) {
+            const std::string name2 = it2.first;
+            printf(
+                "%8s %8s %10.3f\n", name.c_str(), name2.c_str(),
+                it.second.dotContainment(it2.second, false, nullptr, nullptr));
+        }
+    }
 }
 
 int main(int argc, char **argv) {
     testdot();
+    return 1;
 }

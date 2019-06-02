@@ -1,9 +1,9 @@
 #pragma once
 #ifndef VEC_H
 #define VEC_H
-#include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
 typedef float real;  // Precision of float numbers
 
 // let the dimensionality of the space be n. We have:
@@ -47,9 +47,7 @@ int C[MAXC][MAXC];
 
 // init the table of C[n][r]
 
-
-__attribute__((constructor))
-void initCTable() {
+__attribute__((constructor)) void initCTable() {
     C[0][0] = 1;
     C[1][0] = C[1][1] = 1;
 
@@ -60,7 +58,6 @@ void initCTable() {
         }
     }
 }
-
 
 // dumb encoding of GA. uses log2(n)elements.
 struct Vec {
@@ -77,11 +74,12 @@ struct Vec {
         this->len = len;
         this->ndims = log2(len);
         // make sure that the length given is a power of two.
-        assert(pow2(this->ndims) == len && "dimension number is not powr of 2!");
+        assert(pow2(this->ndims) == len &&
+               "dimension number is not powr of 2!");
 
         int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
         assert(v != nullptr && "memory allocation failed");
-        (void) a;
+        (void)a;
     }
 
     inline int getlen() const { return len; }
@@ -89,22 +87,22 @@ struct Vec {
         this->len = len;
         this->ndims = log2(len);
         // make sure that the length given is a power of two.
-        assert(pow2(this->ndims) == len && "dimension number is not powr of 2!");
+        assert(pow2(this->ndims) == len &&
+               "dimension number is not powr of 2!");
         this->v = (real *)calloc(len, sizeof(real));
     }
 
     // also update partial sums every time set is called.
     // So this is expensive to do.
-    inline void set(int i, real val) {
-        v[i] = val;
-    }
+    inline void set(int i, real val) { v[i] = val; }
 
     inline real ix(int i) const { return v[i]; }
 
     inline void fillzero() const {
-        for (int i = 0; i < len; ++i) { v[i] = 0; }
+        for (int i = 0; i < len; ++i) {
+            v[i] = 0;
+        }
     }
-
 
     // return 1?
     inline real lensq() const {
@@ -119,17 +117,12 @@ struct Vec {
         // z = x * const
         // dz/dt = const * dx/dt
         if (gbuf == nullptr) return;
-        for(int i = 0; i < len; ++i) gbuf[i] *= f;
+        for (int i = 0; i < len; ++i) gbuf[i] *= f;
     }
 
     inline void accumscaleadd(real f, const Vec &other) {
-        for(int i = 0; i < len; ++i)
-            v[i] += f * other.v[i];
+        for (int i = 0; i < len; ++i) v[i] += f * other.v[i];
     }
-
-
-
-
 
     // scalar product is useless!
     // https://arxiv.org/pdf/1205.5935.pdf (Geometric Algebra: Eric Chisolm)
@@ -180,61 +173,27 @@ struct Vec {
     // A = p + qe_1 + r e_2 + s re_1e_2
     // B = w + xe_1 + ye_2 + ze_1e_2
     // A.b == p (w + x + y + z) + q (x + z) + r (y + z) + s z
-    inline real dotContainment(const Vec &other, bool grad,
-            float *gbufthis,
-            float *gbufother) const {
+    // <scalar> . <anything other than scalar> = 0
+    // <full space>  . <anything> = dot product
+    inline real dotContainment(const Vec &other, bool grad, float *gbufthis,
+                               float *gbufother) const {
         real dot = 0;
-        for(unsigned int i = 0; i < pow2(ndims); i++) {
-            for(unsigned int j = 0; j < pow2(ndims); j++) {
+        for (unsigned int i = 0; i < pow2(ndims); i++) {
+            for (unsigned int j = 0; j < pow2(ndims); j++) {
                 // check if J is subset of I
                 const bool subset = (j & i) == j;
                 if (!subset) continue;
                 dot += v[i] * other.v[j];
+                if (!grad) continue;
+
+                gbufthis[i] += other.v[j];
+                gbufother[j] += this->v[i];
             }
         }
-        // the r in nCr
-        /*
-        for (int sd = 0; sd <= ndims; ++sd) {
-            // number of elements in this s dimension = 2^s
-            const int ns = C[ndims][sd];
-            // nC0 + nC1 + .. nCs.
-            const int sbase = pow2(sd) - 1;
-            for (int rd = 0; rd <= sd; ++rd) {
-                const int nr =  C[ndims][rd];
-                const int rbase =  pow2(rd) - 1;
-
-                for (int s = 0; s < ns; ++s) {
-                    for (int r = 0; r < nr; ++r) {
-                        // r \subset s
-                        // (r^c \cap s != emptyset) || r == s
-                        const bool subset = (r == s) || (((!r) & s) != 0);
-
-                        // printf("%4d  %4d  %4d  %4d  %4d\n", sd, s, rd, r, subset);
-                        printf("%4d %4d   %2d\n", sbase + s, rbase + r, subset);
-                        if (!subset) continue;
-                        dot += v[sbase + s] * other.v[rbase + r];
-
-                        // if we are not interested in gradients, just continue.
-                        if (!grad) continue;
-
-                        gbufthis[sbase+s] += other.v[rbase + r];
-                        gbufother[rbase+r] += this->v[sbase + s];
-                    }
-                }
-            }
-        }
-        */
 
         return dot;
     }
 
-    // what should this do?
-    // this is returning the scalar product!
-    // inline real dot(const Vec &v2) const {
-    //     real d = 0;
-    //     for (int i = 0; i < len; ++i) d += v[i] * v2.v[i];
-    //     return d;
-    // }
 };
 
 void writevec(FILE *f, Vec &v) {
@@ -254,18 +213,22 @@ void readvec(FILE *f, Vec &v) {
 
 // print in little endian: <ABC> = 4A + 2B + C
 void printbinary(int v, int ndigits) {
-    for(int i = ndigits-1; i >= 0; i--) {
+    for (int i = ndigits - 1; i >= 0; i--) {
         printf("%d", (bool)(v & (1 << i)));
     }
 }
 void printvec(Vec &v, const char *name, real *grad) {
     // number of digits to print == dimension.
     const int ndigits = v.ndims;
-    for(int i = 0; i < v.len; ++i) {
-        printf("%s", name); printf("["); printbinary(i, ndigits); printf("]");
+    for (int i = 0; i < v.len; ++i) {
+        printf("%s", name);
+        printf("[");
+        printbinary(i, ndigits);
+        printf("]");
         printf(": %f", v.v[i]);
         if (grad != nullptr) {
-            printf("  ∇"); printf("%f", grad[i]);
+            printf("  ∇");
+            printf("%f", grad[i]);
         }
         printf("\n");
     }

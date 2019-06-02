@@ -4,7 +4,10 @@ DEBUG=-fsanitize=address -fsanitize=undefined -g -O0
 RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall -funroll-loops -Wno-unused-result ${RELEASE}
 
-all: word2vec word2phrase distance word-analogy compute-accuracy
+all: word2vec word2phrase distance word-analogy compute-accuracy test
+
+test: test.cpp vec.h
+	$(CC) -std=c++11 test.cpp -o test $(CFLAGS)
 
 word2vec : word2vec.cpp vec.h
 	$(CC) -std=c++11 word2vec.cpp -o word2vec $(CFLAGS)

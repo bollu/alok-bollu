@@ -966,7 +966,7 @@ int mainw2v(int argc, char **argv) {
 
 
 int main(int argc, char *argv[]) {
-    main2v(argc, argv);
+    mainw2v(argc, argv);
     return 0;
 
 }

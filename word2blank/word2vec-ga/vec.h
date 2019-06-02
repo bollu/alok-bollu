@@ -1,6 +1,7 @@
 #pragma once
 #ifndef VEC_H
 #define VEC_H
+#include <stdio.h>
 #include <assert.h>
 #include <math.h>
 typedef float real;  // Precision of float numbers
@@ -72,7 +73,7 @@ struct Vec {
         this->len = len;
         this->ndims = log2(len);
         // make sure that the length given is a power of two.
-        assert(pow2(ndims) == len && "dimension number is not powr of 2!");
+        assert(pow2(this->ndims) == len && "dimension number is not powr of 2!");
 
         int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
         assert(v != nullptr && "memory allocation failed");
@@ -82,6 +83,9 @@ struct Vec {
     inline int getlen() const { return len; }
     inline void alloczero(int len) {
         this->len = len;
+        this->ndims = log2(len);
+        // make sure that the length given is a power of two.
+        assert(pow2(this->ndims) == len && "dimension number is not powr of 2!");
         this->v = (real *)calloc(len, sizeof(real));
     }
 
@@ -234,7 +238,7 @@ void readvec(FILE *f, Vec &v) {
 // print in little endian: <ABC> = 4A + 2B + C
 void printbinary(int v, int ndigits) {
     for(int i = ndigits-1; i >= 0; i--) {
-        printf("%d", v & (1 << i));
+        printf("%d", (bool)(v & (1 << i)));
     }
 }
 void printvec(Vec &v, const char *name, real *grad) {

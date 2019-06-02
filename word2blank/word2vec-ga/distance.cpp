@@ -42,7 +42,7 @@ void dot() {
     float d = 0;
     // for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] *
     // size];
-    d = M[bi[1]].dotContainment(M[bi[2]]);
+    d = M[bi[1]].dotContainment(M[bi[2]], /*gradient=*/false, nullptr, nullptr);
 
     // lensq = 0;
     // for (a = 0; a < size; a++)
@@ -82,7 +82,7 @@ void cosine() {
         if (a == 1) continue;
         // dist = 0;
         // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-        dist = vec.dotContainment(M[c]);
+        dist = vec.dotContainment(M[c], /*gradient=*/false, nullptr, nullptr);
         for (a = 0; a < N; a++) {
             if (dist > bestd[a]) {
                 for (d = N - 1; d > a; d--) {

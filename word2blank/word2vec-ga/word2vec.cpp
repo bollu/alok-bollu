@@ -419,16 +419,24 @@ void InitNet() {
 }
 
 void *TrainModelThread(void *id) {
-    long long a, b, d, cw, word, last_word, sentence_length = 0,
+    long long a, b, d, word, last_word, sentence_length = 0,
                                             sentence_position = 0;
     long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
     long long l1, l2, c, target, label, local_iter = iter;
     unsigned long long next_random = (long long)id;
     char eof = 0;
-    real f, g;
+    real f, err;
     clock_t now;
-    real *neu1 = (real *)calloc(layer1_size, sizeof(real));
+    // real *neu1 = (real *)calloc(layer1_size, sizeof(real));
     // real *neu1e = (real *)calloc(layer1_size, sizeof(real));
+    // buffer to store gradient of syn0 in one round
+    real *gsyn0 = (real *)calloc(layer1_size, sizeof(real));
+    // buffer to accumulate gradient of syn0
+    real *gsyn0_accum = (real *)calloc(layer1_size, sizeof(real));
+
+    // buffer to store gradient of syn1neg
+    real *gsyn1neg = (real *)calloc(layer1_size, sizeof(real));
+
     Vec neu1e;
     neu1e.alloczero(layer1_size);
 
@@ -490,7 +498,7 @@ void *TrainModelThread(void *id) {
         }
         word = sen[sentence_position];
         if (word == -1) continue;
-        for (c = 0; c < layer1_size; c++) neu1[c] = 0;
+        // for (c = 0; c < layer1_size; c++) neu1[c] = 0;
         neu1e.fillzero();
         // for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
         next_random = next_random * (unsigned long long)25214903917 + 11;
@@ -640,7 +648,17 @@ void *TrainModelThread(void *id) {
                         l2 = target * layer1_size;
                         Vec *syn0v = &syn0[last_word];
                         Vec *syn1negv = &syn1neg[target];
-                        f = syn0v->dotContainment(*syn1negv);
+
+                        // clear the buffers of syn1neg, syn0
+                        for(int i = 0; i < layer1_size; ++i) {
+                            gsyn1neg[i] = 0;
+                            gsyn0[i] = 0;
+                        }
+
+                        f = syn0v->dotContainment(*syn1negv, /*gradient=*/true,
+                                gsyn0,  // collect gradient for syn0 in its buf
+                                gsyn1neg // gradient for syn1neg in its buffer
+                                );
                         // for (c = 0; c < layer1_size; c++)
                         //     f += syn0[c + l1] * syn1neg[c + l2];
                         // ****
@@ -654,24 +672,44 @@ void *TrainModelThread(void *id) {
                         const int index =
                             ((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2));
                         if (index >= MAX_EXP)
-                            g = (label - 1) * alpha;
+                            err = (label - 1) * alpha;
                         else if (index < 0)
-                            g = (label - 0) * alpha;
+                            err = (label - 0) * alpha;
                         else
-                            g = (label - expTable[index]) * alpha;
-                        neu1e.accumscaleadd(g, *syn1negv);
-                        syn1negv->accumscaleadd(g, *syn0v);
+                            err = (label - expTable[index]) * alpha;
+
+                        // neu1e.accumscaleadd(g, *syn1negv, /*gradient=*/false);
+                        // syn1negv->accumscaleadd(g, *syn0v, /*gradient=*/false);
                         // for (c = 0; c < layer1_size; c++)
                         //     neu1e[c] += g * syn1neg[c + l2];
                         // for (c = 0; c < layer1_size; c++)
                         //     syn1neg[c + l2] += g * syn0[c + l1];
+
+                        //  update weights of syn1neg according to gradient
+                        for(int i = 0; i < layer1_size; ++i) {
+                            syn1neg->v[i] += err * gsyn1neg[i];
+                        }
+
+                        // store weights of gsync0 in gsyn0_accum
+                        // to be accumulated.
+                        for(int i = 0; i < layer1_size; ++i) {
+                            gsyn0_accum[i] += gsyn0[i] * err;
+                        }
+
                     }
                 // Learn weights input -> hidden
-                // for (c = 0; c < layer1_size; c++) syn0[c + l1] +=
-                // neu1e[c];
-                syn0[last_word].accumscaleadd(1, neu1e);
+                // for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+
+                // update syn0 in one large step
+                for(int i = 0; i < layer1_size; ++i) {
+                    syn1neg->v[i] += err * gsyn1neg[i];
+                }
+                // clear the buffers of gsyn0_accum
+                for(int i = 0; i < layer1_size; ++i) {
+                    gsyn0_accum[i] = 0;
+                }
             }
-        // }
+
         sentence_position++;
         if (sentence_position >= sentence_length) {
             sentence_length = 0;
@@ -679,7 +717,7 @@ void *TrainModelThread(void *id) {
         }
     }
     fclose(fi);
-    free(neu1);
+    // free(neu1);
     neu1e.freemem();
     pthread_exit(NULL);
 }
@@ -783,7 +821,7 @@ int ArgPos(char *str, int argc, char **argv) {
     return -1;
 }
 
-int main(int argc, char **argv) {
+int mainw2v(int argc, char **argv) {
     int i;
     if (argc == 1) {
         printf("WORD VECTOR estimation toolkit v 0.1c\n\n");
@@ -918,4 +956,14 @@ int main(int argc, char **argv) {
     }
     TrainModel();
     return 0;
+}
+
+int word2vecmain(int argc, char *argv[]) {
+    return 0;
+}
+
+int main(int argc, char *argv[]) {
+    // experiment here.
+    return 0;
+
 }

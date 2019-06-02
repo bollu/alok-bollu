@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
             if (c == b1) continue;
             if (c == b2) continue;
             if (c == b3) continue;
-            dist = vec.dotContainment(M[c]);
+            dist = vec.dotContainment(M[c], /*gradient=*/false, nullptr, nullptr);
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             for (a = 0; a < N; a++) {
                 if (dist > bestd[a]) {

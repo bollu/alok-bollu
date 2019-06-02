@@ -76,7 +76,7 @@ struct Vec {
 
         int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
         assert(v != nullptr && "memory allocation failed");
-        (void)a;
+        (void) a;
     }
 
     inline int getlen() const { return len; }
@@ -85,25 +85,43 @@ struct Vec {
         this->v = (real *)calloc(len, sizeof(real));
     }
 
-    inline void set(int i, real val) { v[i] = val; }
-    inline real ix(int i) const { return v[i]; }
-    inline void fillzero() const {
-        for (int i = 0; i < len; ++i) v[i] = 0;
+    // also update partial sums every time set is called.
+    // So this is expensive to do.
+    inline void set(int i, real val) {
+        v[i] = val;
     }
+
+    inline real ix(int i) const { return v[i]; }
+
+    inline void fillzero() const {
+        for (int i = 0; i < len; ++i) { v[i] = 0; }
+    }
+
 
     // return 1?
-    // inline real lensq() const { return dot(*this); }
-    inline real lensq() const { return 1; }
+    inline real lensq() const {
+        return dotContainment(*this, /*gradient=*/false, nullptr, nullptr);
+    }
+    // inline real lensq() const { return 1; }
 
-    inline void normalize() { scale(1.0 / sqrt(lensq())); }
+    inline void normalize() { scale(1.0 / sqrt(lensq()), nullptr); }
 
-    inline void scale(real f) {
+    inline void scale(real f, real *gbuf) {
         for (int i = 0; i < len; ++i) v[i] *= f;
+        // z = x * const
+        // dz/dt = const * dx/dt
+        if (gbuf == nullptr) return;
+        for(int i = 0; i < len; ++i) gbuf[i] *= f;
     }
 
-    inline void accumscaleadd(float f, const Vec &v2) {
-        for (int i = 0; i < len; ++i) v[i] += f * v2.v[i];
+    inline void accumscaleadd(real f, const Vec &other) {
+        for(int i = 0; i < len; ++i)
+            v[i] += f * other.v[i];
     }
+
+
+
+
 
     // scalar product is useless!
     // https://arxiv.org/pdf/1205.5935.pdf (Geometric Algebra: Eric Chisolm)
@@ -148,7 +166,15 @@ struct Vec {
     // __non symmetric__. For example,
     // 1. scalar * space = scalar (since the space contains the scalar)
     // 2. space * scalar = 0 (since the scalar does NOT contain the space)
-    inline real dotContainment(const Vec &v2) {
+    // so, for this, we will walk along the tree, and take the dot product
+    // of an element of A with the _partial sum of B_ upto that point.
+    // eg.
+    // A = p + qe_1 + r e_2 + s re_1e_2
+    // B = w + xe_1 + ye_2 + ze_1e_2
+    // A.b == p (w + x + y + z) + q (x + z) + r (y + z) + s z
+    inline real dotContainment(const Vec &other, bool grad,
+            float *gbufthis,
+            float *gbufother) const {
         real dot = 0;
         // the r in nCr
         for (int sd = 0; sd < this->ndims; ++sd) {
@@ -163,14 +189,21 @@ struct Vec {
                 for (int s = 0; s < ns; ++s) {
                     for (int r = 0; r < nr; ++r) {
                         // r \subset s
-                        // r / (r \cap s) == emptyset
-                        // r ^ (r & s) == emptyset
-                        if ((r ^ (r & s)) != 0) continue;
-                        dot += v[sbase + s] * v[rbase + r];
+                        // (r^c \cap s != emptyset) || r == s
+                        const bool subset = r == s || (((!r) & s) != 0);
+                        if (!subset) continue;
+                        dot += v[sbase + s] * other.v[rbase + r];
+
+                        // if we are not interested in gradients, just continue.
+                        if (!grad) continue;
+
+                        gbufthis[sbase+s] += other.v[rbase + r];
+                        gbufother[rbase+r] += this->v[sbase + s];
                     }
                 }
             }
         }
+
         return dot;
     }
 
@@ -195,6 +228,25 @@ void readvec(FILE *f, Vec &v) {
         real r;
         fread(&r, sizeof(real), 1, f);
         v.set(a, r);
+    }
+}
+
+// print in little endian: <ABC> = 4A + 2B + C
+void printbinary(int v, int ndigits) {
+    for(int i = ndigits-1; i >= 0; i--) {
+        printf("%d", v & (1 << i));
+    }
+}
+void printvec(Vec &v, const char *name, real *grad) {
+    // number of digits to print == dimension.
+    const int ndigits = v.ndims;
+    for(int i = 0; i < v.len; ++i) {
+        printf("%s", name); printf("["); printbinary(i, ndigits); printf("]");
+        printf(": %f", v.v[i]);
+        if (grad != nullptr) {
+            printf("  ∇"); printf("%f", grad[i]);
+        }
+        printf("\n");
     }
 }
 #endif

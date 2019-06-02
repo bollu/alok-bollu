@@ -186,8 +186,8 @@ struct Vec {
                 dot += v[i] * other.v[j];
                 if (!grad) continue;
 
-                gbufthis[i] += other.v[j];
-                gbufother[j] += this->v[i];
+                if(gbufthis) gbufthis[i] += other.v[j];
+                if(gbufother) gbufother[j] += this->v[i];
             }
         }
 

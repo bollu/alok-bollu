@@ -178,8 +178,8 @@ struct Vec {
     inline real dotContainment(const Vec &other, bool grad, float *gbufthis,
                                float *gbufother) const {
         real dot = 0;
-        for (unsigned int i = 0; i < pow2(ndims); i++) {
-            for (unsigned int j = 0; j < pow2(ndims); j++) {
+        for (unsigned int i = 0; i < len; i++) {
+            for (unsigned int j = 0; j < len; j++) {
                 // check if J is subset of I
                 const bool subset = (j & i) == j;
                 if (!subset) continue;
@@ -225,10 +225,10 @@ void printvec(Vec &v, const char *name, real *grad) {
         printf("[");
         printbinary(i, ndigits);
         printf("]");
-        printf(": %f", v.v[i]);
+        printf(": %4.2f", v.v[i]);
         if (grad != nullptr) {
             printf("  ∇");
-            printf("%f", grad[i]);
+            printf("%4.2f", grad[i]);
         }
         printf("\n");
     }

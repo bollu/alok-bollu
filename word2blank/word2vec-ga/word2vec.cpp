@@ -420,7 +420,7 @@ void InitNet() {
 
 void *TrainModelThread(void *id) {
     long long a, b, d, word, last_word, sentence_length = 0,
-                                            sentence_position = 0;
+                                        sentence_position = 0;
     long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
     long long l1, l2, c, target, label, local_iter = iter;
     unsigned long long next_random = (long long)id;
@@ -430,7 +430,7 @@ void *TrainModelThread(void *id) {
     // real *neu1 = (real *)calloc(layer1_size, sizeof(real));
     // real *neu1e = (real *)calloc(layer1_size, sizeof(real));
     // buffer to store gradient of syn0 in one round
-    real *gsyn0 = (real *)calloc(layer1_size, sizeof(real));
+    // real *gsyn0 = (real *)calloc(layer1_size, sizeof(real));
     // buffer to accumulate gradient of syn0
     real *gsyn0_accum = (real *)calloc(layer1_size, sizeof(real));
 
@@ -599,7 +599,7 @@ void *TrainModelThread(void *id) {
                 last_word = sen[c];
                 if (last_word == -1) continue;
                 l1 = last_word * layer1_size;
-                neu1e.fillzero();
+                // neu1e.fillzero();
                 // for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
                 // HIERARCHICAL SOFTMAX
                 /*
@@ -650,15 +650,17 @@ void *TrainModelThread(void *id) {
                         Vec *syn1negv = &syn1neg[target];
 
                         // clear the buffers of syn1neg, syn0
-                        for(int i = 0; i < layer1_size; ++i) {
+                        for (int i = 0; i < layer1_size; ++i) {
                             gsyn1neg[i] = 0;
-                            gsyn0[i] = 0;
+                            // gsyn0[i] = 0;
                         }
 
-                        f = syn0v->dotContainment(*syn1negv, /*gradient=*/true,
-                                gsyn0,  // collect gradient for syn0 in its buf
-                                gsyn1neg // gradient for syn1neg in its buffer
-                                );
+                        f = syn0v->dotContainment(
+                            *syn1negv, /*gradient=*/true,
+                            gsyn0_accum,  // collect gradient for syn0 in its
+                                          // buf
+                            gsyn1neg      // gradient for syn1neg in its buffer
+                        );
                         // for (c = 0; c < layer1_size; c++)
                         //     f += syn0[c + l1] * syn1neg[c + l2];
                         // ****
@@ -678,40 +680,39 @@ void *TrainModelThread(void *id) {
                         else
                             err = (label - expTable[index]) * alpha;
 
-
-
                         // update error by learning rate
-                        const real learning_rate = 0.01;
-                        err *= learning_rate;
+                        // const real learning_rate = 1.0;  // 0.01;
+                        // err *= learning_rate;
 
-                        // neu1e.accumscaleadd(g, *syn1negv, /*gradient=*/false);
-                        // syn1negv->accumscaleadd(g, *syn0v, /*gradient=*/false);
-                        // for (c = 0; c < layer1_size; c++)
+                        // neu1e.accumscaleadd(g, *syn1negv,
+                        // /*gradient=*/false); syn1negv->accumscaleadd(g,
+                        // *syn0v, /*gradient=*/false); for (c = 0; c <
+                        // layer1_size; c++)
                         //     neu1e[c] += g * syn1neg[c + l2];
                         // for (c = 0; c < layer1_size; c++)
                         //     syn1neg[c + l2] += g * syn0[c + l1];
 
                         //  update weights of syn1neg according to gradient
-                        for(int i = 0; i < layer1_size; ++i) {
-                            syn1neg->v[i] += err * gsyn1neg[i];
+                        for (int i = 0; i < layer1_size; ++i) {
+                            // syn1neg->v[i] += err * gsyn1neg[i];
+                            syn1neg->v[i] += gsyn1neg[i];
                         }
 
                         // store weights of gsync0 in gsyn0_accum
                         // to be accumulated.
-                        for(int i = 0; i < layer1_size; ++i) {
-                            gsyn0_accum[i] += gsyn0[i] * err;
-                        }
-
+                        // for (int i = 0; i < layer1_size; ++i) {
+                        //     gsyn0_accum[i] += gsyn0[i] * err;
+                        // }
                     }
                 // Learn weights input -> hidden
                 // for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
 
                 // update syn0 in one large step
-                for(int i = 0; i < layer1_size; ++i) {
-                    syn1neg->v[i] += err * gsyn1neg[i];
+                for (int i = 0; i < layer1_size; ++i) {
+                    syn0->v[i] += gsyn0_accum[i];
                 }
                 // clear the buffers of gsyn0_accum
-                for(int i = 0; i < layer1_size; ++i) {
+                for (int i = 0; i < layer1_size; ++i) {
                     gsyn0_accum[i] = 0;
                 }
             }
@@ -964,9 +965,7 @@ int mainw2v(int argc, char **argv) {
     return 0;
 }
 
-
 int main(int argc, char *argv[]) {
     mainw2v(argc, argv);
     return 0;
-
 }

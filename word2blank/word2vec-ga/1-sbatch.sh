@@ -7,7 +7,7 @@
 #SBATCH -o ./slurm/%j
 
 ### SET NAME (NO .bin) ###
-NAME=size32-window4-negative10-iter5
+NAME=size8-window8-negative25-iter20
 ########
 ########
 
@@ -19,7 +19,7 @@ mkdir -p models/
 mkdir -p slurm/
 
 make word2vec
-time ./word2vec -train text8 -output models/$GITNAME.bin -cbow 0 -size 32 -window 4 -negative 10 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 5
+time ./word2vec -train text8 -output models/$GITNAME.bin -cbow 0 -size 8 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 20
 # ./1-save-models.sh
 # $(cd models; ln -s $GITNAME.bin $NAME.bin; cd ../)
 # ./1-eval.sh models/$NAME.bin

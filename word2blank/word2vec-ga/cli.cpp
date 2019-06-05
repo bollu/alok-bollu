@@ -135,6 +135,13 @@ std::tuple<AST, char *> parse_(char *str) {
     return std::make_tuple(AST(list), str);
 };
 
+Vec clone(Vec v) {
+    Vec w;
+    w.alloc(v.len);
+    for(int i = 0; i < v.len; ++i) w.v[i] = v.v[i];
+    return w;
+}
+
 AST parse(char *str) { return std::get<0>(parse_(str)); }
 
 Vec interpret(AST ast) {
@@ -146,7 +153,7 @@ Vec interpret(AST ast) {
         case ASTTy::AtomString: {
             const std::string s = ast.s();
             for (int i = 0; i < words; i++) {
-                if (!strcmp(&vocab[i * max_w], s.c_str())) return M[i];
+                if (!strcmp(&vocab[i * max_w], s.c_str())) return clone(M[i]);
             }
             std::cout << "|" << s << "|  unknown.\n";
             return Vec();
@@ -273,5 +280,6 @@ int main(int argc, char **argv) {
         Vec v = interpret(ast);
         printvec(v, "vector: ", nullptr);
         cosine(v);
+        v.freemem();
     }
 }

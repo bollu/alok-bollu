@@ -10,3 +10,6 @@ word2phrase
 word-analogy
 *.bin
 test
+cli
+# object files.t
+*.o

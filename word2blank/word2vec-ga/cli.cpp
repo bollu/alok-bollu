@@ -10,7 +10,7 @@
 #include "vec.h"
 
 #define max_size 2000
-#define N 40
+#define N 10
 #define max_w 50
 
 Vec *M;
@@ -138,7 +138,7 @@ std::tuple<AST, char *> parse_(char *str) {
 Vec clone(Vec v) {
     Vec w;
     w.alloc(v.len);
-    for(int i = 0; i < v.len; ++i) w.v[i] = v.v[i];
+    for (int i = 0; i < v.len; ++i) w.v[i] = v.v[i];
     return w;
 }
 
@@ -194,13 +194,25 @@ Vec interpret(AST ast) {
                 Vec w = interpret(ast.at(2));
                 v.accumscaleadd(-1, w);
                 return v;
+            }
 
+            if (s == "." || s == "dot") {
+                if (ast.size() != 3) {
+                    std::cout << "Dot needs 2 arguments\n";
+                }
+
+                Vec v = interpret(ast.at(1));
+                Vec w = interpret(ast.at(2));
+                std::cout << "dot: "
+                          << v.dotContainment(w, /*grad=*/false, nullptr,
+                                              nullptr)
+                          << "\n";
+                return Vec();
             }
 
             // left projection.
-            if (s == "<." || s == ".<" || s == "lproject"  || s == "projectl") {
+            if (s == "<." || s == ".<" || s == "lproject" || s == "projectl") {
             }
-
 
             return interpret(ast.at(0));
         }
@@ -208,6 +220,17 @@ Vec interpret(AST ast) {
         case ASTTy::Null:
             assert(false && "cannot interpret null ast");
             return Vec();
+    }
+}
+
+// completions for linenoise
+void completion(const char *buf, linenoiseCompletions *lc) {
+    for (int i = 0; i < words; ++i) {
+        // TODO: change it so it works when typing stuff. That is,
+        // tokenize the string and the decide what completion to add...
+        if (strstr(&vocab[i * max_w], buf) == &vocab[i * max_w]) {
+            linenoiseAddCompletion(lc, &vocab[i * max_w]);
+        }
     }
 }
 
@@ -267,6 +290,7 @@ int main(int argc, char **argv) {
     fclose(f);
 
     linenoiseHistorySetMaxLen(10000);
+    linenoiseSetCompletionCallback(completion);
     while (1) {
         char *s = linenoise(">");
         AST ast = parse(s);

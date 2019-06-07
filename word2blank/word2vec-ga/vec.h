@@ -7,6 +7,7 @@
 #include <cmath>
 typedef float real;  // Precision of float numbers
 
+
 template <typename T>
 T min(T x, T y) {
     return x < y ? x : y;
@@ -47,7 +48,7 @@ int pow2(int n) {
     return p;
 }
 
-static const int MAXC = 1000;
+static const int MAXC = 20;
 // table containing binomial coefficients C[n][r]
 int C[MAXC][MAXC];
 
@@ -128,6 +129,57 @@ struct Vec {
 
     inline void accumscaleadd(real f, const Vec &other) {
         for (int i = 0; i < len; ++i) v[i] += f * other.v[i];
+    }
+
+
+    // Take the left projection of this vector with the other vector
+    inline void leftproject(const Vec &right, Vec &out) {
+        out.fillzero();
+
+        for (unsigned int s = 0; s <= ndims; s++) {
+            for (unsigned int r = 0; r <= s; r++) {
+
+
+                // base index of values that survive the grade projection to
+                // <s - r>
+                int outbase = pow2(s - r);
+                // maximum index that can be grade projected to <s - r>
+                int outmaxix = outbase + C[ndims][s - r];
+
+                // Calculate Ar Bs
+                const int rbase = pow2(r) - 1;
+                const int sbase = pow2(s) - 1;
+                for(int ro = 0; ro < C[ndims][r]; ro++) {
+                    for(int so = 0; so < C[ndims][s]; so++) {
+                        const int ri = rbase + ro;
+                        const int si = sbase + so;
+
+                        // fast way to calculate r . s?
+                        // note that  ii = i.i +  (i /\ (i) = 1+0 = 1
+                        // ij = (i.j) + (i /\ j) = (i /\ j)
+                        // ji = (j /\ i) = - (i /\ j)
+                        //
+                        //
+                        // (ij)(ijk)
+                        // = i(ji)jk
+                        // = i(-ij)jk
+                        // -1.k
+                        //
+                        // -> repeated indeces disappear, and add a sign.
+                        // -> sign is based on distance between
+                        const int sign = -42;
+                        // index = all indeces that only occur once.
+                        // holy shit, this may have something deep to do with
+                        // XOR convolution???
+                        const int ix = ri ^ si;
+
+                        if (ix < outbase || ix > outmaxix) continue;
+                        out.v[ix] = sign * this->v[ri] * right.v[si];
+
+                    }
+                }
+            }
+        }
     }
 
     // scalar product is useless!

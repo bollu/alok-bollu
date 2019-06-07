@@ -2,9 +2,15 @@ CC = g++
 #Using -Ofast instead of -O3 might result in faster code, but is supported only by newer GCC versions
 DEBUG=-fsanitize=address -fsanitize=undefined -g -O0
 RELEASE=-O3
-CFLAGS = -lm -pthread  -march=native -Wall -funroll-loops -Wno-unused-result ${RELEASE}
+CFLAGS = -lm -pthread  -march=native -Wall -funroll-loops -Wno-unused-result ${DEBUG}
 
-all: word2vec word2phrase distance word-analogy compute-accuracy test
+all: word2vec word2phrase distance word-analogy compute-accuracy test cli
+
+
+cli: cli.cpp vec.h linenoise.c
+	gcc -c linenoise.c -o linenoise.o $(CFLAGS)
+	$(CC) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS)
+	$(CC) linenoise.o cli.o -o cli $(CFLAGS)
 
 test: test.cpp vec.h
 	$(CC) -std=c++11 test.cpp -o test $(CFLAGS)

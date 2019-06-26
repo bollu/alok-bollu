@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <cmath>
+#include <stdlib.h>
 typedef float real;  // Precision of float numbers
 
 template <typename T>

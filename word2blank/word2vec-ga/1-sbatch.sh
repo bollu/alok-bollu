@@ -19,7 +19,8 @@ mkdir -p models/
 mkdir -p slurm/
 
 make word2vec
-time ./word2vec -train text8 -output models/$GITNAME.bin -cbow 0 -size 8 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 20
+head -c 211000 text8 > text7
+time ./word2vec -train text7 -output models/$GITNAME.bin -cbow 0 -size 64 -window 2 -negative 25 -hs 0 -sample 1e-4 -threads 4 -binary 1 -iter 2
 # ./1-save-models.sh
 # $(cd models; ln -s $GITNAME.bin $NAME.bin; cd ../)
 # ./1-eval.sh models/$NAME.bin

@@ -43,7 +43,7 @@ void testdot() {
         for (auto it2 : vs) {
             const std::string name2 = it2.first;
             printf(
-                "%20s %20s %20.3f\n", name.c_str(), name2.c_str(),
+                "%20s ∈ %20s %20.3f\n", name.c_str(), name2.c_str(),
                 it.second.dotContainment(it2.second, false, nullptr, nullptr));
         }
     }
@@ -70,14 +70,14 @@ void testgradient() {
             const real d =
                 it.second.dotContainment(it2.second, true, gs[name], gs[name2]);
             printf("----\n");
-            printf("dot %8s %8s %8.2f\n", name.c_str(), name2.c_str(), d);
+            printf("%8s ∈ %8s %8.2f\n", name.c_str(), name2.c_str(), d);
             printvec(it.second, name.c_str(), gs[name]);
             printvec(it2.second, name2.c_str(), gs[name2]);
         }
     }
 }
 
-void learn2d(int x0, int x1, int x2, int x3) {
+void learn2d(int x0, int x1, int x2, int x3, bool debug) {
     static const real LEARNINGRATE = 0.1;
     Vec normal;
     normal.alloczero(4);
@@ -100,7 +100,7 @@ void learn2d(int x0, int x1, int x2, int x3) {
     float dot = 1.0, dot2 = 1.0;
     int round = 1;
     int dim = 0;  // current dimension we are optimising;
-    static const int NROUNDS = 10000;
+    static const int NROUNDS = 800;
     for (; round < NROUNDS; ++round) {
         for (int i = 0; i < 4; ++i) grad[i] = 0;
         for (int i = 0; i < 4; ++i) grad2[i] = 0;
@@ -147,9 +147,11 @@ void learn2d(int x0, int x1, int x2, int x3) {
             }
         }
 
-        // for (int i = 0; i < 4; ++i) printf("%7.5f ", random.v[i]);
-        // printf(" | dot %7.5f | dot2 %7.5f | dim %5d |round %5d |∇δ: %f\n", dot,
-        //        dot2, dim, round, gradDelta);
+        if (debug) {
+            for (int i = 0; i < 4; ++i) printf("%7.5f ", random.v[i]);
+            printf(" | random ∈ normal %7.5f | normal ∈ random %7.5f | dim %5d |round %5d |∇δ: %f\n", dot,
+                    dot2, dim, round, gradDelta);
+        }
 
         if (round >= (1 + dim) * (NROUNDS / 4)) {
             dim++;
@@ -183,9 +185,12 @@ int main(int argc, char **argv) {
     srand(SEED);
     testdot();
     testgradient();
+    /*
     for (int i = 0; i < 16; ++i) {
         learn2d(bool(i & 1), bool(i & (1 << 1)), bool(i & (1 << 2)), bool(i &
-                    (1 << 3)));
+                    (1 << 3)), false);
     }
+    */
+    learn2d(0, 0, 0, 1, true);
     return 1;
 }

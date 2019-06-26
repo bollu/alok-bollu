@@ -230,13 +230,14 @@ struct Vec {
     // A.b == p (w + x + y + z) + q (x + z) + r (y + z) + s z
     // <scalar> . <anything other than scalar> = 0
     // <full space>  . <anything> = dot product
+    // x dotContainment  y == degree of x ∈ y
     inline real dotContainment(const Vec &other, bool grad, float *gbufthis,
                                float *gbufother) const {
         real dot = 0;
         for (unsigned int i = 0; i < len; i++) {
             for (unsigned int j = 0; j < len; j++) {
-                // check if J is subset of I
-                const bool subset = (j & i) == j;
+                // check if I is a subset of J
+                const bool subset = (i & j) == i;
                 if (!subset) continue;
 
                 // provide larger dot products for more dimensions they
@@ -277,8 +278,8 @@ struct Vec {
              i < min(len, pow2(thisdimend) - 1); i++) {
             for (unsigned int j = pow2(otherdimbegin) - 1;
                  j < min(len, pow2(otherdimend) - 1); j++) {
-                // check if J is subset of I
-                const bool subset = (j & i) == j;
+                // check if I is a subset of J
+                const bool subset = (i & j) == i;
                 if (!subset) continue;
 
                 // provide larger dot products for more dimensions they

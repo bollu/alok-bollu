@@ -257,19 +257,20 @@ void completion(const char *buf, linenoiseCompletions *lc) {
 
 // plot dimension usage
 void dimension_usage() {
-    float *f = (float *)malloc(size * sizeof(float));
+    double *f = (double *)malloc(size * sizeof(double));
+    double *fnorm = (double *)malloc(size * sizeof(double));
     for (int w = 0; w < words; w++)
         for (int i = 0; i < size; i++)
-            f[i] += (M[w].ix(i));
+            f[i] += fabs(M[w].ix(i));
 
-    float total;
+    double total = 0;
     for (int i = 0; i < size; ++i) total += f[i];
 
     // normalize
-    for (int i = 0; i < size; ++i) f[i] *= 100.0 / total;
+    for (int i = 0; i < size; ++i) fnorm[i] = (f[i] * 100.0) / total;
 
     printf("dimension weights as percentage [0..n]:\n");
-    for (int i = 0; i < size; ++i) printf("%5.2f", f[i]);
+    for (int i = 0; i < size; ++i) printf("%d: %5.8f\n", i, fnorm[i]);
     printf("\n");
 }
 

@@ -90,7 +90,7 @@ void learn2d(int x0, int x1, int x2, int x3) {
     random.alloc(4);
     randomOrig.alloc(4);
     for (int i = 1; i <= 2; ++i)
-        random.v[i] = randomOrig.v[i] = real(((rand() % 10) - 5.0) / 5.0);
+        random.v[i] = randomOrig.v[i] = 0.01 + real(((rand() % 10) - 5.0) / 5.0);
 
     real *grad = (float *)malloc(4 * sizeof(real));
     real *grad2 = (float *)malloc(4 * sizeof(real));
@@ -181,10 +181,9 @@ int main(int argc, char **argv) {
     srand(SEED);
     testdot();
     testgradient();
-    learn2d(1, 0, 0, 0);
-    learn2d(0, 1, 0, 0);
-    learn2d(0, 0, 1, 0);
-    learn2d(0, 0, 0, 1);
-    learn2d(0, 1, 1, 0);
+    for (int i = 0; i < 16; ++i) {
+        learn2d(bool(i & 1), bool(i & (1 << 1)), bool(i & (1 << 2)), bool(i &
+                    (1 << 3)));
+    }
     return 1;
 }

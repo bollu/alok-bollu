@@ -260,17 +260,16 @@ void dimension_usage() {
     float *f = (float *)malloc(size * sizeof(float));
     for (int w = 0; w < words; w++)
         for (int i = 0; i < size; i++)
-            // f[i] += fabs(M[w].ix(i));
             f[i] += (M[w].ix(i));
 
     float total;
-    for (int i = 1; i < size; ++i) total += f[i];
+    for (int i = 0; i < size; ++i) total += f[i];
 
     // normalize
-    for (int i = 1; i < size; ++i) f[i] *= 100.0 / total;
+    for (int i = 0; i < size; ++i) f[i] *= 100.0 / total;
 
-    printf("dimension weights as percentage [0..n]: ");
-    for (int i = 1; i < size; ++i) printf("%5.2f", f[i]);
+    printf("dimension weights as percentage [0..n]:\n");
+    for (int i = 0; i < size; ++i) printf("%5.2f", f[i]);
     printf("\n");
 }
 
@@ -318,7 +317,7 @@ int main(int argc, char **argv) {
         printf("%s:", vocab + b * max_w);
         printf(" lensq: %f  ", M[b].lensq());
         for (int i = 0; i < 10; i++) {
-            printf("%f ", M[b].ix(i));
+            printf("%3.4f ", M[b].ix(i));
         }
         printf("\n");
         // for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1,
@@ -328,6 +327,11 @@ int main(int argc, char **argv) {
     }
 
     fclose(f);
+
+    printf("HACK: CLEARNING 0th and LAST DIMENSION\n");
+    for(int i = 0; i < words; i++) {
+        M[i].v[0] = M[i].v[size - 1] = 0;
+    }
 
     dimension_usage();
 

@@ -7,7 +7,6 @@
 #include <cmath>
 typedef float real;  // Precision of float numbers
 
-
 template <typename T>
 T min(T x, T y) {
     return x < y ? x : y;
@@ -54,13 +53,15 @@ int C[MAXC][MAXC];
 
 // init the table of C[n][r]
 
+// NOTE: check recurrene
 __attribute__((constructor)) void initCTable() {
     C[0][0] = 1;
     C[1][0] = C[1][1] = 1;
 
     for (int n = 1; n < MAXC; n++) C[n][0] = 1;
+    for (int n = 1; n < MAXC; n++) C[n][n] = 1;
     for (int n = 2; n < MAXC; ++n) {
-        for (int r = 1; r <= n; ++r) {
+        for (int r = 1; r < n; ++r) {
             C[n][r] = C[n][r - 1] + C[n - 1][r - 1];
         }
     }
@@ -131,15 +132,12 @@ struct Vec {
         for (int i = 0; i < len; ++i) v[i] += f * other.v[i];
     }
 
-
     // Take the left projection of this vector with the other vector
     inline void leftproject(const Vec &right, Vec &out) {
         out.fillzero();
 
         for (unsigned int s = 0; s <= ndims; s++) {
             for (unsigned int r = 0; r <= s; r++) {
-
-
                 // base index of values that survive the grade projection to
                 // <s - r>
                 int outbase = pow2(s - r);
@@ -149,8 +147,8 @@ struct Vec {
                 // Calculate Ar Bs
                 const int rbase = pow2(r) - 1;
                 const int sbase = pow2(s) - 1;
-                for(int ro = 0; ro < C[ndims][r]; ro++) {
-                    for(int so = 0; so < C[ndims][s]; so++) {
+                for (int ro = 0; ro < C[ndims][r]; ro++) {
+                    for (int so = 0; so < C[ndims][s]; so++) {
                         const int ri = rbase + ro;
                         const int si = sbase + so;
 
@@ -175,7 +173,6 @@ struct Vec {
 
                         if (ix < outbase || ix > outmaxix) continue;
                         out.v[ix] = sign * this->v[ri] * right.v[si];
-
                     }
                 }
             }
@@ -245,7 +242,10 @@ struct Vec {
                 // provide larger dot products for more dimensions they
                 // share accurately in common
                 const real weight = [&]() {
-                    const int delta = __builtin_popcount(i) -  __builtin_popcount(j);
+                    return 1.0;
+
+                    const int delta =
+                        __builtin_popcount(i) - __builtin_popcount(j);
                     assert(delta >= 0);
 
                     return 1.0 / pow2(delta);
@@ -266,6 +266,45 @@ struct Vec {
         return dot;
     }
 
+    // pick dimensions to take dot product with, and only the projection
+    // of the GA object onto those subdimensions is taken when dotting.
+    inline real dotContainmentConstrained(const Vec &other, int thisdimbegin,
+                                          int thisdimend, int otherdimbegin,
+                                          int otherdimend, float *gbufthis,
+                                          float *gbufother) const {
+        real dot = 0;
+        for (unsigned int i = pow2(thisdimbegin) - 1;
+             i < min(len, pow2(thisdimend) - 1); i++) {
+            for (unsigned int j = pow2(otherdimbegin) - 1;
+                 j < min(len, pow2(otherdimend) - 1); j++) {
+                // check if J is subset of I
+                const bool subset = (j & i) == j;
+                if (!subset) continue;
+
+                // provide larger dot products for more dimensions they
+                // share accurately in common
+                const real weight = [&]() {
+                    return 1.0;
+
+                    const int delta =
+                        __builtin_popcount(i) - __builtin_popcount(j);
+                    assert(delta >= 0);
+
+                    return 1.0 / pow2(delta);
+                }();
+
+                dot += weight * v[i] * other.v[j];
+                // make the gradients of larger dimensions expoentnially
+                // much larger, thereby forcing them to only be used
+                // if they truly exist. Otherwise, they will be squashed towards
+                // 0
+                if (gbufthis) gbufthis[i] += other.v[j] * weight;
+                if (gbufother) gbufother[j] += this->v[i] * weight;
+            }
+        }
+
+        return dot;
+    }
 };
 
 void writevec(FILE *f, Vec &v) {

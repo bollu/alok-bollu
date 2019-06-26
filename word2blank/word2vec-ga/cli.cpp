@@ -239,7 +239,8 @@ void dimension_usage() {
   float *f = (float *)malloc(size * sizeof(float));
   for (int w = 0; w < words; w++)
     for (int i = 0; i < size; i++)
-      f[i] += fabs(M[w].ix(i));
+      // f[i] += fabs(M[w].ix(i));
+     f[i] += (M[w].ix(i));
 
   float total;
   for(int i = 0; i < size; ++i)
@@ -247,11 +248,11 @@ void dimension_usage() {
 
   // normalize
   for(int i = 0; i < size; ++i)
-    f[i] /= total;
+    f[i] *= 100.0 / total;
 
-  printf("dimension weights [0..n]: ");
+  printf("dimension weights as percentage [0..n]: ");
   for(int i = 0; i < size; ++i)
-    printf("%4.2f", f[i]);
+    printf("%5.2f",  f[i]);
   printf("\n");
 }
 

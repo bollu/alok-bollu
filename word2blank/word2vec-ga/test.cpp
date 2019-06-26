@@ -185,12 +185,13 @@ int main(int argc, char **argv) {
     srand(SEED);
     testdot();
     testgradient();
-    /*
+
     for (int i = 0; i < 16; ++i) {
+        if (i == 8 || i == 10 || i == 12) continue;
         learn2d(bool(i & 1), bool(i & (1 << 1)), bool(i & (1 << 2)), bool(i &
                     (1 << 3)), false);
     }
-    */
-    learn2d(0, 0, 0, 1, true);
+
+    // learn2d(0, 0, 0, 1, true);
     return 1;
 }

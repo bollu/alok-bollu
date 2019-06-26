@@ -100,7 +100,7 @@ void learn2d(int x0, int x1, int x2, int x3) {
     float dot = 1.0, dot2 = 1.0;
     int round = 1;
     int dim = 0;  // current dimension we are optimising;
-    static const int NROUNDS = 1000;
+    static const int NROUNDS = 10000;
     for (; round < NROUNDS; ++round) {
         for (int i = 0; i < 4; ++i) grad[i] = 0;
         for (int i = 0; i < 4; ++i) grad2[i] = 0;
@@ -174,6 +174,8 @@ void learn2d(int x0, int x1, int x2, int x3) {
            normal.dotContainment(random, false, nullptr, nullptr));
     printf("random . normal: %.5f\n",
            random.dotContainment(normal, false, nullptr, nullptr));
+    assert(fabs(normal.dotContainment(random, false, nullptr, nullptr)) < 0.01);
+    assert(fabs(random.dotContainment(normal, false, nullptr, nullptr)) < 0.01);
 }
 
 int main(int argc, char **argv) {

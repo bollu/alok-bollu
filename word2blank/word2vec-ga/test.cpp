@@ -78,7 +78,7 @@ void testgradient() {
 }
 
 void learn2d(int x0, int x1, int x2, int x3, bool debug) {
-    static const real LEARNINGRATE = 0.1;
+    static const real LEARNINGRATE = 0.01;
     Vec normal;
     normal.alloczero(4);
     normal.v[0] = x0;
@@ -90,7 +90,8 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
     random.alloc(4);
     randomOrig.alloc(4);
     for (int i = 1; i <= 2; ++i)
-        random.v[i] = randomOrig.v[i] = 0.01 + real(((rand() % 10) - 5.0) / 5.0);
+        random.v[i] = randomOrig.v[i] =
+            0.01 + real(((rand() % 10) - 5.0) / 5.0);
 
     real *grad = (float *)malloc(4 * sizeof(real));
     real *grad2 = (float *)malloc(4 * sizeof(real));
@@ -100,15 +101,13 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
     float dot = 1.0, dot2 = 1.0;
     int round = 1;
     int dim = 0;  // current dimension we are optimising;
-    static const int NROUNDS = 800;
+    static const int NROUNDS = 10000;
     for (; round < NROUNDS; ++round) {
         for (int i = 0; i < 4; ++i) grad[i] = 0;
         for (int i = 0; i < 4; ++i) grad2[i] = 0;
 
         // Uniformly sample from {00, 01, 10, 11} and then pick the number
         // of dimensions as the number of 1s.
-        const int base = (1 << dim) - 1;
-        // const int curdim = __builtin_popcount(r);
 
         // delta between average gradient and new gradient
         float gradDelta = 0.0;
@@ -116,11 +115,11 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
         // RANDOM . NORMAL
         // dot += normal.dotContainment(random, true, nullptr, grad);
         {
-            dot = random.dotContainmentConstrained(normal, dim, dim + 1, 0, 2,
-                                                    grad, nullptr);
+            dot = random.dotContainmentConstrained(normal, 0, dim, 0, 2, grad,
+                                                   nullptr);
 
             // train objects of dimension "dim"
-            for (int i = base; i < base + C[2][dim]; i++) {
+            for (int i = 0; i < min(4, pow2(dim) - 1); i++) {
                 random.v[i] += -1.0 * LEARNINGRATE * dot * grad[i];
 
                 // add up the absolute difference in the gradient.
@@ -131,13 +130,14 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
             }
         }
 
-        // NORMAL . RANDOM dot += normal.dotContainment(random, true, nullptr, grad);
+        // NORMAL . RANDOM dot += normal.dotContainment(random, true, nullptr,
+        // grad);
         {
-            dot2 = normal.dotContainmentConstrained(random, 0, 2, dim, dim + 1,
+            dot2 = normal.dotContainmentConstrained(random, 0, 2, 0, dim + 1,
                                                     nullptr, grad2);
 
             // train objects of dimension "dim"
-            for (int i = base; i < base + C[2][dim]; i++) {
+            for (int i = 0; i < min(4, pow2(dim) - 1); i++) {
                 random.v[i] += -1.0 * LEARNINGRATE * dot2 * grad2[i];
                 // add up the absolute difference in the gradient.
                 gradDelta += fabs(avggrad2[i] - grad2[i]);
@@ -149,8 +149,12 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
 
         if (debug) {
             for (int i = 0; i < 4; ++i) printf("%7.5f ", random.v[i]);
-            printf(" | random ∈ normal %7.5f | normal ∈ random %7.5f | dim %5d |round %5d |∇δ: %f\n", dot,
-                    dot2, dim, round, gradDelta);
+            printf(
+                " | random ∈ normal %7.5f | normal ∈ random %7.5f | dim %5d "
+                "|round %5d |∇δ: %f\n",
+                dot, dot2, dim, round, gradDelta);
+
+            printvec(random, " r from r ∈ n", grad);
         }
 
         if (round >= (1 + dim) * (NROUNDS / 4)) {
@@ -172,10 +176,10 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
     printvec(randomOrig, "random (starting)", nullptr);
     printf("--\n");
     printvec(random, "random", grad);
-    printf("normal . random: %.5f\n",
-           normal.dotContainment(random, false, nullptr, nullptr));
     printf("random . normal: %.5f\n",
            random.dotContainment(normal, false, nullptr, nullptr));
+    printf("normal . random: %.5f\n",
+           normal.dotContainment(random, false, nullptr, nullptr));
     assert(fabs(normal.dotContainment(random, false, nullptr, nullptr)) < 0.01);
     assert(fabs(random.dotContainment(normal, false, nullptr, nullptr)) < 0.01);
 }
@@ -188,10 +192,10 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < 16; ++i) {
         if (i == 8 || i == 10 || i == 12) continue;
-        learn2d(bool(i & 1), bool(i & (1 << 1)), bool(i & (1 << 2)), bool(i &
-                    (1 << 3)), false);
+        learn2d(bool(i & 1), bool(i & (1 << 1)), bool(i & (1 << 2)),
+                bool(i & (1 << 3)), false);
     }
 
-    learn2d(0, 0, 0, 1, true);
+    // learn2d(0, 0, 0, 1, true);
     return 1;
 }

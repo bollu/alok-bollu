@@ -275,9 +275,9 @@ struct Vec {
                                           float *gbufother) const {
         real dot = 0;
         for (unsigned int i = pow2(thisdimbegin) - 1;
-             i < min(len, pow2(thisdimend) - 1); i++) {
+             i < min(len, pow2(thisdimend)); i++) {
             for (unsigned int j = pow2(otherdimbegin) - 1;
-                 j < min(len, pow2(otherdimend) - 1); j++) {
+                 j < min(len, pow2(otherdimend)); j++) {
                 // check if I is a subset of J
                 const bool subset = (i & j) == i;
                 if (!subset) continue;

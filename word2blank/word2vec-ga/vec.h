@@ -114,10 +114,10 @@ struct Vec {
     }
 
     // return 1?
-    inline real lensq() const {
-        return dotContainment(*this, /*gradient=*/false, nullptr, nullptr);
-    }
-    // inline real lensq() const { return 1; }
+    // inline real lensq() const {
+    //     return dotContainment(*this, /*gradient=*/false, nullptr, nullptr);
+    // }
+    inline real lensq() const { return 1; }
 
     inline void normalize() { scale(1.0 / sqrt(lensq()), nullptr); }
 
@@ -235,8 +235,8 @@ struct Vec {
     inline real dotContainment(const Vec &other, bool grad, float *gbufthis,
                                float *gbufother) const {
         real dot = 0;
-        for (unsigned int i = 0; i < len; i++) {
-            for (unsigned int j = 0; j < len; j++) {
+        for (unsigned int i = 1; i < len - 1; i++) {
+            for (unsigned int j = 1; j < len - 1; j++) {
                 // check if I is a subset of J
                 const bool subset = (i & j) == i;
                 if (!subset) continue;

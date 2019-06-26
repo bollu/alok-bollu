@@ -13,3 +13,4 @@ test
 cli
 # object files.t
 *.o
+text7

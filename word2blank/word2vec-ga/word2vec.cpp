@@ -443,7 +443,7 @@ void *TrainModelThread(void *id) {
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 100) {
+        if (word_count - last_word_count > 1000) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {
@@ -695,7 +695,7 @@ void *TrainModelThread(void *id) {
                         //  update weights of syn1neg according to gradient
                         for (int i = 0; i < layer1_size; ++i) {
                             // syn1neg->v[i] += err * gsyn1neg[i];
-                            syn1neg->v[i] += gsyn1neg[i];
+                            syn1neg->v[i] += -1.0 * alpha * gsyn1neg[i];
                         }
 
                         // store weights of gsync0 in gsyn0_accum
@@ -709,7 +709,7 @@ void *TrainModelThread(void *id) {
 
                 // update syn0 in one large step
                 for (int i = 0; i < layer1_size; ++i) {
-                    syn0->v[i] += gsyn0_accum[i];
+                    syn0->v[i] += -1.0 * alpha * gsyn0_accum[i];
                 }
                 // clear the buffers of gsyn0_accum
                 for (int i = 0; i < layer1_size; ++i) {

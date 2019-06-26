@@ -192,6 +192,6 @@ int main(int argc, char **argv) {
                     (1 << 3)), false);
     }
 
-    // learn2d(0, 0, 0, 1, true);
+    learn2d(0, 0, 0, 1, true);
     return 1;
 }

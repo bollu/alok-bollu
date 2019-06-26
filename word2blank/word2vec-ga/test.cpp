@@ -115,7 +115,7 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
         // RANDOM . NORMAL
         // dot += normal.dotContainment(random, true, nullptr, grad);
         {
-            dot = random.dotContainmentConstrained(normal, 0, dim, 0, 2, grad,
+            dot = random.dotContainmentConstrained(normal, 0, 2, 0, 2, grad,
                                                    nullptr);
 
             // train objects of dimension "dim"
@@ -133,7 +133,7 @@ void learn2d(int x0, int x1, int x2, int x3, bool debug) {
         // NORMAL . RANDOM dot += normal.dotContainment(random, true, nullptr,
         // grad);
         {
-            dot2 = normal.dotContainmentConstrained(random, 0, 2, 0, dim + 1,
+            dot2 = normal.dotContainmentConstrained(random, 0, 2, 0, 2,
                                                     nullptr, grad2);
 
             // train objects of dimension "dim"

@@ -30,11 +30,11 @@ const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
 typedef float real;   // Precision of float numbers
-typedef long int ff;  // finite field elements.
+typedef real ff;  // finite field elements.
 // finite field Z/7Z
-#define FFCOEFF (100019)
+#define FFCOEFF (13)
 
-#define norm(x) ((x % FFCOEFF) + FFCOEFF) % FFCOEFF
+#define norm(x) (fmod(x, FFCOEFF))
 
 struct vocab_word {
     long long cn;
@@ -65,10 +65,10 @@ struct Vec {
     inline void fillzero() const {
         for (int i = 0; i < len; ++i) v[i] = 0;
     }
-    inline ff dot(const Vec &v2) const {
-        ff d = 0;
+    inline real dot(const Vec &v2) const {
+        real d = 0;
         for (int i = 0; i < len; ++i) d += norm(v[i] * v2.v[i]);
-        return d % FFCOEFF;
+        return norm(d);
     }
 
     inline void accumscaleadd(ff g, const Vec &v2) const {
@@ -80,7 +80,7 @@ struct Vec {
         const int maxix = min(npr, len);
         printf("|");
         for (int i = 0; i < maxix; i++) {
-            printf("%8ld ", v[i]);
+            printf("%8f ", v[i]);
         }
         printf("|");
     }
@@ -103,7 +103,7 @@ struct Mat2 {
     }
 
     inline void set(int i, int j, ff val) {
-        m[i * inner + j] = (val + FFCOEFF) % FFCOEFF;
+        m[i * inner + j] = norm(val);
     }
     inline ff ix(int i, int j) { return m[i * inner + j]; }
     inline Vec ix(int i) { return Vec(inner, &m[i * inner]); }
@@ -739,7 +739,6 @@ void *TrainModelThread(void *id) {
                         Vec syn0v = syn0.ix(last_word);
                         Vec syn1negv = syn1neg.ix(target);
                         f = syn0v.dot(syn1negv);
-                        while (f < 0) f += FFCOEFF;
 
                         if (0) {
                             g = (label - f) * alpha;
@@ -810,7 +809,7 @@ void TrainModel() {
                 }
             else
                 for (b = 0; b < layer1_size; b++)
-                    fprintf(fo, "%ld ", syn0.ix(a, b));
+                    fprintf(fo, "%lf ", syn0.ix(a, b));
             fprintf(fo, "\n");
         }
     } else {

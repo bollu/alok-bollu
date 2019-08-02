@@ -423,7 +423,7 @@ void *TrainModelThread(void *id) {
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 10000) {
+        if (word_count - last_word_count > 100) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {
@@ -612,7 +612,7 @@ void *TrainModelThread(void *id) {
 
                         for(int m = 0; m < layer1_size - 1; m++) {
                             // [m, m] = sin[m]
-                            syn0sinaccum[m + layer1_size * m] = syn0sin[c];
+                            syn0sinaccum[m + layer1_size * m] = syn0sin[m];
                             for(int n = m - 1; n >= 0; n--) {
                                 // [n, m] = sin[n] * [n+1, m]
                                 syn0sinaccum[n + layer1_size * m] = 
@@ -667,8 +667,9 @@ void *TrainModelThread(void *id) {
                             }
 
                             // compute dot product
-                            for (c = 0; c < layer1_size; c++)
-                                f += syn0vec[c + l1] * syn1neg[c + l2];
+                            for (c = 0; c < layer1_size; c++) {
+                                f += syn0vec[c] * syn1neg[c + l2];
+                            }
 
                             if (f > MAX_EXP)
                                 g = (label - 1) * alpha;
@@ -700,15 +701,15 @@ void *TrainModelThread(void *id) {
                                 neu1e[c] += g * -1 * syn0sinaccum[0 + layer1_size *c] * syn1neg[c + l2];
 
                                 for (int j  = c+1; j < layer1_size; ++j) {
-                                    const float l = syn0sinaccum[0 + layer1_size * (c - 1)];
+                                    const float l = c == 0 ? 1 : syn0sinaccum[0 + layer1_size * (c - 1)];
                                     // this division might be bad. Maybe a good
                                     // idea to not have it...
-                                    const float r = syn0sinaccum[c+1 + layer1_size * (j - 1)];
+                                    const float r = c == layer1_size - 1 ? 1  : syn0sinaccum[c+1 + layer1_size * (j - 1)];
                                     neu1e[c] += g * syn1neg[j + l2] * (l * syn0cos[c] * r * syn0cos[j]);
                                 }
                             }
                             for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0vec[c + l1];
+                                syn1neg[c + l2] += g * syn0vec[c];
                         } // end negative samples loop
 
                         // Learn weights input -> hidden

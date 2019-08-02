@@ -2,7 +2,7 @@ CC = g++
 #Using -Ofast instead of -O3 might result in faster code, but is supported only by newer GCC versions
 DEBUG=-fsanitize=address -fsanitize=undefined -g -O0
 RELEASE=-O3
-CFLAGS = -lm -pthread  -march=native -Wall -funroll-loops -Wno-unused-result ${DEBUG}
+CFLAGS = -lm -pthread  -march=native -Wall -funroll-loops -Wno-unused-result ${RELEASE}
 
 all: word2vec word2phrase distance word-analogy compute-accuracy
 

@@ -7,7 +7,7 @@
 #SBATCH -o ./slurm/%j
 
 ### SET NAME (NO .bin) ###
-NAME=size-300-window-8-neg-25
+NAME=XXXX
 ########
 ########
 

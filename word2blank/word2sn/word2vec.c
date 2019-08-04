@@ -922,13 +922,21 @@ void test(int argc, char **argv) {
     int ix = 2; // word2vec -stress-test
     int n = atoi(argv[ix++]);
     float v[n];
+    printf("v: ");
     for(int i = 0; i < n; ++i) {
         v[i] = atoi(argv[ix++]);
+        printf("%f ", v[i]);
     }
+    printf("\n");
+
+
+    printf("angles: ");
     float angles[n-1];
     for(int i = 0; i < n - 1; ++i) {
         angles[i] = atoi(argv[ix++]);
+        printf("%f ", angles[i]);
     }
+    printf("\n");
     float sins[n-1];
     float coss[n-1];
     float sinaccum[n-1][n-1];
@@ -953,10 +961,13 @@ void test(int argc, char **argv) {
     angle2vec(n, sins, coss, angles_vec);
 
     float angles_der[n-1];
+    for(int i = 0; i < n - 1; ++i) { angles_der[i] = 0; }
+
     angle2der(n, coss,
             sins, sinaccum,
             v, 1, angles_der);
     
+    printf("angles_der: ");
     for(int i = 0; i < n - 1; ++i) {
         printf("%f ", angles_der[i]);
     }

@@ -205,10 +205,18 @@ if __name__ == "__main__":
         dervals = [float(simplify(der.subs(subs))) for der in ders]
 
         inp = [n] + vec + anglevals
+        print("input: ", inp) 
 
         outvals = word2vec("-stress-test", *inp)
-        outvals = list(map(float, outvals.strip().split()))
-        print("input: ", inp) 
+
+        print("---raw output---")
+        print(outvals)
+        print("---(done)---")
+
+        # only one line should have angles_der: f1 f2 ... fn
+        out_angles_der = [l for l in outvals.split("\n") if l.find("angles_der:") != -1][0]
+        outvals = list(map(float, out_angles_der.split("angles_der:")[1].split()))
+
         print("*  dervals(reference): ", dervals)
         print("*  outvals(from word2vec):", outvals)
 

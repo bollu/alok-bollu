@@ -943,12 +943,24 @@ void test(int argc, char **argv) {
 
     angleprecompute(n, angles, coss, sins, sinaccum);
 
+    printf("sins: ");
+    for(int i = 0; i < n - 1; ++i) {
+        printf("%f ", sins[i]);
+    }
+    printf("\n");
+
+    printf("coss: ");
+    for(int i = 0; i < n - 1; ++i) {
+        printf("%f ", coss[i]);
+    }
+    printf("\n");
+
     // check interval [i..j]
     for(int i = 0; i < n - 1; ++i) {
         for(int j = 0; j < n - 1; ++ j) {
             float prod = 1;
             for(int k = i; k <= j; ++k) {
-                prod *= sins[k];
+                prod *= sin(angles[k]);
             }
             if(fabs(sinaccum[i][j] - prod) > 1e-2) {
                 printf("i: %d | j: %d | sinaccum[i][j]: %f | prod: %f",  i, j, sinaccum[i][j], prod);
@@ -959,6 +971,9 @@ void test(int argc, char **argv) {
 
     float angles_vec[n];
     angle2vec(n, sins, coss, angles_vec);
+    printf("angle2vec: ");
+    for(int i = 0; i < n; i++) { printf("%f ", angles_vec[i]); } 
+    printf("\n");
 
     float angles_der[n-1];
     for(int i = 0; i < n - 1; ++i) { angles_der[i] = 0; }

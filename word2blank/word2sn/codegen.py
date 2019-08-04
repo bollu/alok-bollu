@@ -163,6 +163,30 @@ def vec2angleder(vec):
 
     return list(map(lambda e: e.simpl(), angleders))
 
+
+"""
+given string
+outstr="v1: x11 x12 x13\nv2: x21 x22 x23"
+vecname=v2"
+
+output=[x21, x22, x23]
+"""
+def extractvec(outstr, vecname):
+    outvline = [l for l in outstr.split("\n")
+                if l.find(vecname + ":") != -1][0]
+    outvs_str = outvline.split(vecname + ":")[1].split()
+    return list(map(float, outvs_str))
+
+def assert_eq_vec(name, referencevec, outvec):
+    for (i, (der, out)) in enumerate(zip(referencevec, outvec)):
+        delta = abs(der - out)
+        if delta >= 1e-2:
+            print("*  %s | i: %s | reference: %s | out: %s" % 
+                    (name, i, referencevec, outvec))
+            print("*  i: %s\t|%s - %s| = %s" % 
+                    (i, der, out, delta))
+            raise Exception("delta > 1e-2")
+
 if __name__ == "__main__":
     n = 4
     angles = [sym.Symbol("a"+str(i)) for i in range(n-1)]
@@ -207,20 +231,24 @@ if __name__ == "__main__":
         inp = [n] + vec + anglevals
         print("input: ", inp) 
 
-        outvals = word2vec("-stress-test", *inp)
+        outstr = word2vec("-stress-test", *inp)
 
         print("---raw output---")
-        print(outvals)
+        print(outstr)
         print("---(done)---")
 
-        # only one line should have angles_der: f1 f2 ... fn
-        out_angles_der = [l for l in outvals.split("\n") if l.find("angles_der:") != -1][0]
-        outvals = list(map(float, out_angles_der.split("angles_der:")[1].split()))
+        out_anglevec = extractvec(outstr, "angle2vec")
+        anglevec_evaluated = \
+          [simplify(a.subs(subs)).evalf() for a in anglevec]
+        print("*  anglevec(reference): ", 
+              anglevec_evaluated)
+        print("*  anglevec (from word2vec): ", out_anglevec)
+        assert_eq_vec("anglevec", anglevec_evaluated, out_anglevec)
+
+        # angles_der: f1 f2 ... fn
+        out_dervals = extractvec(outstr, "angles_der")
 
         print("*  dervals(reference): ", dervals)
-        print("*  outvals(from word2vec):", outvals)
+        print("*  outvals(from word2vec): ", out_dervals)
+        assert_eq_vec("dervals", dervals, out_dervals)
 
-        for (der, out) in zip(dervals, outvals):
-            delta = abs(der - out)
-            print("*  |%s - %s| = %s" % (der, out, delta))
-            assert delta < 1e-2

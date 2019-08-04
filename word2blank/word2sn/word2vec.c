@@ -407,8 +407,29 @@ void InitNet() {
 
 // given angles, precompute sin(theta_i), cos(theta_i) and 
 //  sin(theta_i) * sin(theta_{i+1}) *  ... * sin(theta_j) 0 <= i, j <= n-1
-void angleprecompute(int n, real theta[n-1], real sines[n-1], real
-        coss[n-1], real sinaccum[n-1][n-1]) {
+void angleprecompute(int n, real theta[n-1], real coss[n-1], 
+        real sins[n-1], real sinaccum[n-1][n-1]) {
+    for(int i = 0; i < n - 1; i++) {
+        coss[i] = cos(theta[i]);
+        sins[i] = sin(theta[i]);
+    }
+
+    // initialize sin[n,m] = product of sin[n] * sin[n+1] * ... * sin[m]
+    // tables
+    for(int j = 0; j < n - 2; j++) {
+        // [n, n] = sin[n]
+        sinaccum[j][j] = sins[j];
+        for(int i = j - 1; i >= 0; i--) {
+            // [m, n] = sin[n] * [n+1, m]
+            sinaccum[i][j] = 
+                sins[i] * 
+                sinaccum[i+1][j];
+        }
+        //[m, n] where m > n
+        for(int i = j + 1; i < n - 1; i++) {
+            sinaccum[i][j] = 1;
+        }
+    }
 }
 
 // convert angles to vectors for a given index
@@ -424,17 +445,19 @@ void angle2vec(int n, real sins[n - 1], real coss[n - 1],
     out[n-1] = sins[n-2];
     for(int i = n - 3; i >= 0; i--) {
         out[i] = coss[i];
-        for(int j = i + 1; j < layer1_size; j++) {
+        for(int j = i + 1; j < n; j++) {
             out[j] *= sins[i];
         }
     }
 
     real lensq = 0;
-    for(int i = 0; i < layer1_size; i++) {
+    for(int i = 0; i < n; i++) {
         lensq += out[i] * out[i];
     }
     assert(fabs(lensq - 1) < 1e-2);
 }
+
+
 // store in out[i] the derivative of d(angle2vec(thetas) . vec)/d(theta_i)
 // NOTE: does not zero out ders
 void angle2der(int n, real sins[n - 1], real coss[n - 1], real
@@ -694,6 +717,9 @@ void *TrainModelThread(void *id) {
                         }
                     // NEGATIVE SAMPLING
                     if (negative > 0) {
+                        angleprecompute(layer1_size, syn0 + l1, syn0cos,
+                                syn0sin, syn0sinaccum);
+                        /*
                         // initialize sin/cos tables for syn0
                         for(c = 0; c < layer1_size - 1; c++) {
                             syn0cos[c] = cos(syn0[c + l1]);
@@ -716,6 +742,7 @@ void *TrainModelThread(void *id) {
                                 syn0sinaccum[m][n] = 1;
                             }
                         }
+                        */
 
                         for (d = 0; d < negative + 1; d++) {
                             if (d == 0) {
@@ -895,11 +922,46 @@ int ArgPos(char *str, int argc, char **argv) {
     return -1;
 }
 
+// given angle inputs, will print derivative outputs.
+// first provide 4 vector, then provide 3 angles
+void test(int argc, char **argv) {
+    int ix = 2; // word2vec -stress-test
+    int n = atoi(argv[ix++]);
+    float v[n];
+    for(int i = 0; i < n; ++i) {
+        v[i] = atoi(argv[ix++]);
+    }
+    float angles[n-1];
+    for(int i = 0; i < n - 1; ++i) {
+        angles[i] = atoi(argv[ix++]);
+    }
+    float sins[n-1];
+    float coss[n-1];
+    float sinaccum[n-1][n-1];
+    angleprecompute(n, angles, coss, sins, sinaccum);
+
+    float angles_vec[n];
+    angle2vec(n, sins, coss, angles_vec);
+
+    float angles_der[n-1];
+    angle2der(n, sins,
+            coss, sinaccum,
+            v, 1, angles_der);
+    
+    for(int i = 0; i < n - 1; ++i) {
+        printf("%f ", angles_der[i]);
+    }
+    printf("\n");
+
+}
+
 int main(int argc, char **argv) {
+
     int i;
     if (argc == 1) {
         printf("WORD VECTOR estimation toolkit v 0.1c\n\n");
         printf("Options:\n");
+        printf("Stress testing: -stress-test\n");
         printf("Parameters for training:\n");
         printf("\t-train <file>\n");
         printf("\t\tUse text data from <file> to train the model\n");
@@ -964,6 +1026,13 @@ int main(int argc, char **argv) {
             "-sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3\n\n");
         return 0;
     }
+
+    if ((i = ArgPos((char *)"-stress-test", argc, argv)) > 0) {
+        assert(i == 1);
+        test(argc, argv);
+        return 0;
+    }
+
     output_file[0] = 0;
     save_vocab_file[0] = 0;
     read_vocab_file[0] = 0;

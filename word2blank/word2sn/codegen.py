@@ -1,4 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+import sympy
+from itertools import *
+from sympy import *
+import sympy as sym
+import sh
+from random import randrange
+
 class Expr:
     def __init__(self, v=None):
         if v is None:
@@ -46,6 +53,7 @@ class Expr:
 
     @classmethod
     def cos(cls, inner):
+        assert(isinstance(inner, Expr))
         e = Expr()
         e.type = "cos"
         e.inner = inner
@@ -53,6 +61,7 @@ class Expr:
 
     @classmethod
     def sin(cls, inner):
+        assert(isinstance(inner, Expr))
         e = Expr()
         e.type = "sin"
         e.inner = inner
@@ -71,6 +80,24 @@ class Expr:
             return "(/ %s %s)" % (self.l, self.r)
         elif self.type == "sin" or self.type == "cos":
             return "(%s %s)" % (self.type, self.inner)
+    def __repr__(self):
+        return self.__str__()
+
+    def tosympy(self):
+        if self.type == "id":
+            return sym.Symbol(self.v)
+        if self.type == "num":
+            return self.v
+        if self.type == "add":
+            return self.l.tosympy() + self.r.tosympy()
+        if self.type == "mul":
+            return self.l.tosympy() + self.r.tosympy()
+        if self.type == "sin":
+            return sym.sin(self.inner.tosympy())
+        if self.type == "cos":
+            return sym.cos(self.inner.tosympy())
+        raise Exception("unknown tosympy")
+
     def der(self, v):
         if self.type == "num":
             return Expr(0)
@@ -97,7 +124,7 @@ class Expr:
                 elif r == Expr(0):
                     return l
                 elif l.type == "num" and r.type == "num":
-                    return Expr(l.v * r.v)
+                    return Expr(l.v + r.v)
                 else:
                     return l + r
             elif self.type == "mul":
@@ -118,9 +145,73 @@ class Expr:
             elif self.type == "cos":
                 return Expr.cos(inner)
         return self
+# convert angles to vectors
+def angle2vec(angle):
+    sinaccum = Expr(1)
+    vec = []
+    for a in angle:
+        vec.append((sinaccum * Expr.cos(a)))
+        sinaccum *= Expr.sin(a)
+    vec.append(sinaccum)
+    return vec
+
+def vec2angleder(vec):
+    angleders = [Expr(0) for _ in range(len(vec))]
+    for i in range(len(vec)):
+        angleders[i] += vec[i].der("a" + str(i)).simpl().simpl()
 
 
+    return list(map(lambda e: e.simpl(), angleders))
 
-e =  Expr.cos(Expr("x")) * Expr.cos(Expr("y"))
-print(e)
-print("de/dy: %s " % e.der("y").simpl())
+if __name__ == "__main__":
+    n = 4
+    angles = [sym.Symbol("a"+str(i)) for i in range(n-1)]
+    anglevec = []
+    sinaccum = 1
+    for a in angles:
+        anglevec.append(sinaccum * sym.cos(a))
+        sinaccum *= sym.sin(a)
+    anglevec.append(sinaccum)
+    print("anglevec: ", anglevec)
+
+    lensq = 0
+    for v in anglevec:
+        lensq += v * v
+    lensq = simplify(lensq)
+    assert abs(lensq.evalf() - 1) == 0
+
+    vec = [float(i+1) for i in range(n)]
+    print("vec: ", vec)
+
+    dot = 0
+    for i in range(len(vec)):
+        dot += vec[i] * anglevec[i]
+    print("dot: ", dot)
+
+    # total derivative of the dot product wrt to the angle, in order of angle
+    ders = [diff(dot, a) for a in angles]
+    print("derivatives: ", ders)
+
+    NTEST = 1000
+    word2vec = sh.Command("./word2vec")
+    for _ in range(NTEST):
+        # angle substitutions
+        anglevals = [randrange(-10, 10) for _ in range(n-1)]
+        # subs to be fed to sympy
+        subs = [(angles[i], anglevals[i]) for i in range(n-1)]
+        
+        # derivative values
+        dervals = [float(simplify(der.subs(subs))) for der in ders]
+
+        inp = [n] + vec + anglevals
+
+        outvals = word2vec("-stress-test", *inp)
+        outvals = list(map(float, outvals.strip().split()))
+        print("input: ", inp) 
+        print("*  dervals: ", dervals)
+        print("*  outvals:", outvals)
+
+        for (der, out) in zip(dervals, outvals):
+            delta = abs(der - out)
+            print("*  |%s - %s| = %s" % (der, out, delta))
+            assert delta < 1e-2

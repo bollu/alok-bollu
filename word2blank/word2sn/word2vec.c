@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -369,7 +370,7 @@ void InitNet() {
     long long a, b;
     unsigned long long next_random = 1;
     a = posix_memalign((void **)&syn0, 128,
-                       (long long)vocab_size * layer1_size * sizeof(real));
+                       (long long)vocab_size * (layer1_size -1) * sizeof(real));
     if (syn0 == NULL) {
         printf("Memory allocation failed\n");
         exit(1);
@@ -395,13 +396,96 @@ void InitNet() {
             for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
     }
     for (a = 0; a < vocab_size; a++)
-        for (b = 0; b < layer1_size; b++) {
+        for (b = 0; b < layer1_size-1; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
             // 0 -> 2pi, random value
-            syn0[a * layer1_size + b] =
+            syn0[a * (layer1_size -1) + b] =
                 2.0 * M_PI * (((next_random & 0xFFFF) / (real)65536));
         }
     CreateBinaryTree();
+}
+
+// given angles, precompute sin(theta_i), cos(theta_i) and 
+//  sin(theta_i) * sin(theta_{i+1}) *  ... * sin(theta_j) 0 <= i, j <= n-1
+void angleprecompute(int n, real theta[n-1], real sines[n-1], real
+        coss[n-1], real sinaccum[n-1][n-1]) {
+}
+
+// convert angles to vectors for a given index
+void angle2vec(int n, real sins[n - 1], real coss[n - 1],
+        real out[n]) {
+    // x1          = c1
+    // x2          = s1 c2
+    // x3          = s1 s2 c3
+    // x4          = s1 s2 s3 c4
+    // x5          = s1 s2 s3 s4 c5
+    // x6 = xfinal = s1 s2 s3 s4 s5
+    out[n-2] = coss[n-2];
+    out[n-1] = sins[n-2];
+    for(int i = n - 3; i >= 0; i--) {
+        out[i] = coss[i];
+        for(int j = i + 1; j < layer1_size; j++) {
+            out[j] *= sins[i];
+        }
+    }
+
+    real lensq = 0;
+    for(int i = 0; i < layer1_size; i++) {
+        lensq += out[i] * out[i];
+    }
+    assert(fabs(lensq - 1) < 1e-2);
+}
+// store in out[i] the derivative of d(angle2vec(thetas) . vec)/d(theta_i)
+// NOTE: does not zero out ders
+void angle2der(int n, real sins[n - 1], real coss[n - 1], real
+        sinprods[n-1][n-1], real vec[n], real g, real ders[n - 2]) {
+    // x1 = c1
+    // x2 = s1 c2
+    // x3 = s1 s2 c3
+    // x4 = s1 s2 s3 c4
+    // x5 = s1 s2 s3 s4 c5
+    // x6 = s1 s2 s3 s4 s5
+    // di(x . y) 
+    // = di(\sum_j x_j * y_j) // dot product
+    // = \sum_j di(x_j * y_j) // linearity of di
+    // = \sum_j { di((s1 s2 .. s(j-1) cj) * y_j) | j < END  } +  
+    //      di((s1 s2 .. s_end) * y_end) (j == END )
+
+    // Now analyzing a particular term di(j)
+    // = \sum_j di((s1 s2 .. s(j-1) cj) * y_j)
+    // if j < i
+    //   = 0 (since we have not seen a s(c) yet)
+    // if j == i
+    //   = \sum_j (s1 s2 .. s(j-1) (-sj)) * y_j
+    // else (j > i)
+    //   = \sum_j (s1 s2 .. s(i-1) c(i) s(i+1)..s(j-1)cos(j))*yj
+    // if j == max AND 
+    // compute d/di for all angles except final angle.
+    for (int i = 0; i < n-2; ++i) {
+        // j == i
+        ders[i] += g * 
+            (i == 0 ? 1 : sinprods[0][i-1]) * 
+            (-1 * sins[i]) * vec[i];
+
+        for(int j = i + 1; j < n - 2; ++j) {
+            ders[i] += g * 
+                (i == 0 ? 1 : sinprods[0][i-1]) * 
+                coss[i] * 
+                sinprods[i+1][j] *
+                coss[j] * vec[j];
+        }
+    }
+
+    // compute d/dtheta(final) of all terms. Only the final 2
+    // terms (x5 and x6) are involved in theta5. the x5 term has
+    // been accounted for. We now need to account for the x6
+    // term.
+    // dend((s1 s2 .. s_end) * y_end) (j == END)
+    // = ((s1 s2 .. -c_end) * y_end) (j == END)
+    ders[n-2] += g * sinprods[0][n-3] * (-1.0 * coss[n-2]) * vec[n-1];
+    // dend((s1 s2 .. c_end) * y_end) (j == END )
+    // = ((s1 s2 .. s_end) * y_end) (j == END )
+    ders[n-2] += g * sinprods[0][n-2] * vec[n-1];
 }
 
 void *TrainModelThread(void *id) {
@@ -414,16 +498,22 @@ void *TrainModelThread(void *id) {
     real f, g;
     clock_t now;
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
-    real *neu1e = (real *)calloc(layer1_size, sizeof(real));
-    real *syn0vec = (real *)calloc(layer1_size, sizeof(real));
-    real *syn0cos = (real *)calloc(layer1_size, sizeof(real));
-    real *syn0sin = (real *)calloc(layer1_size, sizeof(real));
+    // real *neu1e = (real *)calloc(layer1_size - 1, sizeof(real));
+    real neu1e[layer1_size-1];
+    // real *syn0vec = (real *)calloc(layer1_size, sizeof(real));
+    real syn0vec[layer1_size];
+    //real *syn0cos = (real *)calloc(layer1_size-1, sizeof(real));
+    real syn0cos[layer1_size - 1];
+    //real *syn0sin = (real *)calloc(layer1_size-1, sizeof(real));
+    real syn0sin[layer1_size - 1];
     // syn0sinaccum[n + (layer_size - 1) * m] = product of syn0sin in range [n, m] (inclusive)
-    real *syn0sinaccum = (real *)calloc(layer1_size * layer1_size, sizeof(real));
+    // real *syn0sinaccum = (real *)calloc((layer1_size -1)* (layer1_size-1), sizeof(real));
+    real syn0sinaccum[layer1_size-1][layer1_size-1];
+
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 100) {
+        if (word_count - last_word_count > 1000) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {
@@ -478,7 +568,7 @@ void *TrainModelThread(void *id) {
         word = sen[sentence_position];
         if (word == -1) continue;
         for (c = 0; c < layer1_size; c++) neu1[c] = 0;
-        for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+        for (c = 0; c < layer1_size - 1; c++) neu1e[c] = 0;
         next_random = next_random * (unsigned long long)25214903917 + 11;
         b = next_random % window;
         if (cbow) {  // train the cbow architecture
@@ -574,13 +664,13 @@ void *TrainModelThread(void *id) {
                     if (c >= sentence_length) continue;
                     last_word = sen[c];
                     if (last_word == -1) continue;
-                    l1 = last_word * layer1_size;
-                    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+                    l1 = last_word * (layer1_size - 1);
+                    for (c = 0; c < layer1_size-1; c++) neu1e[c] = 0;
                     // HIERARCHICAL SOFTMAX
                     if (hs)
                         for (d = 0; d < vocab[word].codelen; d++) {
                             f = 0;
-                            l2 = vocab[word].point[d] * layer1_size;
+                            l2 = vocab[word].point[d] * (layer1_size - 1);
                             // Propagate hidden -> output
                             for (c = 0; c < layer1_size; c++)
                                 f += syn0[c + l1] * syn1[c + l2];
@@ -605,18 +695,25 @@ void *TrainModelThread(void *id) {
                     // NEGATIVE SAMPLING
                     if (negative > 0) {
                         // initialize sin/cos tables for syn0
-                        for(c = 0; c < layer1_size; c++) {
-                            syn0cos[c] = cos(syn0[c]);
-                            syn0sin[c] = sin(syn0[c]);
+                        for(c = 0; c < layer1_size - 1; c++) {
+                            syn0cos[c] = cos(syn0[c + l1]);
+                            syn0sin[c] = sin(syn0[c + l1]);
                         }
 
-                        for(int m = 0; m < layer1_size - 1; m++) {
-                            // [m, m] = sin[m]
-                            syn0sinaccum[m + layer1_size * m] = syn0sin[m];
-                            for(int n = m - 1; n >= 0; n--) {
-                                // [n, m] = sin[n] * [n+1, m]
-                                syn0sinaccum[n + layer1_size * m] = 
-                                    syn0sinaccum[n + 1 + layer1_size * m] * syn0sin[n];
+                        // initialize sin[n,m] = product of sin[n] * sin[n+1] * ... * sin[m]
+                        // tables
+                        for(int n = 0; n < layer1_size - 2; n++) {
+                            // [n, n] = sin[n]
+                            syn0sinaccum[n][n] = syn0sin[n];
+                            for(int m = n - 1; m >= 0; m--) {
+                                // [m, n] = sin[n] * [n+1, m]
+                                syn0sinaccum[m][n] = 
+                                    syn0sin[m] * 
+                                    syn0sinaccum[m+1][n];
+                            }
+                            //[m, n] where m > n
+                            for(int m = n + 1; m < layer1_size - 1; m++) {
+                                syn0sinaccum[m][n] = 1;
                             }
                         }
 
@@ -637,36 +734,11 @@ void *TrainModelThread(void *id) {
                                 label = 0;
                             }
                             l2 = target * layer1_size;
-                            f = 0;
-                            // x1 = c1
-                            // x2 = s1 c2
-                            // x3 = s1 s2 c3
-                            // x4 = s1 s2 s3 c4
-                            // x5 = s1 s2 s3 s4 c5
-                            // syn0vec
-                           
-                            // leti = ith angle
-                            // di = d/di
-                            // di(x . y) 
-                            // = \sum_j di(x_j * y_j)
-                            // = \sum_j di((s1 s2 .. s(j-1) cj) * y_j)
-                            // = \sum_j di((s1 s2 .. s(j-1) cj) * y_j)
-                            // if i < j
-                            //   = 0 (since we have not seen a sin i yet)
-                            // if i == j
-                            //   = \sum_j (s1 s2 .. s(j-1) (-sj)) * y_j
-                            // else
-                            //   = \sum_j (s1 s2 .. s(i-1) ci s(i+1)..cj)*yj
-                            //        
-                            //
+                            angle2vec(layer1_size, syn0sin, syn0cos, syn0vec);
 
-                            real sinaccum = 1;
-                            for(c = 0; c < layer1_size; c++) {
-                                syn0vec[c] = sinaccum * syn0cos[c];
-                                sinaccum *= syn0sin[c];
-                            }
 
                             // compute dot product
+                            f = 0;
                             for (c = 0; c < layer1_size; c++) {
                                 f += syn0vec[c] * syn1neg[c + l2];
                             }
@@ -680,40 +752,19 @@ void *TrainModelThread(void *id) {
                                             (EXP_TABLE_SIZE /
                                              MAX_EXP / 2))]) *
                                     alpha;
-                            // neu1e = gradients of *focus word*
-                            // syn1neg: context word
-                            // x1 = c1
-                            // x2 = s1 c2
-                            // x3 = s1 s2 c3
-                            // x4 = s1 s2 s3 c4
-                            // x5 = s1 s2 s3 s4 c5
-                            // dc(x . y) 
-                            // = \sum_j dc(x_j * y_j)
-                            // = \sum_j dc((s1 s2 .. s(j-1) cj) * y_j)
-                            // = \sum_j dc((s1 s2 .. s(j-1) cj) * y_j)
-                            // if c < j
-                            //   = 0 (since we have not seen a s(c) yet)
-                            // if c == j
-                            //   = \sum_j (s1 s2 .. s(j-1) (-sj)) * y_j
-                            // else
-                            //   = \sum_j (s1 s2 .. s(c-1) cos(c) s(c+1)..s(j-1)cos(j))*yj
-                            for (c = 0; c < layer1_size; c++) {
-                                neu1e[c] += g * -1 * syn0sinaccum[0 + layer1_size *c] * syn1neg[c + l2];
 
-                                for (int j  = c+1; j < layer1_size; ++j) {
-                                    const float l = c == 0 ? 1 : syn0sinaccum[0 + layer1_size * (c - 1)];
-                                    // this division might be bad. Maybe a good
-                                    // idea to not have it...
-                                    const float r = c == layer1_size - 1 ? 1  : syn0sinaccum[c+1 + layer1_size * (j - 1)];
-                                    neu1e[c] += g * syn1neg[j + l2] * (l * syn0cos[c] * r * syn0cos[j]);
-                                }
-                            }
+                            // buffer weights of focus
+                            angle2der(layer1_size, syn0sin,
+                                    syn0cos, syn0sinaccum,
+                                    syn1neg, g, neu1e);
+
+                            // learn weights of neg
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] += g * syn0vec[c];
                         } // end negative samples loop
 
                         // Learn weights input -> hidden
-                        for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+                        for (c = 0; c < layer1_size-1; c++) syn0[c + l1] += neu1e[c];
                     }
                 }
         }
@@ -725,7 +776,6 @@ void *TrainModelThread(void *id) {
     }
     fclose(fi);
     free(neu1);
-    free(neu1e);
     pthread_exit(NULL);
 }
 
@@ -757,18 +807,26 @@ void TrainModel() {
 
             //re-create the actual vector from the
             //angles.
+            // x1 = c1
+            // x2 = s1 c2
+            // x3 = s1 s2 c3
+            // x4 = s1 s2 s3 c4
+            // x5 = s1 s2 s3 s4 c5
+            // x6 = s1 s2 s3 s4 s5
             real sinaccum = 1;
-            for(b = 0; b < layer1_size; b++) {
-                syn0vec[b] = sinaccum * cos(syn0[a * layer1_size + b]);
-                sinaccum *= sin(syn0[a * layer1_size + b]);
+            for(b = 0; b < layer1_size-2; b++) {
+                syn0vec[b] = sinaccum * cos(syn0[a * (layer1_size -1) + b]);
+                sinaccum *= sin(syn0[a * (layer1_size-1)  + b]);
             }
+            // final value is all sins multiplied together
+            syn0vec[layer1_size-1] = sinaccum;
 
             if (binary)
                 for (b = 0; b < layer1_size; b++)
-                    fwrite(&syn0vec[a * layer1_size + b], sizeof(real), 1, fo);
+                    fwrite(&syn0vec[b], sizeof(real), 1, fo);
             else
                 for (b = 0; b < layer1_size; b++)
-                    fprintf(fo, "%lf ", syn0vec[a * layer1_size + b]);
+                    fprintf(fo, "%lf ", syn0vec[b]);
             fprintf(fo, "\n");
         }
     } else {

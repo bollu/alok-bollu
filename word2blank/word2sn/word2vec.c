@@ -413,21 +413,15 @@ void angleprecompute(int n, real theta[n-1], real coss[n-1],
         coss[i] = cos(theta[i]);
         sins[i] = sin(theta[i]);
     }
-
-    // initialize sin[n,m] = product of sin[n] * sin[n+1] * ... * sin[m]
-    // tables
-    for(int j = 0; j < n - 2; j++) {
-        // [n, n] = sin[n]
-        sinaccum[j][j] = sins[j];
-        for(int i = j - 1; i >= 0; i--) {
-            // [m, n] = sin[n] * [n+1, m]
-            sinaccum[i][j] = 
-                sins[i] * 
-                sinaccum[i+1][j];
-        }
-        //[m, n] where m > n
-        for(int i = j + 1; i < n - 1; i++) {
-            sinaccum[i][j] = 1;
+    
+    // check interval [i..j]
+    for(int i = 0; i < n - 1; ++i) {
+        for(int j = 0; j < n - 1; ++ j) {
+            float prod = 1;
+            for(int k = i; k <= j; ++k) {
+                prod *= sins[k];
+            }
+            sinaccum[i][j] = prod;
         }
     }
 }
@@ -460,7 +454,7 @@ void angle2vec(int n, real sins[n - 1], real coss[n - 1],
 
 // store in out[i] the derivative of d(angle2vec(thetas) . vec)/d(theta_i)
 // NOTE: does not zero out ders
-void angle2der(int n, real sins[n - 1], real coss[n - 1], real
+void angle2der(int n, real coss[n - 1], real sins[n - 1],  real
         sinprods[n-1][n-1], real vec[n], real g, real ders[n - 2]) {
     // x1 = c1
     // x2 = s1 c2
@@ -781,8 +775,8 @@ void *TrainModelThread(void *id) {
                                     alpha;
 
                             // buffer weights of focus
-                            angle2der(layer1_size, syn0sin,
-                                    syn0cos, syn0sinaccum,
+                            angle2der(layer1_size, syn0cos,
+                                    syn0sin, syn0sinaccum,
                                     syn1neg, g, neu1e);
 
                             // learn weights of neg
@@ -938,14 +932,29 @@ void test(int argc, char **argv) {
     float sins[n-1];
     float coss[n-1];
     float sinaccum[n-1][n-1];
+
     angleprecompute(n, angles, coss, sins, sinaccum);
+
+    // check interval [i..j]
+    for(int i = 0; i < n - 1; ++i) {
+        for(int j = 0; j < n - 1; ++ j) {
+            float prod = 1;
+            for(int k = i; k <= j; ++k) {
+                prod *= sins[k];
+            }
+            if(fabs(sinaccum[i][j] - prod) > 1e-2) {
+                printf("i: %d | j: %d | sinaccum[i][j]: %f | prod: %f",  i, j, sinaccum[i][j], prod);
+                assert(0 && "incorrect value in sinaccum");
+            }
+        }
+    }
 
     float angles_vec[n];
     angle2vec(n, sins, coss, angles_vec);
 
     float angles_der[n-1];
-    angle2der(n, sins,
-            coss, sinaccum,
+    angle2der(n, coss,
+            sins, sinaccum,
             v, 1, angles_der);
     
     for(int i = 0; i < n - 1; ++i) {

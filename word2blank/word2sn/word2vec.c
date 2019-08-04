@@ -488,9 +488,15 @@ void angle2der(int n, real coss[n - 1], real sins[n - 1],  real
             ders[i] += g * 
                 (i == 0 ? 1 : sinprods[0][i-1]) * 
                 coss[i] * 
-                sinprods[i+1][j] *
+                sinprods[i+1][j-1] *
                 coss[j] * vec[j];
         }
+
+        // di(final)
+        ders[i] += g * (i == 0 ? 1 : sinprods[0][i-1]) *
+                coss[i] * 
+                sinprods[i+1][n-2] *
+                vec[n-1];
     }
 
     // compute d/dtheta(final) of all terms. Only the final 2
@@ -499,10 +505,7 @@ void angle2der(int n, real coss[n - 1], real sins[n - 1],  real
     // term.
     // dend((s1 s2 .. s_end) * y_end) (j == END)
     // = ((s1 s2 .. -c_end) * y_end) (j == END)
-    ders[n-2] += g * sinprods[0][n-3] * (-1.0 * coss[n-2]) * vec[n-1];
-    // dend((s1 s2 .. c_end) * y_end) (j == END )
-    // = ((s1 s2 .. s_end) * y_end) (j == END )
-    ders[n-2] += g * sinprods[0][n-2] * vec[n-1];
+    ders[n-2] += g * sinprods[0][n-3] * (-1 * coss[n-2]) * vec[n-1];
 }
 
 void *TrainModelThread(void *id) {

@@ -180,7 +180,7 @@ if __name__ == "__main__":
     lensq = simplify(lensq)
     assert abs(lensq.evalf() - 1) == 0
 
-    vec = [float(i+1) for i in range(n)]
+    vec = [(i+1) for i in range(n)]
     print("vec: ", vec)
 
     dot = 0
@@ -192,6 +192,7 @@ if __name__ == "__main__":
     ders = [diff(dot, a) for a in angles]
     print("derivatives: ", ders)
 
+    print("----")
     NTEST = 1000
     word2vec = sh.Command("./word2vec")
     for _ in range(NTEST):
@@ -208,8 +209,8 @@ if __name__ == "__main__":
         outvals = word2vec("-stress-test", *inp)
         outvals = list(map(float, outvals.strip().split()))
         print("input: ", inp) 
-        print("*  dervals: ", dervals)
-        print("*  outvals:", outvals)
+        print("*  dervals(reference): ", dervals)
+        print("*  outvals(from word2vec):", outvals)
 
         for (der, out) in zip(dervals, outvals):
             delta = abs(der - out)

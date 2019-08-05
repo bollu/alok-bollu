@@ -430,22 +430,31 @@ void angleprecompute(int n, real theta[n-1], real coss[n-1],
 }
 
 // convert angles to vectors for a given index
-void angle2vec(int n, real sins[n - 1], real coss[n - 1],
+void angle2vec(int n, real sins[n - 1], real coss[n - 1], real sinaccum[n-1][n-1],
         real out[n]) {
+
+    // reference
     // x1          = c1
     // x2          = s1 c2
     // x3          = s1 s2 c3
     // x4          = s1 s2 s3 c4
     // x5          = s1 s2 s3 s4 c5
     // x6 = xfinal = s1 s2 s3 s4 s5
+    for(int i = 0; i < n; i++) {
+        out[i] = (i == 0 ? 1 : sinaccum[0][i-1]) * (i == n-1 ? 1 : coss[i]);
+    }
+
+    /*
     out[n-1] = sins[n-2];
     out[n-2] = coss[n-2];
     for(int i = n - 3; i >= 0; i--) {
         out[i] = coss[i];
+
         for(int j = i + 1; j < n; j++) {
             out[j] *= sins[i];
         }
     }
+    */
 
     #ifdef EXPENSIVE_CHECKS
     real lensq = 0;
@@ -778,7 +787,7 @@ void *TrainModelThread(void *id) {
                                 label = 0;
                             }
                             l2 = target * layer1_size;
-                            angle2vec(layer1_size, syn0sin, syn0cos, syn0vec);
+                            angle2vec(layer1_size, syn0sin, syn0cos, syn0sinaccum, syn0vec);
 
 
                             // compute dot product
@@ -992,7 +1001,7 @@ void test(int argc, char **argv) {
     }
 
     float angles_vec[n];
-    angle2vec(n, sins, coss, angles_vec);
+    angle2vec(n, sins, coss, sinaccum, angles_vec);
     printf("angle2vec: ");
     for(int i = 0; i < n; i++) { printf("%f ", angles_vec[i]); } 
     printf("\n");

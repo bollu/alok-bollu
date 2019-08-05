@@ -25,7 +25,8 @@
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
 
-#define DEBUG_ANGLE2VEC
+// #define DEBUG_ANGLE2VEC
+// #define EXPENSIVE_CHECKS
 
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
@@ -418,12 +419,12 @@ void angleprecompute(int n, real theta[n-1], real coss[n-1],
     
     // check interval [i..j]
     for(int i = 0; i < n - 1; ++i) {
-        for(int j = 0; j < n - 1; ++ j) {
-            float prod = 1;
-            for(int k = i; k <= j; ++k) {
-                prod *= sins[k];
-            }
-            sinaccum[i][j] = prod;
+        // j < i
+        for(int j = 0; j < i; ++j) { sinaccum[i][j] = 1; }
+        //j = i
+        sinaccum[i][i] = sins[i];
+        for(int j = i + 1; j < n - 1; ++j) {
+            sinaccum[i][j] = sins[j] * sinaccum[i][j-1];
         }
     }
 }
@@ -446,11 +447,13 @@ void angle2vec(int n, real sins[n - 1], real coss[n - 1],
         }
     }
 
+    #ifdef EXPENSIVE_CHECKS
     real lensq = 0;
     for(int i = 0; i < n; i++) {
         lensq += out[i] * out[i];
     }
     assert(fabs(lensq - 1) < 1e-2);
+    #endif
 }
 
 void debugPrintAngleRepr(int n, int derix, int vecix) {
@@ -473,8 +476,10 @@ void debugPrintAngleRepr(int n, int derix, int vecix) {
 // x5 = s0 s1 s2 s3 s4   v5
 real angle2derTerm(int n, int theta, int xindex, real coss[n-1], real sins[n-1],
         real sinprods[n-1][n-1], real vec[n], real g) {
+    #ifdef EXPENSIVE_CHECKS
     assert(xindex >= 0 && xindex <= n - 1);
     assert(theta >= 0 && theta <= n - 2);
+    #endif
     // term n contains thetas of {0..n}
     if (xindex < theta) { return 0; }
 
@@ -548,7 +553,7 @@ void *TrainModelThread(void *id) {
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 1000) {
+        if (word_count - last_word_count > 10) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {

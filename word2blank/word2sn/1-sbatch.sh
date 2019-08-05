@@ -7,13 +7,12 @@
 #SBATCH -o ./slurm/%j
 
 ### SET NAME (NO .bin) ###
-NAME=XXXX
+NAME="size=50-negative=25-iter=15"
 ########
 ########
-
 
 DATE=`date '+%Y-%m-%d--%H:%M:%S'`
-GITNAME=$(git rev-parse --short HEAD)
+GITNAME=$(git rev-parse --short HEAD)-size=50-negsamples=25
 FOLDERNAME=$GITNAME
 mkdir -p models/
 mkdir -p slurm/

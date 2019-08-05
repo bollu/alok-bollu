@@ -1,3 +1,4 @@
 ./ablation_models/*.bin
 text8
 text1
+slurm/

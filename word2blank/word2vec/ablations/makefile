@@ -1,8 +1,9 @@
 CC = gcc
+DEBUG=-fsanitize=address -fsanitize=undefined -g  
 #Using -Ofast instead of -O3 might result in faster code, but is supported only by newer GCC versions
 CFLAGS = -lm -pthread -O3 -march=native -Wall -funroll-loops -Wno-unused-result
 
-all: word2vec word2phrase distance word-analogy compute-accuracy word2vec_two_random_vectors
+all: word2vec word2phrase distance word-analogy compute-accuracy word2vec_two_random_vectors word2vec_one_random_vector
 
 word2vec : word2vec.c
 	$(CC) word2vec.c -o word2vec $(CFLAGS)
@@ -17,6 +18,8 @@ compute-accuracy : compute-accuracy.c
 	chmod +x *.sh
 word2vec_two_random_vectors : word2vec_two_random_vectors.c
 	$(CC) word2vec_two_random_vectors.c -o word2vec_two_random_vectors $(CFLAGS)
+word2vec_one_random_vector : word2vec_one_random_vector.c
+	$(CC) word2vec_one_random_vector.c -o word2vec_one_random_vector $(CFLAGS)
 
 clean:
 	rm -rf word2vec word2phrase distance word-analogy compute-accuracy

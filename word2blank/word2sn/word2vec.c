@@ -390,13 +390,19 @@ void InitNet() {
     }
     if (negative > 0) {
         a = posix_memalign((void **)&syn1neg, 128,
-                           (long long)vocab_size * layer1_size * sizeof(real));
+                           (long long)vocab_size * (layer1_size -1) * sizeof(real));
         if (syn1neg == NULL) {
             printf("Memory allocation failed\n");
             exit(1);
         }
         for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
+            for (b = 0; b < layer1_size; b++) 
+                { 
+                    next_random = next_random * (unsigned long long)25214903917 + 11;
+                    syn1neg[a * layer1_size + b] = 
+                2.0 * M_PI * (((next_random & 0xFFFF) / (real)65536));
+                }
+
     }
     for (a = 0; a < vocab_size; a++)
         for (b = 0; b < layer1_size-1; b++) {
@@ -551,13 +557,17 @@ void *TrainModelThread(void *id) {
     real neu1e[layer1_size-1];
     // real *syn0vec = (real *)calloc(layer1_size, sizeof(real));
     real syn0vec[layer1_size];
+    real syn1vec[layer1_size];
     //real *syn0cos = (real *)calloc(layer1_size-1, sizeof(real));
     real syn0cos[layer1_size - 1];
+    real syn1cos[layer1_size - 1];
     //real *syn0sin = (real *)calloc(layer1_size-1, sizeof(real));
     real syn0sin[layer1_size - 1];
+    real syn1sin[layer1_size - 1];
     // syn0sinaccum[n + (layer_size - 1) * m] = product of syn0sin in range [n, m] (inclusive)
     // real *syn0sinaccum = (real *)calloc((layer1_size -1)* (layer1_size-1), sizeof(real));
     real syn0sinaccum[layer1_size-1][layer1_size-1];
+    real syn1sinaccum[layer1_size-1][layer1_size-1];
 
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);

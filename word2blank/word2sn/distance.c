@@ -69,6 +69,7 @@ void cosine() {
     len = 0;
     for (a = 0; a < size; a++) len += vec[a] * vec[a];
     len = sqrt(len);
+    printf("len: %f\n", len);
     for (a = 0; a < size; a++) vec[a] /= len;
     for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
@@ -129,6 +130,7 @@ int main(int argc, char **argv) {
         len = 0;
         for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
         len = sqrt(len);
+        printf("len: %f\n", len);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);

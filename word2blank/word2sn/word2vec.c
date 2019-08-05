@@ -25,6 +25,8 @@
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
 
+#define DEBUG_ANGLE2VEC
+
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -435,8 +437,8 @@ void angle2vec(int n, real sins[n - 1], real coss[n - 1],
     // x4          = s1 s2 s3 c4
     // x5          = s1 s2 s3 s4 c5
     // x6 = xfinal = s1 s2 s3 s4 s5
-    out[n-2] = coss[n-2];
     out[n-1] = sins[n-2];
+    out[n-2] = coss[n-2];
     for(int i = n - 3; i >= 0; i--) {
         out[i] = coss[i];
         for(int j = i + 1; j < n; j++) {
@@ -451,61 +453,74 @@ void angle2vec(int n, real sins[n - 1], real coss[n - 1],
     assert(fabs(lensq - 1) < 1e-2);
 }
 
+void debugPrintAngleRepr(int n, int derix, int vecix) {
+    printf("  d/d%d[", derix);
+
+    for(int i = 0; i < vecix; ++i){
+        printf("sin(%d)", i);
+    }
+    if (vecix != n - 1) {
+        printf("cos(%d)", vecix);
+    }
+    printf("]");
+}
+
+// x0 = c0               v0
+// x1 = s0 c1            v1
+// x2 = s0 s1 c2         v2
+// x3 = s0 s1 s2 c3      v3
+// x4 = s0 s1 s2 s3 c4   v4
+// x5 = s0 s1 s2 s3 s4   v5
+real angle2derTerm(int n, int theta, int xindex, real coss[n-1], real sins[n-1],
+        real sinprods[n-1][n-1], real vec[n], real g) {
+    assert(xindex >= 0 && xindex <= n - 1);
+    assert(theta >= 0 && theta <= n - 2);
+    // term n contains thetas of {0..n}
+    if (xindex < theta) { return 0; }
+
+    // final term
+    // need to take the derivative of
+    // xn = s0 s1 ... sn
+    // d/di(s0 s1 ... sn) = s0 s1 ... s{i-1} ci s{i+1} ... sn
+    if (xindex == n-1) {
+        const real lprod = theta == 0 ? 1 : sinprods[0][theta - 1];
+        const real rprod = theta == n - 2 ? 1 : sinprods[theta+1][n-2];
+        return lprod * coss[theta] * rprod * g * vec[xindex];
+    }
+
+    // No more final term. Term is of the form
+    // xn = s0 s1 s2 s3 ... s{n-1} cn 
+    // Two cases:
+    // case 1. d/dn(xn) = d/dn(s0 s1 ...s{n-1} cn) = s0 s1...s{n-1} |(- sn)|
+    // case 2. d/di(xn) = d/dn(s0 s1 ...s{n-1} cn) = s0 s1..s{i-1} |ci| s{i+1}..s{n-1}..cn
+    if (theta == xindex) { // case 1
+        const real lprod = theta == 0 ? 1 : sinprods[0][theta-1];
+        return lprod * (-sins[theta]) * g * vec[xindex];
+    } else { // case 2
+        assert(theta < xindex);
+        const real lprod = theta == 0 ? 1 : sinprods[0][theta - 1];
+        const real rprod = sinprods[theta+1][xindex-1];
+        return lprod * coss[theta] * rprod * coss[xindex] * g * vec[xindex];
+    }
+
+    assert(0 && "unreachable");
+}
 
 // store in out[i] the derivative of d(angle2vec(thetas) . vec)/d(theta_i)
 // NOTE: does not zero out ders
 void angle2der(int n, real coss[n - 1], real sins[n - 1],  real
         sinprods[n-1][n-1], real vec[n], real g, real ders[n - 2]) {
-    // x1 = c1
-    // x2 = s1 c2
-    // x3 = s1 s2 c3
-    // x4 = s1 s2 s3 c4
-    // x5 = s1 s2 s3 s4 c5
-    // x6 = s1 s2 s3 s4 s5
-    // di(x . y) 
-    // = di(\sum_j x_j * y_j) // dot product
-    // = \sum_j di(x_j * y_j) // linearity of di
-    // = \sum_j { di((s1 s2 .. s(j-1) cj) * y_j) | j < END  } +  
-    //      di((s1 s2 .. s_end) * y_end) (j == END )
-
-    // Now analyzing a particular term di(j)
-    // = \sum_j di((s1 s2 .. s(j-1) cj) * y_j)
-    // if j < i
-    //   = 0 (since we have not seen a s(c) yet)
-    // if j == i
-    //   = \sum_j (s1 s2 .. s(j-1) (-sj)) * y_j
-    // else (j > i)
-    //   = \sum_j (s1 s2 .. s(i-1) c(i) s(i+1)..s(j-1)cos(j))*yj
-    // if j == max AND 
-    // compute d/di for all angles except final angle.
-    for (int i = 0; i < n-2; ++i) {
-        // j == i
-        ders[i] += g * 
-            (i == 0 ? 1 : sinprods[0][i-1]) * 
-            (-1 * sins[i]) * vec[i];
-
-        for(int j = i + 1; j < n - 2; ++j) {
-            ders[i] += g * 
-                (i == 0 ? 1 : sinprods[0][i-1]) * 
-                coss[i] * 
-                sinprods[i+1][j-1] *
-                coss[j] * vec[j];
+    // x0 = c0               v0
+    // x1 = s0 c1            v1
+    // x2 = s0 s1 c2         v2
+    // x3 = s0 s1 s2 c3      v3
+    // x4 = s0 s1 s2 s3 c4   v4
+    // x5 = s0 s1 s2 s3 s4   v5
+    for(int xindex = 0; xindex < n; xindex++) {
+        for(int theta = 0; theta < n - 1; theta++) {
+            ders[theta] += angle2derTerm(n, theta, xindex, coss, sins, sinprods, vec, g);
         }
-
-        // di(final)
-        ders[i] += g * (i == 0 ? 1 : sinprods[0][i-1]) *
-                coss[i] * 
-                sinprods[i+1][n-2] *
-                vec[n-1];
     }
-
-    // compute d/dtheta(final) of all terms. Only the final 2
-    // terms (x5 and x6) are involved in theta5. the x5 term has
-    // been accounted for. We now need to account for the x6
-    // term.
-    // dend((s1 s2 .. s_end) * y_end) (j == END)
-    // = ((s1 s2 .. -c_end) * y_end) (j == END)
-    ders[n-2] += g * sinprods[0][n-3] * (-1 * coss[n-2]) * vec[n-1];
 }
 
 void *TrainModelThread(void *id) {
@@ -957,7 +972,6 @@ void test(int argc, char **argv) {
         printf("%f ", coss[i]);
     }
     printf("\n");
-
     // check interval [i..j]
     for(int i = 0; i < n - 1; ++i) {
         for(int j = 0; j < n - 1; ++ j) {

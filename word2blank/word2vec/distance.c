@@ -21,6 +21,8 @@
 #define N 40
 #define max_w 50
 
+typedef float real;
+
 FILE *f;
 char st1[max_size];
 char *bestw[N];
@@ -29,6 +31,39 @@ float dist, len, bestd[N], vec[max_size];
 long long words, size, a, b, c, d, cn, bi[100];
 float *M;
 char *vocab;
+
+#define NUM_SPARKS 100
+
+
+void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
+    // number of values in each bucket.
+    int buckets[nbuckets];
+    for(int i = 0; i < nbuckets; ++i) buckets[i] = 0;
+
+    real vmax = vals[0];
+    real vmin = vals[0];
+    for(int i = 0; i < n; ++i) vmax = vals[i] > vmax ? vals[i] : vmax;
+    for(int i = 0; i < n; ++i) vmin = vals[i] < vmin ? vals[i] : vmin;
+
+    real multiple = (vmax - vmin) / nbuckets;
+
+    for(int i = 0; i < n; ++i) {
+        int b = floor((vals[i] - vmin) / multiple);
+        b = b >= nbuckets ? (nbuckets -1): (b < 0 ? 0 : b);
+        buckets[b]++;
+    }
+    
+    int total = 0;
+    for(int i = 0; i < nbuckets; ++i) total += buckets[i];
+
+    printf("%s: |", name);
+    for(int i = 0; i < nbuckets; ++i) {
+        printf(" %f ", ((buckets[i] / (real)total)) * 100.0);
+    }
+    printf("|");
+
+}
+
 
 // find dot product of two words
 void dot() {
@@ -55,6 +90,9 @@ void dot() {
 }
 
 void cosine() {
+    real vals[words];
+    for(int i = 0; i < words; ++i) vals[i] = 0;
+
     printf(
         "\n                                              Word       "
         "Cosine "
@@ -79,6 +117,10 @@ void cosine() {
         if (a == 1) continue;
         dist = 0;
         for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+
+        // store the distance value
+        vals[c] = dist;
+
         for (a = 0; a < N; a++) {
             if (dist > bestd[a]) {
                 for (d = N - 1; d > a; d--) {
@@ -92,6 +134,13 @@ void cosine() {
         }
     }
     for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+    real vals2[100];
+    for(int i = 0; i < 100; ++i) {
+        vals2[i] = rand()  % 10;
+    }
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
 }
 
 int main(int argc, char **argv) {

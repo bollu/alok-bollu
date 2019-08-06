@@ -26,7 +26,7 @@
 #define MAX_CODE_LENGTH 40
 
 // #define DEBUG_ANGLE2VEC
-// #define EXPENSIVE_CHECKS
+//#define EXPENSIVE_CHECKS
 
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
@@ -56,6 +56,25 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
+
+void angleprecompute(int n, const real theta[n-1], real coss[n-1], real
+        sins[n-1], real sinaccum[n-1][n-1]);
+
+
+void angle2vec(int n, const real coss[n - 1], const real sins[n - 1], const
+        real sinaccum[n-1][n-1], real out[n]);
+
+
+real uniform01(long long unsigned int* next_random){
+    *next_random =
+        *next_random * (unsigned long long)25214903917 + 11;
+    return (*next_random & 0xFFFF) / ((real) 65536);
+}
+
+real uniformsign(long long unsigned int *next_random) {
+    return uniform01(next_random) >= 0.5 ? 1 : -1;
+}
+
 // value proportional to distribution we wish to draw from.
 real angleScore(int n, int i, real angle) {
     return powf(sin(angle), (n - 1) - (i - 1));
@@ -82,15 +101,13 @@ real angleScore(int n, int i, real angle) {
 real metropolisStep(int n, int i, real curtheta, long long unsigned int *next_random) {
     *next_random =
         *next_random * (unsigned long long)25214903917 + 11;
-    const int rand_sign = (*next_random % 2 == 0) ? 1 : -1;
+    const int rand_sign = uniformsign(next_random);
 
     assert(0 <= i);
     assert(i <= n - 1);
     // current score
     // next sample point
-    *next_random =
-        *next_random * (unsigned long long)25214903917 + 11;
-    real nextheta = curtheta + rand_sign * 0.1 * ((*next_random & 0xFFFF) / ((real) 65536));
+    real nextheta = curtheta + rand_sign * 0.1 * uniform01(next_random);
     // wrap around [0, 2 pi]
     if (nextheta < 0) {
         nextheta = 2 * M_PI - fabs(nextheta);
@@ -116,11 +133,10 @@ real metropolisStep(int n, int i, real curtheta, long long unsigned int *next_ra
 
 }
 
+
 real sampleAngle(int n, int i, long long unsigned int *next_random) {
     // start from random angle in [0, 2PI]
-    *next_random =
-        *next_random * (unsigned long long)25214903917 + 11;
-    real curtheta = 2 * M_PI * (*next_random & 0xFFFF) / ((real) 65536);
+    real curtheta = 2 * M_PI * uniform01(next_random);
     // take 10 steps of MH to decorrelate
     for(int k = 0; k < 100; ++k) {
         curtheta = metropolisStep(n, i, curtheta, next_random);
@@ -129,10 +145,85 @@ real sampleAngle(int n, int i, long long unsigned int *next_random) {
     return curtheta;
 }
 
+/*
 void sampleRandomPointSphere(int n, real angles[n-1], long long unsigned int *next_random) {
     for(int i = 0; i < n - 1; ++i) {
         angles[i] = sampleAngle(n, i, next_random);
     }
+}
+*/
+
+// gaussian distribution, mean 0, variance 1
+real standardNormal(long long unsigned int *next_random) {
+
+    // https://en.wikibooks.org/wiki/Statistics/Distributions/Uniform
+    // mean of standard normal = sum of means of iid = 0 * NSAMPLES = 0
+    // stddev of standard normal = sum of stddevs of iid = 0 * 12 = 0
+    real sum = 0;
+    const int NSAMPLES = 10;
+    // var = (1 - (-1))^2 / 12 = 2^2 / 12 = 4 / 12 = 1 / 3
+    // stddev = sqrt(1/3)
+    const real uniformStddev = sqrtf(1.0 / 3);
+
+    for(int i = 0; i < NSAMPLES; ++i) {
+        // uniform in [-1, 1]
+        sum += uniformsign(next_random) * uniform01(next_random);
+    }
+
+    // convert gaussian X into standard normal: (X - mu) / sigma
+    return (sum - 0.0) / 2 * (uniformStddev * NSAMPLES);
+}
+
+void sampleRandomPointSphere(int n, real angles[n-1], long long unsigned int *next_random) {
+    real vec[n];
+    float lensq = 0;
+    for(int i = 0; i < n; ++i) {
+        vec[i] = standardNormal(next_random);
+        lensq += vec[i] * vec[i];
+    }
+
+    const float len = sqrt(lensq);
+    for(int i = 0; i < n; ++i) {
+        vec[i] /= len;
+    };
+    
+    // n = 5
+    // x0 = cos t0
+    // x1 = sin t0 cos t1
+    // x2 = sin t0 sin t1 cos t2
+    // x3 = sin t0 sin t1 sin t2 cos t3
+    // x4 = sin t0 sin t1 sin t2 sin t3
+    //
+    // x4/x3 = sin t3 / cos t3 = tan t3
+    angles[n-2] = atan2(vec[n-1], vec[n-2]);
+    // to compute t2, we need to take atan2(x3, x2 * cos(t3))
+    for(int i = n - 3; i >= 0; i--) {
+        angles[i] =  atan2(vec[i+1], vec[i] * cos(angles[i+1]));
+    }
+
+    #ifdef EXPENSIVE_CHECKS
+    real sins[n-1], coss[n-1], sinaccum[n-1][n-1];
+    real vecinv[n];
+    angleprecompute(n, angles, coss, sins, sinaccum);
+    angle2vec(n, coss, sins, sinaccum, vecinv);
+
+    float lensq_vecinv = 0;
+    for(int i = 0; i < n; ++i) {
+        lensq_vecinv += vecinv[i] * vecinv[i];
+    }
+
+    assert (fabs(lensq_vecinv - 1) < 1e-2);
+
+    //TODO: find out why we have sign differences.
+    for(int i = n - 1; i >= 0; --i) {
+        if (fabs(fabs(vecinv[i]) - fabs(vec[i])) > 1e-2) {
+            printf("mismatch(n=%d): expected[%d] = %f | found[%d] = %f\n",  n,
+                    i, vec[i], i, vecinv[i]);
+            assert(0 && "mismatch in expected and recovered vector");
+        }
+    }
+    #endif
+
 }
 
 // code from:
@@ -547,8 +638,8 @@ void InitNet() {
 void angleprecompute(int n, const real theta[n-1], real coss[n-1], 
         real sins[n-1], real sinaccum[n-1][n-1]) {
     for(int i = 0; i < n - 1; i++) {
-        coss[i] = cos_fast(theta[i]);
-        sins[i] = sin_fast(theta[i]);
+        coss[i] = cos(theta[i]);
+        sins[i] = sin(theta[i]);
     }
     
     // check interval [i..j]
@@ -595,7 +686,15 @@ void angle2vec(int n, const real coss[n - 1], const real sins[n - 1], const real
     for(int i = 0; i < n; i++) {
         lensq += out[i] * out[i];
     }
-    assert(fabs(lensq - 1) < 1e-2);
+    if(fabs(lensq - 1) >= 0.2) { 
+        printf("lensq: %f |", lensq);
+        printf("["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", out[i]);
+        }
+        printf("]\n"); 
+    }
+    assert(fabs(lensq - 1) < 0.2);
     #endif
 }
 
@@ -886,6 +985,7 @@ void *TrainModelThread(void *id) {
                         angleprecompute(layer1_size, syn0 + l1, syn0cos,
                                 syn0sin, syn0sinaccum);
 
+                        // printf("anglevec: syn0\n");
                         angle2vec(layer1_size, syn0cos, syn0sin, syn0sinaccum, syn0vec);
 
                         /*
@@ -932,6 +1032,7 @@ void *TrainModelThread(void *id) {
                             l2 = target * (layer1_size - 1);
                             angleprecompute(layer1_size, syn1neg + l2, syn1cos,
                                     syn1sin, syn1sinaccum);
+                            // printf("anglevec: syn1\n");
                             angle2vec(layer1_size, syn1cos, syn1sin, syn1sinaccum, syn1vec);
 
 
@@ -1117,6 +1218,7 @@ void test(int argc, char **argv) {
     printf("\n");
 
 
+
     printf("angles: ");
     float angles[n-1];
     for(int i = 0; i < n - 1; ++i) {
@@ -1173,6 +1275,13 @@ void test(int argc, char **argv) {
         printf("%f ", angles_der[i]);
     }
     printf("\n");
+
+    // test gaussian code
+    {
+        long long unsigned int  next_random = 1;
+        float random_angle[n-1];
+        sampleRandomPointSphere(n, random_angle, &next_random);
+    }
 
 }
 

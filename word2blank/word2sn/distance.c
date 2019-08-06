@@ -71,7 +71,7 @@ void cosine() {
     len = sqrt(len);
     printf("len: %f\n", len);
     for (a = 0; a < size; a++) vec[a] /= len;
-    for (a = 0; a < N; a++) bestd[a] = -1;
+    for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
         a = 0;
@@ -81,7 +81,7 @@ void cosine() {
         dist = 0;
         for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
         for (a = 0; a < N; a++) {
-            if (dist > bestd[a]) {
+            if (fabs(dist) > fabs(bestd[a])) {
                 for (d = N - 1; d > a; d--) {
                     bestd[d] = bestd[d - 1];
                     strcpy(bestw[d], bestw[d - 1]);

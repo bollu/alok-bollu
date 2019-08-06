@@ -18,5 +18,5 @@ mkdir -p models/
 mkdir -p slurm/
 
 make word2vec
-./word2vec -train text0 -output models/text0 -alpha 5 -cbow 0 -size 30 -window 4 -negative 15 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15
+./word2vec -train text0 -output models/text0 -alpha 50 -cbow 0 -size 10 -window 4 -negative 10 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15
 # time ./word2vec -train text1 -output models/$GITNAME.bin -cbow 0 -size 50 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 

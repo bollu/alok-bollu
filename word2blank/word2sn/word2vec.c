@@ -75,84 +75,6 @@ real uniformsign(long long unsigned int *next_random) {
     return uniform01(next_random) >= 0.5 ? 1 : -1;
 }
 
-// value proportional to distribution we wish to draw from.
-real angleScore(int n, int i, real angle) {
-    return powf(sin(angle), (n - 1) - (i - 1));
-}
-
-// https://stats.stackexchange.com/questions/331253/draw-n-dimensional-uniform-sample-from-a-unit-n-1-sphere-defined-by-n-1-dime
-// consider
-// x0     = cos t0
-// x1     = sin t0 cos t1
-// ...
-// x(n-1) = sini t0 sin t1 ... cos t(n-1)
-// xn     = sin t0 sin t1 ... sin t(n-1)
-//
-// Joint distribution:
-// (sin t0)^(n-1) (sin t1)^(n-1) .. sin t(n-1)
-
-// Take a step of the metropolis hastings.
-// - Propose jew distributions by adding +-[0, 0.1] (uniform) to the current point
-// - acceptance probability of theta_i = sin(theta_i)^((n - 1) - (i - 1))
-//      aka, the angleScore() function.
-// n = total number of dimensions of the vector (ie, num angles + 1)
-// i = index of (sin (ti))
-// curtheta = current angle sample
-real metropolisStep(int n, int i, real curtheta, long long unsigned int *next_random) {
-    *next_random =
-        *next_random * (unsigned long long)25214903917 + 11;
-    const int rand_sign = uniformsign(next_random);
-
-    assert(0 <= i);
-    assert(i <= n - 1);
-    // current score
-    // next sample point
-    real nextheta = curtheta + rand_sign * 0.1 * uniform01(next_random);
-    // wrap around [0, 2 pi]
-    if (nextheta < 0) {
-        nextheta = 2 * M_PI - fabs(nextheta);
-    }
-    if (nextheta > 2 * M_PI) {
-        nextheta = nextheta - 2 * M_PI;
-    }
-    #ifdef EXPENSIVE_CHECKS
-    assert(nextheta >= 0);
-    assert(nextheta <= 2 * M_PI);
-    #endif
-
-    float ratio = angleScore(n, i, nextheta) / angleScore(n, i, curtheta);
-
-    *next_random =
-        *next_random * (unsigned long long)25214903917 + 11;
-    float uniform = (*next_random & 0xFFFF) / ((real) 65536);
-    
-    if (uniform <= ratio) {
-        return nextheta;
-    }
-    return curtheta;
-
-}
-
-
-real sampleAngle(int n, int i, long long unsigned int *next_random) {
-    // start from random angle in [0, 2PI]
-    real curtheta = 2 * M_PI * uniform01(next_random);
-    // take 10 steps of MH to decorrelate
-    for(int k = 0; k < 100; ++k) {
-        curtheta = metropolisStep(n, i, curtheta, next_random);
-    }
-    // return the final angle
-    return curtheta;
-}
-
-/*
-void sampleRandomPointSphere(int n, real angles[n-1], long long unsigned int *next_random) {
-    for(int i = 0; i < n - 1; ++i) {
-        angles[i] = sampleAngle(n, i, next_random);
-    }
-}
-*/
-
 // gaussian distribution, mean 0, variance 1
 real standardNormal(long long unsigned int *next_random) {
 
@@ -797,27 +719,33 @@ void *TrainModelThread(void *id) {
     // real *syn0sinaccum = (real *)calloc((layer1_size -1)* (layer1_size-1), sizeof(real));
     real syn0sinaccum[layer1_size-1][layer1_size-1];
     real syn1sinaccum[layer1_size-1][layer1_size-1];
+    real total_loss = 0;
 
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 10) {
+        if (word_count - last_word_count > 100) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ",
+                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk Total loss: %.2f ",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
-                                         (real)CLOCKS_PER_SEC * 1000));
+                                         (real)CLOCKS_PER_SEC * 1000),
+                    total_loss);
+            total_loss = 0;
                 fflush(stdout);
             }
+
+            /*
             alpha = starting_alpha *
                     (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
+            */
         }
         if (sentence_length == 0) {
             while (1) {
@@ -1042,7 +970,7 @@ void *TrainModelThread(void *id) {
                             f = 0;
                             for (c = 0; c < layer1_size; c++) {
                                 //dot product is between -1 and 1
-                                f += syn0vec[c] * syn1vec[c];
+                                f += 5.0 * syn0vec[c] * syn1vec[c];
                             }
                             // ----
                             // loss = (label - syn0 . syn1)^2
@@ -1060,6 +988,7 @@ void *TrainModelThread(void *id) {
                                 g = (label - expTable[(int)((f + MAX_EXP) *
                                             (EXP_TABLE_SIZE /
                                              MAX_EXP / 2))]) * alpha;
+                            total_loss += g * g;
                             
                             // buffer gradients of focus
                             angle2der(layer1_size, syn0cos,
@@ -1076,7 +1005,7 @@ void *TrainModelThread(void *id) {
 
                         // Learn weights input -> hidden
                         for (c = 0; c < layer1_size-1; c++) syn0[c + l1] += neu1e[c];
-                    }
+                    } // end negative sampling if condition
                 }
         }
         sentence_position++;

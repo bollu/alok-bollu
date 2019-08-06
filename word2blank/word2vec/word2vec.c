@@ -414,26 +414,31 @@ void *TrainModelThread(void *id) {
     clock_t now;
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
     real *neu1e = (real *)calloc(layer1_size, sizeof(real));
+    real total_loss = 0;
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 10000) {
+        if (word_count - last_word_count > 100) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ",
+                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  total_loss: %.2f",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
-                                         (real)CLOCKS_PER_SEC * 1000));
+                                         (real)CLOCKS_PER_SEC * 1000),
+                    total_loss);
+                total_loss = 0;
                 fflush(stdout);
             }
+            /*
             alpha = starting_alpha *
                     (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
+            */
         }
         if (sentence_length == 0) {
             while (1) {
@@ -628,6 +633,7 @@ void *TrainModelThread(void *id) {
                                                             (EXP_TABLE_SIZE /
                                                              MAX_EXP / 2))]) *
                                     alpha;
+                            total_loss += g * g;
                             for (c = 0; c < layer1_size; c++)
                                 neu1e[c] += g * syn1neg[c + l2];
                             for (c = 0; c < layer1_size; c++)

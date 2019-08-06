@@ -716,6 +716,7 @@ void debugPrintAngleRepr(int n, int derix, int vecix) {
 // x3 = s0 s1 s2 c3      v3
 // x4 = s0 s1 s2 s3 c4   v4
 // x5 = s0 s1 s2 s3 s4   v5
+// compute: d/dtheta(xindex)
 real angle2derTerm(int n, int theta, int xindex, const real coss[n-1], const real sins[n-1],
         const real sinprods[n-1][n-1], const real vec[n], real g) {
     #ifdef EXPENSIVE_CHECKS
@@ -1039,22 +1040,24 @@ void *TrainModelThread(void *id) {
                             // compute dot product
                             f = 0;
                             for (c = 0; c < layer1_size; c++) {
+                                //dot product is between -1 and 1
                                 f += syn0vec[c] * syn1vec[c];
                             }
 
-                            g = (label - f) * alpha;
-
-                            /*
-                            if (f > MAX_EXP)
-                                g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
-                                g = (label - 0) * alpha;
-                            else
-                                g = (label - expTable[(int)((f + MAX_EXP) *
-                                            (EXP_TABLE_SIZE /
-                                             MAX_EXP / 2))]) *
-                                    alpha;
-                            */
+                            // label - f = 1 - [-1, 1] = [2, 0]
+                            // if (f > MAX_EXP)
+                            //     g = (label - 1) * alpha;
+                            // else if (f < -MAX_EXP)
+                            //     g = (label - 0) * alpha;
+                            // else
+                            //     g = (label - expTable[(int)((f + MAX_EXP) *
+                            //                 (EXP_TABLE_SIZE /
+                            //                  MAX_EXP / 2))]) *
+                            //         alpha;
+                            // loss = (label - syn0 . syn1)^2
+                            // dloss/dxi = 2 (label - syn0 . syn1) *
+                            //                 d(syn.syn1)/dxi
+                            g = (label - f);
 
                             // buffer gradients of focus
                             angle2der(layer1_size, syn0cos,

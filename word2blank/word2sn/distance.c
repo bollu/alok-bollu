@@ -17,9 +17,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef float real;
 #define max_size 2000
 #define N 40
 #define max_w 50
+
+#define NUM_SPARKS 8
+
+void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
+    int buckets[nbuckets];
+    for(int i = 0; i < nbuckets; ++i) buckets[i] = 0;
+
+    real vmax = -3;
+    real vmin = 3;
+    for(int i = 0; i < n; ++i) vmax = vals[i] > vmax ? vals[i] : vmax;
+    for(int i = 0; i < n; ++i) vmin = vals[i] < vmin ? vals[i] : vmin;
+
+    // printf("vmin: %f | vmax: %f\n", vmin, vmax);
+
+    for(int i = 0; i < n; ++i) {
+        const int denom = (vmax - vmin);
+        const int b = denom == 0 ? 1 : floor((vals[i] - vmin) / denom) * (nbuckets - 1);
+        buckets[b]++;
+    }
+    
+    int bucketmax = -3;
+    for(int i = 0; i < nbuckets; ++i) bucketmax = buckets[i] > bucketmax ? buckets[i] : bucketmax;
+
+    printf("%s: |", name);
+    for(int i = 0; i < nbuckets; ++i) {
+        printf(" %d ", ((int)(((buckets[i] / (real)bucketmax)) * NUM_SPARKS)));
+    }
+    printf("|");
+
+}
 
 FILE *f;
 char st1[max_size];
@@ -55,6 +86,9 @@ void dot() {
 }
 
 void cosine() {
+    real vals[words];
+    for(int i = 0; i < words; ++i) vals[i] = 0;
+
     printf(
         "\n                                              Word       "
         "Cosine "
@@ -71,7 +105,8 @@ void cosine() {
     len = sqrt(len);
     printf("len: %f\n", len);
     for (a = 0; a < size; a++) vec[a] /= len;
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    // for (a = 0; a < N; a++) bestd[a] = 0;
+    for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
         a = 0;
@@ -80,8 +115,12 @@ void cosine() {
         if (a == 1) continue;
         dist = 0;
         for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+        // rescale to [0, 2]
+        vals[c] = 1.0 + dist ;
+
         for (a = 0; a < N; a++) {
-            if (fabs(dist) > fabs(bestd[a])) {
+            // if (fabs(dist) > fabs(bestd[a])) {
+            if (dist > bestd[a]) {
                 for (d = N - 1; d > a; d--) {
                     bestd[d] = bestd[d - 1];
                     strcpy(bestw[d], bestw[d - 1]);
@@ -93,6 +132,8 @@ void cosine() {
         }
     }
     for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
 }
 
 int main(int argc, char **argv) {
@@ -135,6 +176,8 @@ int main(int argc, char **argv) {
     }
     fclose(f);
     while (1) {
+
+
         for (a = 0; a < N; a++) bestd[a] = 0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
         printf("Enter word or sentence (EXIT to break): ");

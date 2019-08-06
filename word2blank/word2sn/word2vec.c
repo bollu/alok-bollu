@@ -57,8 +57,8 @@ const int table_size = 1e8;
 int *table;
 
 // value proportional to distribution we wish to draw from.
-real angleScore(real angle) {
-    return powf(sin(curtheta), (n - 1) - (i - 1));
+real angleScore(int n, int i, real angle) {
+    return powf(sin(angle), (n - 1) - (i - 1));
 }
 
 // https://stats.stackexchange.com/questions/331253/draw-n-dimensional-uniform-sample-from-a-unit-n-1-sphere-defined-by-n-1-dime
@@ -79,12 +79,13 @@ real angleScore(real angle) {
 // n = total number of dimensions of the vector (ie, num angles + 1)
 // i = index of (sin (ti))
 // curtheta = current angle sample
-real metropolisStep(int n, int i, real curtheta, unsigned int *next_random) {
+real metropolisStep(int n, int i, real curtheta, long long unsigned int *next_random) {
     *next_random =
         *next_random * (unsigned long long)25214903917 + 11;
-    const int rand_sign = next_random % 2 ? 1 : -1;
+    const int rand_sign = (*next_random % 2 == 0) ? 1 : -1;
 
-    assert(0 <= i && i <= n - 1);
+    assert(0 <= i);
+    assert(i <= n - 1);
     // current score
     // next sample point
     *next_random =
@@ -102,7 +103,7 @@ real metropolisStep(int n, int i, real curtheta, unsigned int *next_random) {
     assert(nextheta <= 2 * M_PI);
     #endif
 
-    float ratio = angleScore(nextheta) / angleScore(curtheta);
+    float ratio = angleScore(n, i, nextheta) / angleScore(n, i, curtheta);
 
     *next_random =
         *next_random * (unsigned long long)25214903917 + 11;
@@ -115,20 +116,20 @@ real metropolisStep(int n, int i, real curtheta, unsigned int *next_random) {
 
 }
 
-real sampleAngle(int n, int i, unsigned int *next_random) {
+real sampleAngle(int n, int i, long long unsigned int *next_random) {
     // start from random angle in [0, 2PI]
     *next_random =
         *next_random * (unsigned long long)25214903917 + 11;
     real curtheta = 2 * M_PI * (*next_random & 0xFFFF) / ((real) 65536);
     // take 10 steps of MH to decorrelate
-    for(int i = 0; i < 10; ++i) {
+    for(int k = 0; k < 100; ++k) {
         curtheta = metropolisStep(n, i, curtheta, next_random);
     }
     // return the final angle
     return curtheta;
 }
 
-real sampleRandomPointSphere(int n, int angles[n-1], unsigned int *next_random) {
+void sampleRandomPointSphere(int n, real angles[n-1], long long unsigned int *next_random) {
     for(int i = 0; i < n - 1; ++i) {
         angles[i] = sampleAngle(n, i, next_random);
     }
@@ -159,7 +160,7 @@ real cos_core (real x)
 /* minimax approximation to sin on [-pi/4, pi/4] with rel. err. ~= 5.5e-12 */
 real sin_core (real x)
 {
-    real x4, x2, t;
+    real x4, x2;
     x2 = x * x;
     x4 = x2 * x2;
     /* evaluate polynomial using a mix of Estrin's and Horner's scheme

@@ -396,10 +396,10 @@ void InitNet() {
             exit(1);
         }
         for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size; b++) 
+            for (b = 0; b < layer1_size - 1; b++) 
                 { 
                     next_random = next_random * (unsigned long long)25214903917 + 11;
-                    syn1neg[a * layer1_size + b] = 
+                    syn1neg[a * (layer1_size - 1) + b] = 
                 2.0 * M_PI * (((next_random & 0xFFFF) / (real)65536));
                 }
 
@@ -436,7 +436,7 @@ void angleprecompute(int n, real theta[n-1], real coss[n-1],
 }
 
 // convert angles to vectors for a given index
-void angle2vec(int n, real sins[n - 1], real coss[n - 1], real sinaccum[n-1][n-1],
+void angle2vec(int n, real coss[n - 1], real sins[n - 1], real sinaccum[n-1][n-1],
         real out[n]) {
 
     // reference
@@ -724,6 +724,8 @@ void *TrainModelThread(void *id) {
                     last_word = sen[c];
                     if (last_word == -1) continue;
                     l1 = last_word * (layer1_size - 1);
+
+                    // zero out gradient buffer for current word.
                     for (c = 0; c < layer1_size-1; c++) neu1e[c] = 0;
                     // HIERARCHICAL SOFTMAX
                     if (hs)
@@ -755,6 +757,9 @@ void *TrainModelThread(void *id) {
                     if (negative > 0) {
                         angleprecompute(layer1_size, syn0 + l1, syn0cos,
                                 syn0sin, syn0sinaccum);
+
+                        angle2vec(layer1_size, syn0cos, syn0sin, syn0sinaccum, syn0vec);
+
                         /*
                         // initialize sin/cos tables for syn0
                         for(c = 0; c < layer1_size - 1; c++) {
@@ -796,16 +801,21 @@ void *TrainModelThread(void *id) {
                                 if (target == word) continue;
                                 label = 0;
                             }
-                            l2 = target * layer1_size;
-                            angle2vec(layer1_size, syn0sin, syn0cos, syn0sinaccum, syn0vec);
+                            l2 = target * (layer1_size - 1);
+                            angleprecompute(layer1_size, syn1neg + l2, syn1cos,
+                                    syn1sin, syn1sinaccum);
+                            angle2vec(layer1_size, syn1cos, syn1sin, syn1sinaccum, syn1vec);
 
 
                             // compute dot product
                             f = 0;
                             for (c = 0; c < layer1_size; c++) {
-                                f += syn0vec[c] * syn1neg[c + l2];
+                                f += syn0vec[c] * syn1vec[c];
                             }
 
+                            g = (label - f) * alpha;
+
+                            /*
                             if (f > MAX_EXP)
                                 g = (label - 1) * alpha;
                             else if (f < -MAX_EXP)
@@ -815,15 +825,19 @@ void *TrainModelThread(void *id) {
                                             (EXP_TABLE_SIZE /
                                              MAX_EXP / 2))]) *
                                     alpha;
+                            */
 
-                            // buffer weights of focus
+                            // buffer gradients of focus
                             angle2der(layer1_size, syn0cos,
                                     syn0sin, syn0sinaccum,
-                                    syn1neg, g, neu1e);
+                                    syn1vec, g, neu1e);
 
-                            // learn weights of neg
-                            for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0vec[c];
+
+                            // write the gradients of context into the vector
+                            angle2der(layer1_size, syn1cos,
+                                    syn1sin, syn1sinaccum,
+                                    syn0vec, g, syn1neg + l2);
+
                         } // end negative samples loop
 
                         // Learn weights input -> hidden
@@ -1011,7 +1025,7 @@ void test(int argc, char **argv) {
     }
 
     float angles_vec[n];
-    angle2vec(n, sins, coss, sinaccum, angles_vec);
+    angle2vec(n, coss, sins, sinaccum, angles_vec);
     printf("angle2vec: ");
     for(int i = 0; i < n; i++) { printf("%f ", angles_vec[i]); } 
     printf("\n");

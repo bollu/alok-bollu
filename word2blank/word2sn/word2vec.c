@@ -26,7 +26,7 @@
 #define MAX_CODE_LENGTH 40
 
 // #define DEBUG_ANGLE2VEC
-//#define EXPENSIVE_CHECKS
+#define EXPENSIVE_CHECKS
 
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
@@ -648,6 +648,7 @@ void angleprecompute(int n, const real theta[n-1], real coss[n-1],
         for(int j = 0; j < i; ++j) { sinaccum[i][j] = 1; }
         //j = i
         sinaccum[i][i] = sins[i];
+        // j > 1
         for(int j = i + 1; j < n - 1; ++j) {
             sinaccum[i][j] = sins[j] * sinaccum[i][j-1];
         }
@@ -1043,32 +1044,33 @@ void *TrainModelThread(void *id) {
                                 //dot product is between -1 and 1
                                 f += syn0vec[c] * syn1vec[c];
                             }
-
-                            // label - f = 1 - [-1, 1] = [2, 0]
-                            // if (f > MAX_EXP)
-                            //     g = (label - 1) * alpha;
-                            // else if (f < -MAX_EXP)
-                            //     g = (label - 0) * alpha;
-                            // else
-                            //     g = (label - expTable[(int)((f + MAX_EXP) *
-                            //                 (EXP_TABLE_SIZE /
-                            //                  MAX_EXP / 2))]) *
-                            //         alpha;
+                            // ----
                             // loss = (label - syn0 . syn1)^2
                             // dloss/dxi = 2 (label - syn0 . syn1) *
                             //                 d(syn.syn1)/dxi
-                            g = (label - f);
+                            // ----
 
+                            // loss = (label - sigmoid (syn0 . syn1))^2
+                            // gradient = d(loss) = 2 . (label - sigmoid(syn0 . syn1)) d (syn0 . syn1)
+                            if (f > MAX_EXP)
+                                g = (label - 1) * alpha;
+                            else if (f < -MAX_EXP)
+                                g = (label - 0) * alpha;
+                            else
+                                g = (label - expTable[(int)((f + MAX_EXP) *
+                                            (EXP_TABLE_SIZE /
+                                             MAX_EXP / 2))]) * alpha;
+                            
                             // buffer gradients of focus
                             angle2der(layer1_size, syn0cos,
                                     syn0sin, syn0sinaccum,
-                                    syn1vec, g, neu1e);
+                                    syn1vec, g * alpha, neu1e);
 
 
                             // write the gradients of context into the vector
                             angle2der(layer1_size, syn1cos,
                                     syn1sin, syn1sinaccum,
-                                    syn0vec, g, syn1neg + l2);
+                                    syn0vec, g * alpha, syn1neg + l2);
 
                         } // end negative samples loop
 
@@ -1092,6 +1094,10 @@ void TrainModel() {
     long a, b, c, d;
     FILE *fo;
     real *syn0vec = (real *)calloc(layer1_size, sizeof(real));
+    real coss[layer1_size - 1];
+    real sins[layer1_size - 1];
+    real sinaccum[layer1_size - 1][layer1_size - 1];
+
     pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
     printf("Starting training using file %s\n", train_file);
     starting_alpha = alpha;
@@ -1116,22 +1122,8 @@ void TrainModel() {
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
         for (a = 0; a < vocab_size; a++) {
             fprintf(fo, "%s ", vocab[a].word);
-
-            //re-create the actual vector from the
-            //angles.
-            // x1 = c1
-            // x2 = s1 c2
-            // x3 = s1 s2 c3
-            // x4 = s1 s2 s3 c4
-            // x5 = s1 s2 s3 s4 c5
-            // x6 = s1 s2 s3 s4 s5
-            real sinaccum = 1;
-            for(b = 0; b < layer1_size-2; b++) {
-                syn0vec[b] = sinaccum * cos(syn0[a * (layer1_size -1) + b]);
-                sinaccum *= sin(syn0[a * (layer1_size-1)  + b]);
-            }
-            // final value is all sins multiplied together
-            syn0vec[layer1_size-1] = sinaccum;
+            angleprecompute(layer1_size, syn0 + a * (layer1_size - 1), coss, sins, sinaccum);
+            angle2vec(layer1_size, coss, sins, sinaccum, syn0vec);
 
             if (binary)
                 for (b = 0; b < layer1_size; b++)

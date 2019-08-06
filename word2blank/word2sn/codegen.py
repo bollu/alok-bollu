@@ -188,7 +188,7 @@ def assert_eq_vec(name, referencevec, outvec):
             raise Exception("delta > 1e-2")
 
 if __name__ == "__main__":
-    n = 4
+    n = 5
     angles = [sym.Symbol("a"+str(i)) for i in range(n-1)]
     anglevec = []
     sinaccum = 1

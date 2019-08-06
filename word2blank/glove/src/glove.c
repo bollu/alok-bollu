@@ -53,6 +53,10 @@ int model = 2; // For text file output only. 0: concatenate word and context vec
 int checkpoint_every = 0; // checkpoint the model for every checkpoint_every iterations. Do nothing if checkpoint_every <= 0
 real eta = 0.05; // Initial learning rate
 real alpha = 0.75, x_max = 100.0; // Weighting function parameters, not extremely sensitive to corpus, though may need adjustment for very small or very large corpora
+// [NOTE: DOCS]
+// W, gradsq = [2*vocab][embedding size + 1]
+// 2 * vocab for focus & context.
+// embedding size + 1 for the "bias term" (constant value)
 real *W, *gradsq, *cost;
 long long num_lines, *lines_per_thread, vocab_size;
 char *vocab_file, *input_file, *save_W_file, *save_gradsq_file;
@@ -63,6 +67,7 @@ int scmp( char *s1, char *s2 ) {
     return(*s1 - *s2);
 }
 
+// [NOTE: DOCS] allocate all arrays
 void initialize_parameters() {
     long long a, b;
     vector_size++; // Temporarily increment to allocate space for bias
@@ -80,6 +85,7 @@ void initialize_parameters() {
     }
     for (b = 0; b < vector_size; b++) {
         for (a = 0; a < 2 * vocab_size; a++) {
+            // random initialization of W
             W[a * vector_size + b] = (rand() / (real)RAND_MAX - 0.5) / vector_size;
         }
     }
@@ -88,6 +94,7 @@ void initialize_parameters() {
             gradsq[a * vector_size + b] = 1.0; // So initial value of eta is equal to initial learning rate
         }
     }
+    // [NOTE: DOCS] subtract 1 so that vector_size is not (layer_size + 1) because of bias
     vector_size--;
 }
 
@@ -101,6 +108,8 @@ inline real check_nan(real update) {
 }
 
 /* Train the GloVe model */
+// See [Adaptive gradient update] for more details.
+// vid = thread ID
 void *glove_thread(void *vid) {
     long long a, b ,l1, l2;
     long long id = *(long long*)vid;
@@ -108,6 +117,7 @@ void *glove_thread(void *vid) {
     real diff, fdiff, temp1, temp2;
     FILE *fin;
     fin = fopen(input_file, "rb");
+    // move to correct location in file.
     fseeko(fin, (num_lines / num_threads * id) * (sizeof(CREC)), SEEK_SET); //Threads spaced roughly equally throughout file
     cost[id] = 0;
     
@@ -119,13 +129,16 @@ void *glove_thread(void *vid) {
         if (cr.word1 < 1 || cr.word2 < 1) { continue; }
         
         /* Get location of words in W & gradsq */
+        // l1 = index into W for focus word
         l1 = (cr.word1 - 1LL) * (vector_size + 1); // cr word indices start at 1
+        // l2 = index into W for context word
         l2 = ((cr.word2 - 1LL) + vocab_size) * (vector_size + 1); // shift by vocab_size to get separate vectors for context words
         
         /* Calculate cost, save diff for gradients */
         diff = 0;
         for (b = 0; b < vector_size; b++) diff += W[b + l1] * W[b + l2]; // dot product of word and context word vector
         diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
+        // f(diff) ~= fdiff | where f(x) = ... (read the paper n00b)
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
 
         // Check for NaN and inf() in the diffs.
@@ -136,6 +149,7 @@ void *glove_thread(void *vid) {
 
         cost[id] += 0.5 * fdiff * diff; // weighted squared error
         
+        // [NOTE:DOCS] [Adaptive gradient update]
         /* Adaptive gradient updates */
         fdiff *= eta; // for ease in calculating gradient
         real W_updates1_sum = 0;
@@ -320,6 +334,7 @@ int train_glove() {
     struct tm *info;
     char time_buffer[80];
     // Lock-free asynchronous SGD
+    // [NOTE: DOCS] Reference paper: Hogwild 
     for (b = 0; b < num_iter; b++) {
         total_cost = 0;
         for (a = 0; a < num_threads - 1; a++) lines_per_thread[a] = num_lines / num_threads;

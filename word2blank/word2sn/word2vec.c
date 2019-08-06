@@ -56,6 +56,83 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
+// value proportional to distribution we wish to draw from.
+real angleScore(real angle) {
+    return powf(sin(curtheta), (n - 1) - (i - 1));
+}
+
+// https://stats.stackexchange.com/questions/331253/draw-n-dimensional-uniform-sample-from-a-unit-n-1-sphere-defined-by-n-1-dime
+// consider
+// x0     = cos t0
+// x1     = sin t0 cos t1
+// ...
+// x(n-1) = sini t0 sin t1 ... cos t(n-1)
+// xn     = sin t0 sin t1 ... sin t(n-1)
+//
+// Joint distribution:
+// (sin t0)^(n-1) (sin t1)^(n-1) .. sin t(n-1)
+
+// Take a step of the metropolis hastings.
+// - Propose jew distributions by adding +-[0, 0.1] (uniform) to the current point
+// - acceptance probability of theta_i = sin(theta_i)^((n - 1) - (i - 1))
+//      aka, the angleScore() function.
+// n = total number of dimensions of the vector (ie, num angles + 1)
+// i = index of (sin (ti))
+// curtheta = current angle sample
+real metropolisStep(int n, int i, real curtheta, unsigned int *next_random) {
+    *next_random =
+        *next_random * (unsigned long long)25214903917 + 11;
+    const int rand_sign = next_random % 2 ? 1 : -1;
+
+    assert(0 <= i && i <= n - 1);
+    // current score
+    // next sample point
+    *next_random =
+        *next_random * (unsigned long long)25214903917 + 11;
+    real nextheta = curtheta + rand_sign * 0.1 * ((*next_random & 0xFFFF) / ((real) 65536));
+    // wrap around [0, 2 pi]
+    if (nextheta < 0) {
+        nextheta = 2 * M_PI - fabs(nextheta);
+    }
+    if (nextheta > 2 * M_PI) {
+        nextheta = nextheta - 2 * M_PI;
+    }
+    #ifdef EXPENSIVE_CHECKS
+    assert(nextheta >= 0);
+    assert(nextheta <= 2 * M_PI);
+    #endif
+
+    float ratio = angleScore(nextheta) / angleScore(curtheta);
+
+    *next_random =
+        *next_random * (unsigned long long)25214903917 + 11;
+    float uniform = (*next_random & 0xFFFF) / ((real) 65536);
+    
+    if (uniform <= ratio) {
+        return nextheta;
+    }
+    return curtheta;
+
+}
+
+real sampleAngle(int n, int i, unsigned int *next_random) {
+    // start from random angle in [0, 2PI]
+    *next_random =
+        *next_random * (unsigned long long)25214903917 + 11;
+    real curtheta = 2 * M_PI * (*next_random & 0xFFFF) / ((real) 65536);
+    // take 10 steps of MH to decorrelate
+    for(int i = 0; i < 10; ++i) {
+        curtheta = metropolisStep(n, i, curtheta, next_random);
+    }
+    // return the final angle
+    return curtheta;
+}
+
+real sampleRandomPointSphere(int n, int angles[n-1], unsigned int *next_random) {
+    for(int i = 0; i < n - 1; ++i) {
+        angles[i] = sampleAngle(n, i, next_random);
+    }
+}
 
 // code from:
 // https://stackoverflow.com/questions/11261170/c-and-maths-fast-approximation-of-a-trigonometric-function
@@ -453,28 +530,20 @@ void InitNet() {
             printf("Memory allocation failed\n");
             exit(1);
         }
-        for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size - 1; b++) 
-                { 
-                    next_random = next_random * (unsigned long long)25214903917 + 11;
-                    syn1neg[a * (layer1_size - 1) + b] = 
-                2.0 * M_PI * (((next_random & 0xFFFF) / (real)65536));
-                }
+        for (a = 0; a < vocab_size; a++) {
+            sampleRandomPointSphere(layer1_size, syn1neg + a * (layer1_size - 1), &next_random);
+        }
 
     }
-    for (a = 0; a < vocab_size; a++)
-        for (b = 0; b < layer1_size-1; b++) {
-            next_random = next_random * (unsigned long long)25214903917 + 11;
-            // 0 -> 2pi, random value
-            syn0[a * (layer1_size -1) + b] =
-                2.0 * M_PI * (((next_random & 0xFFFF) / (real)65536));
-        }
+    for (a = 0; a < vocab_size; a++) {
+            sampleRandomPointSphere(layer1_size, syn0 + a * (layer1_size - 1), &next_random);
+    }
     CreateBinaryTree();
 }
 
 // given angles, precompute sin(theta_i), cos(theta_i) and 
 //  sin(theta_i) * sin(theta_{i+1}) *  ... * sin(theta_j) 0 <= i, j <= n-1
-void angleprecompute(int n, real theta[n-1], real coss[n-1], 
+void angleprecompute(int n, const real theta[n-1], real coss[n-1], 
         real sins[n-1], real sinaccum[n-1][n-1]) {
     for(int i = 0; i < n - 1; i++) {
         coss[i] = cos_fast(theta[i]);
@@ -494,7 +563,7 @@ void angleprecompute(int n, real theta[n-1], real coss[n-1],
 }
 
 // convert angles to vectors for a given index
-void angle2vec(int n, real coss[n - 1], real sins[n - 1], real sinaccum[n-1][n-1],
+void angle2vec(int n, const real coss[n - 1], const real sins[n - 1], const real sinaccum[n-1][n-1],
         real out[n]) {
 
     // reference
@@ -547,8 +616,8 @@ void debugPrintAngleRepr(int n, int derix, int vecix) {
 // x3 = s0 s1 s2 c3      v3
 // x4 = s0 s1 s2 s3 c4   v4
 // x5 = s0 s1 s2 s3 s4   v5
-real angle2derTerm(int n, int theta, int xindex, real coss[n-1], real sins[n-1],
-        real sinprods[n-1][n-1], real vec[n], real g) {
+real angle2derTerm(int n, int theta, int xindex, const real coss[n-1], const real sins[n-1],
+        const real sinprods[n-1][n-1], const real vec[n], real g) {
     #ifdef EXPENSIVE_CHECKS
     assert(xindex >= 0 && xindex <= n - 1);
     assert(theta >= 0 && theta <= n - 2);
@@ -586,8 +655,8 @@ real angle2derTerm(int n, int theta, int xindex, real coss[n-1], real sins[n-1],
 
 // store in out[i] the derivative of d(angle2vec(thetas) . vec)/d(theta_i)
 // NOTE: does not zero out ders
-void angle2der(int n, real coss[n - 1], real sins[n - 1],  real
-        sinprods[n-1][n-1], real vec[n], real g, real ders[n - 2]) {
+void angle2der(int n, const real coss[n - 1], const real sins[n - 1],  
+        const real sinprods[n-1][n-1], const real vec[n], real g, real ders[n - 2]) {
     // x0 = c0               v0
     // x1 = s0 c1            v1
     // x2 = s0 s1 c2         v2
@@ -930,9 +999,12 @@ void TrainModel() {
     InitNet();
     if (negative > 0) InitUnigramTable();
     start = clock();
-    for (a = 0; a < num_threads; a++)
-        pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
-    for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+    // if number of iterations is > 0, then run training
+    if (iter > 0) {
+        for (a = 0; a < num_threads; a++)
+            pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
+        for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+    }
     fo = fopen(output_file, "wb");
     if (classes == 0) {
         // Save the word vectors

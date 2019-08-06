@@ -664,9 +664,11 @@ void TrainModel() {
     InitNet();
     if (negative > 0) InitUnigramTable();
     start = clock();
-    for (a = 0; a < num_threads; a++)
-        pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
-    for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+    if (iter > 0) {
+        for (a = 0; a < num_threads; a++)
+            pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
+        for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+    }
     fo = fopen(output_file, "wb");
     if (classes == 0) {
         // Save the word vectors

@@ -28,6 +28,9 @@
 // #define DEBUG_ANGLE2VEC
 #define EXPENSIVE_CHECKS
 
+pthread_mutex_t mutex_syn0 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_syn1neg = PTHREAD_MUTEX_INITIALIZER;
+
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -557,11 +560,18 @@ void InitNet() {
 
 // given angles, precompute sin(theta_i), cos(theta_i) and 
 //  sin(theta_i) * sin(theta_{i+1}) *  ... * sin(theta_j) 0 <= i, j <= n-1
-void angleprecompute(int n, const real theta[n-1], real coss[n-1], 
+void angleprecompute(const int n, const real theta[n-1], real coss[n-1], 
         real sins[n-1], real sinaccum[n-1][n-1]) {
     for(int i = 0; i < n - 1; i++) {
         coss[i] = cos(theta[i]);
         sins[i] = sin(theta[i]);
+        // cos^2 x + sin^2 x = 1
+        int safe =  fabs(1.0 - (coss[i] * coss[i] + sins[i] * sins[i])) < 1e-2;
+        if (!safe) {
+            printf("theta: %f | real:%f / coss: %f | real: %f / sins: %f\n", theta[i], 
+                    cos(theta[i]), coss[i], sin(theta[i]), sins[i]);
+            assert(0);
+        }
     }
     
     // check interval [i..j]
@@ -578,7 +588,7 @@ void angleprecompute(int n, const real theta[n-1], real coss[n-1],
 }
 
 // convert angles to vectors for a given index
-void angle2vec(int n, const real coss[n - 1], const real sins[n - 1], const real sinaccum[n-1][n-1],
+void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], const real sinaccum[n-1][n-1],
         real out[n]) {
 
     // reference
@@ -610,8 +620,18 @@ void angle2vec(int n, const real coss[n - 1], const real sins[n - 1], const real
         lensq += out[i] * out[i];
     }
     if(fabs(lensq - 1) >= 0.2) { 
-        printf("lensq: %f |", lensq);
-        printf("["); 
+        printf("lensq: %f\n", lensq);
+        printf("  cos: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", coss[i]);
+        }
+        printf("]\n"); 
+        printf("  sin: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", sins[i]);
+        }
+        printf("]\n"); 
+        printf("  vec: ["); 
         for(int i = 0; i < n; ++i) {
             printf("%f ", out[i]);
         }
@@ -640,8 +660,8 @@ void debugPrintAngleRepr(int n, int derix, int vecix) {
 // x4 = s0 s1 s2 s3 c4   v4
 // x5 = s0 s1 s2 s3 s4   v5
 // compute: d/dtheta(xindex)
-real angle2derTerm(int n, int theta, int xindex, const real coss[n-1], const real sins[n-1],
-        const real sinprods[n-1][n-1], const real vec[n], real g) {
+real angle2derTerm(const int n, const int theta, const int xindex, const real coss[n-1], const real sins[n-1],
+        const real sinprods[n-1][n-1], const real vec[n], const real g) {
     #ifdef EXPENSIVE_CHECKS
     assert(xindex >= 0 && xindex <= n - 1);
     assert(theta >= 0 && theta <= n - 2);
@@ -679,8 +699,8 @@ real angle2derTerm(int n, int theta, int xindex, const real coss[n-1], const rea
 
 // store in out[i] the derivative of d(angle2vec(thetas) . vec)/d(theta_i)
 // NOTE: does not zero out ders
-void angle2der(int n, const real coss[n - 1], const real sins[n - 1],  
-        const real sinprods[n-1][n-1], const real vec[n], real g, real ders[n - 2]) {
+void angle2der(const int n, const real coss[n - 1], const real sins[n - 1],  
+        const real sinprods[n-1][n-1], const real vec[n], const real g, real ders[n - 2]) {
     // x0 = c0               v0
     // x1 = s0 c1            v1
     // x2 = s0 s1 c2         v2
@@ -730,7 +750,7 @@ void *TrainModelThread(void *id) {
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk Total loss: %.2f ",
+                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk Total loss: %.7f ",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
@@ -912,8 +932,10 @@ void *TrainModelThread(void *id) {
                         }
                     // NEGATIVE SAMPLING
                     if (negative > 0) {
+                        pthread_mutex_lock(&mutex_syn0);
                         angleprecompute(layer1_size, syn0 + l1, syn0cos,
                                 syn0sin, syn0sinaccum);
+                        pthread_mutex_unlock(&mutex_syn0);
 
                         // printf("anglevec: syn0\n");
                         angle2vec(layer1_size, syn0cos, syn0sin, syn0sinaccum, syn0vec);
@@ -960,9 +982,11 @@ void *TrainModelThread(void *id) {
                                 label = 0;
                             }
                             l2 = target * (layer1_size - 1);
+
+                            pthread_mutex_lock(&mutex_syn1neg);
                             angleprecompute(layer1_size, syn1neg + l2, syn1cos,
                                     syn1sin, syn1sinaccum);
-                            // printf("anglevec: syn1\n");
+                            pthread_mutex_unlock(&mutex_syn1neg);
                             angle2vec(layer1_size, syn1cos, syn1sin, syn1sinaccum, syn1vec);
 
 
@@ -997,14 +1021,20 @@ void *TrainModelThread(void *id) {
 
 
                             // write the gradients of context into the vector
+                            // pthread_mutex_lock(&mutex_syn1neg);
+                            pthread_mutex_lock(&mutex_syn1neg);
                             angle2der(layer1_size, syn1cos,
                                     syn1sin, syn1sinaccum,
                                     syn0vec, g * alpha, syn1neg + l2);
+                            // pthread_mutex_unlock(&mutex_syn1neg);
+                            pthread_mutex_unlock(&mutex_syn1neg);
 
                         } // end negative samples loop
 
                         // Learn weights input -> hidden
+                        pthread_mutex_lock(&mutex_syn0);
                         for (c = 0; c < layer1_size-1; c++) syn0[c + l1] += neu1e[c];
+                        pthread_mutex_unlock(&mutex_syn0);
                     } // end negative sampling if condition
                 }
         }

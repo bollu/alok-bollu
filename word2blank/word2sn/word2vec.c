@@ -791,12 +791,14 @@ void *TrainModelThread(void *id) {
             sentence_position = 0;
         }
         if (eof || (word_count > train_words / num_threads)) {
+            printf("done with iteration (%d) (thread %d)\n", local_iter, (int)id);
             word_count_actual += word_count - last_word_count;
             local_iter--;
             if (local_iter == 0) break;
             word_count = 0;
             last_word_count = 0;
             sentence_length = 0;
+            eof = 0;
             fseek(fi, file_size / (long long)num_threads * (long long)id,
                   SEEK_SET);
             continue;

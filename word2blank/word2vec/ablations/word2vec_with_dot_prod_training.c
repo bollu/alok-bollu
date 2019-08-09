@@ -532,17 +532,19 @@ void *TrainModelThread(void *id) {
                         }
                         l2 = target * layer1_size;
                         f = 0;
-                        for (c = 0; c < layer1_size; c++)
-                            f += neu1[c] * syn1neg[c + l2];
-                        if (f > MAX_EXP)
-                            g = (label - 1) * alpha;
-                        else if (f < -MAX_EXP)
-                            g = (label - 0) * alpha;
-                        else
-                            g = (label - expTable[(int)((f + MAX_EXP) *
-                                                        (EXP_TABLE_SIZE /
-                                                         MAX_EXP / 2))]) *
-                                alpha;
+                        // TODO: replace this sigmoid(v, w) with v . w
+                        // for (c = 0; c < layer1_size; c++)
+                        //     f += neu1[c] * syn1neg[c + l2];
+                        // if (f > MAX_EXP)
+                        //     g = (label - 1) * alpha;
+                        // else if (f < -MAX_EXP)
+                        //     g = (label - 0) * alpha;
+                        // else
+                        //     g = (label - expTable[(int)((f + MAX_EXP) *
+                        //                                 (EXP_TABLE_SIZE /
+                        //                                  MAX_EXP / 2))]) *
+                        //         alpha;
+                        g = label - f; 
                         for (c = 0; c < layer1_size; c++)
                             neu1e[c] += g * syn1neg[c + l2];
                         for (c = 0; c < layer1_size; c++)

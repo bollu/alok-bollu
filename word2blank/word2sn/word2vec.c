@@ -26,7 +26,7 @@
 #define MAX_CODE_LENGTH 40
 
 // #define DEBUG_ANGLE2VEC
-#define EXPENSIVE_CHECKS
+// #define EXPENSIVE_CHECKS
 
 pthread_mutex_t mutex_syn0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_syn1neg = PTHREAD_MUTEX_INITIALIZER;
@@ -877,6 +877,8 @@ void *TrainModelThread(void *id) {
                                                         (EXP_TABLE_SIZE /
                                                          MAX_EXP / 2))]) *
                                 alpha;
+
+
                         for (c = 0; c < layer1_size; c++)
                             neu1e[c] += g * syn1neg[c + l2];
                         for (c = 0; c < layer1_size; c++)
@@ -1006,14 +1008,15 @@ void *TrainModelThread(void *id) {
 
                             // loss = (label - sigmoid (syn0 . syn1))^2
                             // gradient = d(loss) = 2 . (label - sigmoid(syn0 . syn1)) d (syn0 . syn1)
-                            if (f > MAX_EXP)
-                                g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
-                                g = (label - 0) * alpha;
-                            else
-                                g = (label - expTable[(int)((f + MAX_EXP) *
-                                            (EXP_TABLE_SIZE /
-                                             MAX_EXP / 2))]) * alpha;
+                            // if (f > MAX_EXP)
+                            //     g = (label - 1) * alpha;
+                            // else if (f < -MAX_EXP)
+                            //     g = (label - 0) * alpha;
+                            // else
+                            //     g = (label - expTable[(int)((f + MAX_EXP) *
+                            //                 (EXP_TABLE_SIZE /
+                            //                  MAX_EXP / 2))]) * alpha;
+                            g = (label - f) * alpha * (label == 0 ? 10:1)
                             total_loss += g * g;
                             
                             // buffer gradients of focus

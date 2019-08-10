@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import sys
+import torch.multiprocessing as tm
 import datetime
 import os
 import os.path
@@ -22,11 +23,10 @@ import threading
 from numpy import random
 
 CORPUSPATH="text1"
-NUMTHREADS = 40
+NUMTHREADS = 20
 BATCHSIZE = 1000
 WINDOWSIZE = 4
-NNEGSAMPLES = 15
-EPOCHS = 15
+EPOCHS = 10
 EMBEDSIZE = 100
 STARTING_ALPHA = 0.01
 # DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')

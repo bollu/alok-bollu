@@ -19,9 +19,10 @@ from random import sample
 import pickle
 from prompt_toolkit import PromptSession
 import threading
+from numpy import random
 
 CORPUSPATH="text1"
-NTHREADS = 1
+NUMTHREADS = 40
 BATCHSIZE = 1000
 WINDOWSIZE = 4
 NNEGSAMPLES = 15
@@ -102,58 +103,27 @@ def trainsample(fis, cis, label, alpha):
     vecs.grad.data.zero_()
     return 0
 
-def trainthread(ix):
-    size = len(corpus) // NTHREADS
-    begin = min(size * ix, len(corpus) - 1)
-    end = min(size *(ix+1) - 1, len(corpus) - 1)
 
-    total = (EPOCHS * size) // BATCHSIZE
-    count = 0
-
-    last_seen_words = 0
-    total_loss = 0
-
-
-    alpha = STARTING_ALPHA
-
-    label1 = torch.ones(1, device=DEVICE)
-    label0 = torch.zeros(1, device=DEVICE)
-
-        # for fis in np.array_split(np.arange(begin,end), size // BATCHSIZE):
-        #     # positive sample training
-        #     # context words are focus words, with random perturbation
-        #     cis = fis + np.random.randint(-WINDOWSIZE,+WINDOWSIZE, size=fis.size, dtype=np.int32)
-        #     # make sure this is within bounds.
-        #     cis = np.clip(cis, 0, len(corpus) - 1)
-        #     total_loss += trainsample(fis, cis, label1, alpha)
-
-        #     # # random vector
-        #     # cis = np.random.randint(len(corpus), size=fis.size)
-        #     # total_loss += trainsample(fis, cis, label0, alpha)
-
-        #     count += 1
-        #     last_seen_words += 1
-
-        #     if (last_seen_words >= 1e1):
-        #         sys.stdout.write("\r%d: %f%% Loss: %4.2f\n" % (ix, (float(count) / total) * 100, total_loss))
-        #         sys.stdout.flush()
-        #         last_seen_words = 0
-        #         total_loss = 0
-
-
-def trainmodel():
+def perthread(tid):
     # iterate through
     count = 0
     last_seen_words = 0
     total_loss = 0
-    total = EPOCHS * len(corpus) // BATCHSIZE
-    per_epoch = len(corpus) // BATCHSIZE
+    PER_THREAD_SIZE = math.ceil(len(corpus) / NUMTHREADS)
+
+    start = tid * PER_THREAD_SIZE
+    end = min((tid + 1) * PER_THREAD_SIZE, len(corpus) - 1)
+
+    cur_corpus = corpus[start:end]
+    per_epoch = len(cur_corpus) // BATCHSIZE
+    print("%d | per epoch: %d" % (tid, per_epoch))
+    total = EPOCHS * per_epoch
     alpha = STARTING_ALPHA
 
-    for epoch  in range(EPOCHS):
+    for epoch in range(EPOCHS):
         for b in range(per_epoch):
             # take (1000x1000)
-            randixs = list(range(BATCHSIZE))
+            randixs = np.random.randint(start, end, BATCHSIZE)
             # get the words corresponding to the corpus
             fixs = ixedcorpus[randixs]
 
@@ -162,8 +132,8 @@ def trainmodel():
             
             y = torch.matmul(f, torch.transpose(c, 0, 1))
 
-            if b % 100 == 0:
-                print("percent: %d%%" % ((b / per_epoch) * 100))
+            if b % (per_epoch // 10) == 0:
+                print("%d | epoch: %d | percent: %d%%" % (tid, epoch, (b / per_epoch) * 100))
 
             # get the words and fill in the dot products
             labels = vocabNeighbours[fixs].transpose(0, 1)[fixs].transpose(0, 1)
@@ -178,7 +148,15 @@ def trainmodel():
             vecs.grad.data.zero_()
 
 
-        print("    done with epoch: %d" % epoch)
+        print("%d | done with epoch: %d" % (tid, epoch))
+
+def trainmodel():
+    ts = [threading.Thread(target=perthread, args=(i,)) for i in range(NUMTHREADS)]
+    for t in ts:
+        t.start()
+
+    for t in ts:
+        t.join()
 
     with open("model.out", "wb") as f:
         pickle.dump(vecs, f)

@@ -35,3 +35,5 @@ testsave
 
 # folders of models
 ./models/*
+model.out
+text1

@@ -24,8 +24,7 @@ WINDOWSIZE = 4
 NNEGSAMPLES = 15
 EPOCHS = 15
 EMBEDSIZE = 3
-# DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
-DEVICE = torch.device('cuda')
+DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
 
 with open(CORPUSPATH, "r") as f:
     corpus = np.array(f.read().split())
@@ -59,7 +58,7 @@ def train(fis, cis, label):
 count = 0
 last_seen_words = 0
 
-total = EPOCHS * len(corpus)
+total = EPOCHS * len(corpus) // BATCHSIZE
 for _ in range(EPOCHS):
     # fi = focus index
     for fis in np.array_split(np.arange(len(corpus), dtype=np.int32), len(corpus) // BATCHSIZE):
@@ -84,5 +83,5 @@ for _ in range(EPOCHS):
             sys.stdout.flush()
             last_seen_words = 0
 
-with open("save", "w") as f:
-    pickle.dump(syn0)
+with open("model.out", "wb") as f:
+    pickle.dump(syn0, f)

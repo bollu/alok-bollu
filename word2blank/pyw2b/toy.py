@@ -149,7 +149,6 @@ def trainmodel():
     total = EPOCHS * len(corpus) // BATCHSIZE
     per_epoch = len(corpus) // BATCHSIZE
     alpha = STARTING_ALPHA
-    print("per_epoch: ", per_epoch)
 
     for epoch  in range(EPOCHS):
         for b in range(per_epoch):
@@ -163,22 +162,18 @@ def trainmodel():
             
             y = torch.matmul(f, torch.transpose(c, 0, 1))
 
+            if b % 100 == 0:
+                print("percent: %d%%" % ((b / per_epoch) * 100))
+
             # get the words and fill in the dot products
-            print("filling in dot products in label...")
             labels = vocabNeighbours[fixs].transpose(0, 1)[fixs].transpose(0, 1)
-            print("  filled.")
 
             # loss = \sum_ij (labels_ij - y_ij)^2 
             loss = labels.float() - y
             loss = loss * loss
-            print("summing over pointwise loss...")
             loss = loss.sum(0).sum(0)
-            print("loss:", loss)
-
-            print("backpropping loss...")
             loss.backward()
 
-            print("updating vec by gradient")
             vecs.data.sub_(vecs.grad.data * alpha)
             vecs.grad.data.zero_()
 

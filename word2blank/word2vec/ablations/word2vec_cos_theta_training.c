@@ -459,7 +459,6 @@ void *TrainModelThread(void *id) {
             sentence_position = 0;
         }
         if (eof || (word_count > train_words / num_threads)) {
-            eof = 0;
             word_count_actual += word_count - last_word_count;
             local_iter--;
             if (local_iter == 0) break;
@@ -616,14 +615,16 @@ void *TrainModelThread(void *id) {
                                 label = 0;
                             }
                             l2 = target * layer1_size;
-                            f = 0;
+                            f = 0; // write a for loop to calculate the lengths of syn0 and syn1neg
                             for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1neg[c + l2];
-                            if (f > MAX_EXP)
+                                f += syn0[c + l1] * syn1neg[c + l2]; //here divide by |syn0| * |syn1neg|
+                            if (f > MAX_EXP) // f > 1
                                 g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
+                            else if (f < -MAX_EXP) // f < -1 <- ?
                                 g = (label - 0) * alpha;
                             else
+                                // for cost function update: remove this g and
+                                // do g = (label - f) * alpha;
                                 g = (label - expTable[(int)((f + MAX_EXP) *
                                                             (EXP_TABLE_SIZE /
                                                              MAX_EXP / 2))]) *

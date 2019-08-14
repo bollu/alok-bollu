@@ -80,7 +80,7 @@ void initialize_parameters() {
     }
     for (b = 0; b < vector_size; b++) {
         for (a = 0; a < 2 * vocab_size; a++) {
-            W[a * vector_size + b] = (rand() / (real)RAND_MAX - 0.5) / vector_size;
+            W[a * vector_size + b] = (a <= vocab_size)?(rand() / (real)RAND_MAX - 0.5) / vector_size : 0;
         }
     }
     for (b = 0; b < vector_size; b++) {

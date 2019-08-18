@@ -72,7 +72,7 @@ void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], cons
     for(int i = 0; i < n; i++) {
         lensq += out[i] * out[i];
     }
-    if(fabs(lensq - 1) >= 0.2) { 
+    if(fabs(lensq - 1) >= 1e-2) { 
         printf("lensq: %f\n", lensq);
         printf("  cos: ["); 
         for(int i = 0; i < n; ++i) {
@@ -90,21 +90,57 @@ void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], cons
         }
         printf("]\n"); 
     }
-    assert(fabs(lensq - 1) < 0.2);
+    assert(fabs(lensq - 1) < 1e-2);
     #endif
 }
 
+real lensq(const int n, const real v[n]) {
+    real tot = 0;
+    for (int i = 0; i < n; ++i ) tot += v[i] * v[i];
+    return tot;
+}
+
+void normalize(const int n, real v[n]) {
+    const real len = sqrt(lensq(n, v));
+    for (int i = 0; i < n; ++i ) v[i] /= len;
+}
+
 void vec2angle(const int n, const real v[n], real angles[n-1]) {
+    printf("lensq: %4.2f\n", lensq(n, v));
+    assert(fabs(1.0 - lensq(n, v)) < 1e-2);
+
     // convert vector to angle
-    real sinaccum = 1;
+    real sinprod = 1;
     for(int i = 0; i < n-1; ++i) {
-        if (sinaccum == 0) {
+        if (fabs(sinprod) < 1e-4) {
             angles[i] = 0;
         } else {
-            angles[i] = acos(v[i] / sinaccum);
+            real angle_cos = v[i] / sinprod;
+            if (angle_cos < -1) angle_cos = -1;
+            else if (angle_cos > 1) angle_cos = 1;
+            angles[i] = acos(angle_cos);
+            sinprod *= sin(angles[i]);
         }
-        sinaccum *= sin(angles[i]);
+        printf("i: %4d v[i]: %5.2f | v[i+1]: %5.2f | angles[i]: %5.2f | sinprod: %5.2f\n", i, v[i], v[i+1],
+                angles[i], sinprod);
     }
+
+    angles[n-2] = atan2(v[n-1], v[n-2]);
+    printf("angles[n-2]: %5.2f\n", angles[n-2]);
+    
+    #ifdef EXPENSIVE_CHECKS
+    real vcheck[n];
+    real coss[n-1], sins[n-1], sinaccum[n-1][n-1];
+    angleprecompute(n, angles, coss, sins, sinaccum);
+    angle2vec(n, coss, sins, sinaccum, vcheck);
+    for(int i = 0; i < n; ++i) {
+        if (fabs(vcheck[i] - v[i]) > 1e-3) {
+            printf("error: n: %d | i: %d | ours: %3.2f | truth: %3.2f\n" , n, i, vcheck[i], v[i]);
+            assert(0);
+        }
+    }
+    #endif
+
 }
 
 void analogyVec(const int n, const real v1[n], const real v2[n], const real v3[n],
@@ -113,6 +149,7 @@ void analogyVec(const int n, const real v1[n], const real v2[n], const real v3[n
     vec2angle(n, v1, a1);
     vec2angle(n, v2, a2);
     vec2angle(n, v3, a3);
+
     for(int i = 0; i < n - 1; ++i) aout[i] = a2[i] - a1[i] + a3[i];
     real coss[n-1], sins[n-1], sinaccum[n-1][n-1];
     angleprecompute(n, aout, coss, sins, sinaccum);
@@ -208,7 +245,7 @@ int main(int argc, char **argv) {
     if (b == 0) continue;
     printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
     // for (a = 0; a < size; a++) vec[a] = M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
-    analogyVec(size, &M[a + bi[0]], &M[a + bi[1]], &M[a + bi[2]], vec);
+    analogyVec(size, &M[bi[0] * size], &M[bi[1] * size], &M[bi[2] * size], vec);
     len = 0;
     for (a = 0; a < size; a++) len += vec[a] * vec[a];
     len = sqrt(len);
@@ -219,9 +256,9 @@ int main(int argc, char **argv) {
       if (c == bi[0]) continue;
       if (c == bi[1]) continue;
       if (c == bi[2]) continue;
-      a = 0;
-      for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
-      if (a == 1) continue;
+      // a = 0;
+      // for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
+      // if (a == 1) continue;
       dist = 0;
       for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
       for (a = 0; a < N; a++) {

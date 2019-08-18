@@ -602,17 +602,6 @@ void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], cons
         out[i] = (i == 0 ? 1 : sinaccum[0][i-1]) * (i == n-1 ? 1 : coss[i]);
     }
 
-    /*
-    out[n-1] = sins[n-2];
-    out[n-2] = coss[n-2];
-    for(int i = n - 3; i >= 0; i--) {
-        out[i] = coss[i];
-
-        for(int j = i + 1; j < n; j++) {
-            out[j] *= sins[i];
-        }
-    }
-    */
 
     #ifdef EXPENSIVE_CHECKS
     real lensq = 0;
@@ -1016,7 +1005,7 @@ void *TrainModelThread(void *id) {
                             //     g = (label - expTable[(int)((f + MAX_EXP) *
                             //                 (EXP_TABLE_SIZE /
                             //                  MAX_EXP / 2))]) * alpha;
-                            g = (label - f) * alpha * (label == 0 ? 10:1)
+                            g = (label - f) * alpha * (label == 0 ? 10:1);
                             total_loss += g * g;
                             
                             // buffer gradients of focus

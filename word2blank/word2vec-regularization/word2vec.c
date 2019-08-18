@@ -641,13 +641,14 @@ void *TrainModelThread(void *id) {
 
                     // add length term
                     float len = 0;
-                    // loss += (1 - len)^2
+                    // loss += (1 - len)^4
                     for (c = 0; c < layer1_size; c++) 
                         len += syn0[c + l1] * syn0[c + l1];
 
                     // backprop grad[i] = -2(1 - len) * (d/dxi syn1[i])
+                    const float loss = (5.0  - len);
                     for (c = 0; c < layer1_size; c++) 
-                        syn0[c + l1] += syn0[c + l1] * (5.0  - len) * alpha * 3;
+                        syn0[c + l1] += syn0[c + l1] * loss * loss * loss * alpha;
                 }
         }
         sentence_position++;

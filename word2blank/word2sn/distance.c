@@ -16,11 +16,108 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 typedef float real;
 #define max_size 2000
 #define N 40
 #define max_w 50
+
+// given angles, precompute sin(theta_i), cos(theta_i) and 
+//  sin(theta_i) * sin(theta_{i+1}) *  ... * sin(theta_j) 0 <= i, j <= n-1
+void angleprecompute(const int n, const real theta[n-1], real coss[n-1], 
+        real sins[n-1], real sinaccum[n-1][n-1]) {
+    for(int i = 0; i < n - 1; i++) {
+        coss[i] = cos(theta[i]);
+        sins[i] = sin(theta[i]);
+        // cos^2 x + sin^2 x = 1
+        int safe =  fabs(1.0 - (coss[i] * coss[i] + sins[i] * sins[i])) < 1e-2;
+        if (!safe) {
+            printf("theta: %f | real:%f / coss: %f | real: %f / sins: %f\n", theta[i], 
+                    cos(theta[i]), coss[i], sin(theta[i]), sins[i]);
+            assert(0);
+        }
+    }
+    
+    // check interval [i..j]
+    for(int i = 0; i < n - 1; ++i) {
+        // j < i
+        for(int j = 0; j < i; ++j) { sinaccum[i][j] = 1; }
+        //j = i
+        sinaccum[i][i] = sins[i];
+        // j > 1
+        for(int j = i + 1; j < n - 1; ++j) {
+            sinaccum[i][j] = sins[j] * sinaccum[i][j-1];
+        }
+    }
+}
+
+// convert angles to vectors for a given index
+void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], const real sinaccum[n-1][n-1],
+        real out[n]) {
+
+    // reference
+    // x1          = c1
+    // x2          = s1 c2
+    // x3          = s1 s2 c3
+    // x4          = s1 s2 s3 c4
+    // x5          = s1 s2 s3 s4 c5
+    // x6 = xfinal = s1 s2 s3 s4 s5
+    for(int i = 0; i < n; i++) {
+        out[i] = (i == 0 ? 1 : sinaccum[0][i-1]) * (i == n-1 ? 1 : coss[i]);
+    }
+
+    #ifdef EXPENSIVE_CHECKS
+    real lensq = 0;
+    for(int i = 0; i < n; i++) {
+        lensq += out[i] * out[i];
+    }
+    if(fabs(lensq - 1) >= 0.2) { 
+        printf("lensq: %f\n", lensq);
+        printf("  cos: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", coss[i]);
+        }
+        printf("]\n"); 
+        printf("  sin: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", sins[i]);
+        }
+        printf("]\n"); 
+        printf("  vec: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", out[i]);
+        }
+        printf("]\n"); 
+    }
+    assert(fabs(lensq - 1) < 0.2);
+    #endif
+}
+
+void vec2angle(const int n, const real v[n], real angles[n-1]) {
+    // convert vector to angle
+    real sinaccum = 1;
+    for(int i = 0; i < n-1; ++i) {
+        if (sinaccum == 0) {
+            angles[i] = 0;
+        } else {
+            angles[i] = acos(v[i] / sinaccum);
+        }
+        sinaccum *= sin(angles[i]);
+    }
+}
+
+void analogyVec(const int n, const real v1[n], const real v2[n], const real v3[n],
+        real vout[n]) {
+    real a1[n-1], a2[n-1], a3[n-1], aout[n-1];
+    vec2angle(n, v1, a1);
+    vec2angle(n, v2, a2);
+    vec2angle(n, v3, a3);
+    for(int i = 0; i < n - 1; ++i) aout[i] = a2[i] - a1[i] + a3[i];
+    real coss[n-1], sins[n-1], sinaccum[n-1][n-1];
+    angleprecompute(n, aout, coss, sins, sinaccum);
+    angle2vec(n, coss, sins, sinaccum, vout);
+}
 
 void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
     // number of values in each bucket.

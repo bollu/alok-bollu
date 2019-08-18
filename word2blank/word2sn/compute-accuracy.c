@@ -18,6 +18,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <assert.h>
+
+typedef float real;
 
 const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
@@ -109,7 +112,8 @@ int main(int argc, char **argv)
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
-    for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
+   //  for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
+    analogyVec(size, &M[a + bi[0]], &M[a + bi[1]], &M[a + bi[2]], vec);
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;

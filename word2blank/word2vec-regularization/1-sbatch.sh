@@ -7,7 +7,7 @@
 #SBATCH -o ./slurm/%j
 
 ### SET NAME (NO .bin) ###
-NAME=TEXT1
+NAME=regularized-sg-size=200
 ########
 ########
 

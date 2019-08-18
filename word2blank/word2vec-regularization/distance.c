@@ -129,6 +129,7 @@ int main(int argc, char **argv) {
         len = 0;
         for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
         len = sqrt(len);
+        printf("len: %f\n", len);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);

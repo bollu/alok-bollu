@@ -647,7 +647,7 @@ void *TrainModelThread(void *id) {
 
                     // backprop grad[i] = -2(1 - len) * (d/dxi syn1[i])
                     for (c = 0; c < layer1_size; c++) 
-                        syn0[c + l1] += syn0[c + l1] * (1  - len) * alpha * 3;
+                        syn0[c + l1] += syn0[c + l1] * (5.0  - len) * alpha * 3;
                 }
         }
         sentence_position++;

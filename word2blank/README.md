@@ -3,6 +3,11 @@ Files
 
 - `word2vec`: vanilla word2vec
 
+- `word2vec-regularization`: word2vec with a regulatization term that forces
+  vectors to lie on a sphere
+
+- `word2vec-analogy-with-solid-angle`: word2vec with `compute-accuracy` and `word-analogy`
+   code changed to use `angle(b, a) + c` to perform analogy, rather than `b - a + c`.
 
 
 - `word2vec-grad`: partial attempt to train

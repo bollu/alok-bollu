@@ -29,7 +29,6 @@ STARTING_ALPHA = 0.001
 DEVICE = torch.device(torch.cuda.device_count() - 1) if torch.cuda.is_available() else torch.device('cpu')
 
 posvecs = torch.randn([NVECS, EMBEDSIZE], device=DEVICE, requires_grad=True, dtype=torch.float)
-negvecs = torch.randn([NVECS, EMBEDSIZE], device=DEVICE, requires_grad=True, dtype=torch.float)
 targetDots = torch.randn([NVECS, NVECS], device=DEVICE, requires_grad=False, dtype=torch.float)
 
 
@@ -47,8 +46,9 @@ def calculate_loss():
     return l
 
 def trainW2V():
-    prev_total_loss = 0
     loss_acceleration = 1
+    total_loss = 0
+    prev_total_loss = 0
     last_nvecs = 0
     nvecs = 0
 
@@ -67,16 +67,15 @@ def trainW2V():
                     prev_total_loss = cur_total_loss
                     print("loss accleration: %4.2f %% | total loss: %4.2f" % (loss_acceleration, cur_total_loss))
 
-                d = posvecs[i].dot(negvecs[j])
+
+                d = posvecs[i].dot(posvecs[j])
                 score = (targetDots[i][j] - d)
                 loss = score * score
+                total_loss += loss.data
 
                 grad = loss.backward()
                 posvecs.data.sub_(posvecs.grad.data * alpha)
                 posvecs.grad.data.zero_()
-
-                negvecs.data.sub_(negvecs.grad.data * alpha)
-                negvecs.grad.data.zero_()
 
 
 

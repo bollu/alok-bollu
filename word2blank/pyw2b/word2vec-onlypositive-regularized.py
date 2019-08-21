@@ -22,8 +22,10 @@ from prompt_toolkit import PromptSession
 import threading
 from numpy import random
 
+
 torch.manual_seed(0)
 
+LENGTH_WEIGHT = 0.1
 EMBEDSIZE = 3
 NVECS = 10
 NNEGSAMPLES = 15
@@ -71,8 +73,10 @@ def trainW2V():
 
 
                 d = posvecs[i].dot(posvecs[j])
-                score = (targetDots[i][j] - torch.sigmoid(d))
-                loss = score * score
+                score = (targetDots[i][j] - d)
+                loss = score * score + \
+                        LENGTH_WEIGHT * (1.0 - posvecs[i].dot(posvecs[i])) + \
+                        LENGTH_WEIGHT * (1.0 - posvecs[j].dot(posvecs[j]))
                 total_loss += loss.data
 
                 grad = loss.backward()

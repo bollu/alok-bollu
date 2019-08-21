@@ -22,6 +22,8 @@ from prompt_toolkit import PromptSession
 import threading
 from numpy import random
 
+torch.manual_seed(0)
+
 EMBEDSIZE = 3
 NVECS = 10
 NNEGSAMPLES = 15
@@ -68,7 +70,7 @@ def trainW2V():
                     print("loss accleration: %4.2f %% | total loss: %4.2f" % (loss_acceleration, cur_total_loss))
 
                 d = posvecs[i].dot(negvecs[j])
-                score = (targetDots[i][j] - d)
+                score = (targetDots[i][j] - torch.sigmoid(d))
                 loss = score * score
 
                 grad = loss.backward()

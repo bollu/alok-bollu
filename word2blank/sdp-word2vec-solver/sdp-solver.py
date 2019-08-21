@@ -2,6 +2,7 @@
 import picos
 from picos.solvers import *
 import sys
+import mosek
 from random import *
 
 VECSIZE = 10
@@ -42,15 +43,28 @@ def unit_vector_constraint(problem, v, eps):
 
 def test_solver():
     P = picos.Problem()
-    x = P.add_variable("x", 1, vtype="continuous");
-    one = picos.new_param("one", 1)
-    P.set_objective("min", x | x)
+    x = P.add_variable("x", (10, 10), vtype="symmetric")
+    y = P.add_variable("y", (10,10) , vtype="symmetric")
+    
+    # xT I x <= EPS
+    # (x^T -I x) <= EPS
+    EPS = 1.0
+    one = picos.new_param("two", 2)
+    # c2= P.add_constraint(x | y  <= -1)
+    c3 = P.add_constraint (x >> 0)
+    c3 = P.add_constraint (y >> 0)
+    
+    # c2= P.add_constraint(-EPS <= x | x )
+    # c2= P.add_constraint(EPS >= -(x | x ))
+    # c2= P.add_constraint(-(x | x ) <= EPS)
+
+    P.set_objective("min", x[0]y)
     # P.set_objective("find", 0)
     print("problem:")
     print(P)
     print("solution:")
-    # P.solve(solver='mosek')
-    P.solve()
+    P.solve(solver='mosek')
+    #P.solve()
     print("x: ", x.value)
 
 if __name__ == "__main__":
@@ -115,7 +129,7 @@ if False and __name__ == "__main__":
     print("problem:")
     print(P)
 
-    print("solving problem...");
+    print("solving problem...")
     P.solve()
 
 

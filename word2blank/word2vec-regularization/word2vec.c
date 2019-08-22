@@ -25,6 +25,8 @@
 #define MAX_CODE_LENGTH 40
 #define LENGTH_STRENGTH 0.5
 
+#define TARGETLEN 1
+
 const int vocab_hash_size =
     30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -652,11 +654,12 @@ void *TrainModelThread(void *id) {
 
                     // add length term
                     float len = 0;
-                    // loss += (1 - len)^2
+                    // loss += (1 - len)^4
                     for (c = 0; c < layer1_size; c++) 
                         len += syn0[c + l1] * syn0[c + l1];
                     len = sqrt(len);
                     // backprop grad[i] = -2(1 - len) * (d/dxi syn1[i])
+                    const float loss = (TARGETLEN - len);
                     for (c = 0; c < layer1_size; c++) 
                         syn0[c + l1] += syn0[c + l1] * (5.0  - len) * alpha * LENGTH_STRENGTH;
                 }

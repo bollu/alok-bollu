@@ -420,7 +420,7 @@ float sigmoid(float x) {
 // powf(2, 128) which will throw NaN.
 float potMax1(float x) {
     if (x > 1) {
-        return x;
+        return 1;
     }
     return powf(2, x);
 }
@@ -524,7 +524,7 @@ void *TrainModelThread(void *id) {
                             (unsigned long long)25214903917 +
                             11;
                         // sample noise
-                        noises[i][j] = 10 * (((next_random & 0xFFFF) / (real)65536) - 0.5);
+                        noises[i][j] = (((next_random & 0xFFFF) / (real)65536) - 0.5);
                     }
                 }
 
@@ -534,6 +534,7 @@ void *TrainModelThread(void *id) {
                 long targets[negative + 1];
                 float gcurs[negative + 1];
                 float gproposals[negative + 1];
+
                 for (d = 0; d < negative + 1; d++) {
                     if (d == 0) {
                         target = word;
@@ -561,26 +562,7 @@ void *TrainModelThread(void *id) {
 
                     
                     gcur = (label - sigmoid(fcur));
-                    // if (fcur > MAX_EXP)
-                    //     gcur = (label - 1) * alpha;
-                    // else if (fcur < -MAX_EXP)
-                    //     gcur = (label - 0) * alpha;
-                    // else
-                    //     gcur = (label - expTable[(int)((fcur + MAX_EXP) *
-                    //                 (EXP_TABLE_SIZE /
-                    //                  MAX_EXP / 2))]) *
-                    //         alpha;
                     gcurs[d] = gcur;
-
-                    // if (fproposal > MAX_EXP)
-                    //     gproposal = (label - 1) * alpha;
-                    // else if (fproposal < -MAX_EXP)
-                    //     gproposal = (label - 0) * alpha;
-                    // else
-                    //     gproposal = (label - expTable[(int)((fproposal + MAX_EXP) *
-                    //                 (EXP_TABLE_SIZE /
-                    //                  MAX_EXP / 2))]) *
-                    //         alpha;
                     gproposal = (label - sigmoid(fproposal));
                     gproposals[d] = gproposal;
 
@@ -598,7 +580,10 @@ void *TrainModelThread(void *id) {
                 // printf("losscur(%f) - lossproposal(%f): %f\n",  losscur, lossproposal, losscur - lossproposal);
 
                 const float threshold = potMax1(losscur - lossproposal);
-                const int accepted = r < threshold;
+                // HACK HACK HACK
+                // const int accepted = r < threshold;
+                const int accepted = 0;
+
 
                 total_loss += accepted == 1 ? lossproposal : losscur;
                 nproposals++;
@@ -608,21 +593,20 @@ void *TrainModelThread(void *id) {
                 //         "ACCEPT" : "REJECT", r, threshold, losscur, lossproposal);
 
                 // accept the state, so update the vectors
-                if (accepted == 1) {
-                    for(int i = 0; i < layer1_size; ++i)
-                        syn0[i + l1] += noises[0][i];
+                //if (accepted == 1) {
+                //    for(int i = 0; i < layer1_size; ++i)
+                //        syn0[i + l1] += noises[0][i];
 
-                    for(int i = 0; i < negative + 1; ++i) {
-                        if (targets[i] == -1) continue;
-                        const unsigned ix = targets[i] * layer1_size;
-                        for(int j = 0; j < layer1_size; ++j) {
-                            syn1neg[j + ix] += noises[1+i][j];
-                        }
-                    }
-                }
+                //    for(int i = 0; i < negative + 1; ++i) {
+                //        if (targets[i] == -1) continue;
+                //        const unsigned ix = targets[i] * layer1_size;
+                //        for(int j = 0; j < layer1_size; ++j) {
+                //            syn1neg[j + ix] += noises[1+i][j];
+                //        }
+                //    }
+                //}
 
-                /*
-                
+
                 // GRADIENT DESCENT
                 // ================
 
@@ -645,7 +629,6 @@ void *TrainModelThread(void *id) {
                         syn0[j + l1] += g * syn1neg[j + ix] * alpha;
                     }
                 }
-                */
 
             }
         sentence_position++;

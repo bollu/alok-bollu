@@ -23,3 +23,10 @@ context vectors: `c_j`
 
 - [`mosek`](https://www.mosek.com/downloads/) provides free licenses for 30
   days. We can use this for now as well.
+
+
+
+# Reformulation of the problem 
+- Matrix C for now will be set as 0. We really don't care about minimising an objective at the moment.
+- So the real question is just describing each A<sub>k</sub>.
+    Also, word vector matrix X will have elements of the form `x_i_j = f_i . c_j`  

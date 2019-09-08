@@ -431,6 +431,8 @@ int get_cooccurrence() {
         } // log's to make it look (sort of) pretty
         for (y = 1; y <= (lookup[x] - lookup[x-1]); y++) {
             if ((r = bigram_table[lookup[x-1] - 2 + y]) != 0) {
+                // fprintf(stderr, "x: %d | y : %d | r: %5.4f\n", x, y, r);
+                // getchar();
                 fwrite(&x, sizeof(int), 1, fid);
                 fwrite(&y, sizeof(int), 1, fid);
                 fwrite(&r, sizeof(real), 1, fid);

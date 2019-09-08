@@ -21,6 +21,7 @@
 #define max_size 2000
 #define N 40
 #define max_w 50
+#define max(x, y) ((x) > (y) ? (x) : (y))
 
 FILE *f;
 char st1[max_size];
@@ -54,48 +55,136 @@ void dot() {
     printf("dot: %f\n", d);
 }
 
-void cosine() {
-    printf(
-        "\n                                              Word       "
-        "Cosine "
-        "distance\n----------------------------------------------------"
-        "----"
-        "----------------\n");
-    // for (a = 0; a < size; a++) vec[a] = 0;
-    vec.fillzero();
-    for (b = 0; b < cn; b++) {
-        if (bi[b] == -1) continue;
-        vec.accumscaleadd(1.0, M[bi[b]]);
-        // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
+real getNormalizationFactorL(int w) {
+    // this . dot(other)
+    float maxdot = 0;
+    for(int i = 0; i < N; ++i) {
+        const float dist = M[w].dotContainment(M[i],  nullptr, nullptr);
+        maxdot = max(maxdot, fabs(dist));
     }
-    len = 0;
-    // for (a = 0; a < size; a++) len += vec[a] * vec[a];
-    // len = sqrt(len);
-    // for (a = 0; a < size; a++) vec[a] /= len;
-    vec.normalize();
-    for (a = 0; a < N; a++) bestd[a] = -1;
-    for (a = 0; a < N; a++) bestw[a][0] = 0;
-    for (c = 0; c < words; c++) {
-        a = 0;
-        for (b = 0; b < cn; b++)
-            if (bi[b] == c) a = 1;
-        if (a == 1) continue;
-        // dist = 0;
-        // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-        dist = vec.dotContainment(M[c],  nullptr, nullptr);
-        for (a = 0; a < N; a++) {
-            if (dist > bestd[a]) {
-                for (d = N - 1; d > a; d--) {
-                    bestd[d] = bestd[d - 1];
-                    strcpy(bestw[d], bestw[d - 1]);
+    return maxdot;
+}
+
+real getNormalizationFactorR(int w) {
+    // others . dot (this)
+    float maxdot = 0;
+    for(int i = 0; i < N; ++i) {
+        const float dist = M[i].dotContainment(M[w],  nullptr, nullptr);
+        maxdot = max(maxdot, fabs(dist));
+    }
+    return maxdot;
+}
+
+void cosine() {
+
+    
+    {
+        printf(
+                "\n                                              Word       "
+                "Cosine "
+                "distance\n----------------------------------------------------"
+                "----"
+                "----------------\n");
+        // for (a = 0; a < size; a++) vec[a] = 0;
+        vec.fillzero();
+        vec.accumscaleadd(1.0, M[bi[0]]);
+
+        // for (b = 0; b < cn; b++) {
+        //     if (bi[b] == -1) continue;
+        //     vec.accumscaleadd(1.0, M[bi[b]]);
+        //     // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
+        // }
+        for (int i = 0; i < 10; i++) {
+            printf("%3.2f  ", vec.ix(i));
+        }
+        printf("\n");
+        len = 0;
+
+        // get the length of largest dot with bi.
+        const float vecnorm = getNormalizationFactorL(bi[0]);
+
+        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) vec[a] /= len;
+        // vec.normalize();
+        for (a = 0; a < N; a++) bestd[a] = -1;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            a = 0;
+            for (b = 0; b < cn; b++)
+                if (bi[b] == c) a = 1;
+            if (a == 1) continue;
+            // dist = 0;
+            // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
+            const float curnorm = getNormalizationFactorR(c);
+            dist = vec.dotContainment(M[c],  nullptr, nullptr);
+            dist /= vecnorm; 
+            dist /= curnorm;
+
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
                 }
-                bestd[a] = dist;
-                strcpy(bestw[a], &vocab[c * max_w]);
-                break;
             }
         }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
     }
-    for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+
+    {
+        printf(
+                "\n                                              Word       "
+                "Cosine "
+                "distance\n----------------------------------------------------"
+                "----"
+                "----------------\n");
+        // for (a = 0; a < size; a++) vec[a] = 0;
+
+        vec.fillzero();
+        vec.accumscaleadd(1.0, M[bi[0]]);
+
+        // get the length of largest dot with bi.
+        const float vecnorm = getNormalizationFactorR(bi[0]);
+        len = 0;
+        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) vec[a] /= len;
+        // vec.normalize();
+        for (a = 0; a < N; a++) bestd[a] = -1;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            a = 0;
+            for (b = 0; b < cn; b++)
+                if (bi[b] == c) a = 1;
+            if (a == 1) continue;
+            // dist = 0;
+            // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            const float curnorm = getNormalizationFactorL(c);
+            dist = M[c].dotContainment(vec,  nullptr, nullptr);
+            dist /= curnorm;
+            dist /= vecnorm;
+
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
+        }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -133,7 +222,7 @@ int main(int argc, char **argv) {
         vocab[b * max_w + a] = 0;
         M[b].alloc(size);
         readvec(f, M[b]);
-        M[b].normalize();
+        // M[b].normalize();
         printf("%s:", vocab + b * max_w);
         printf(" lensq: %f  ", M[b].lensq());
         for (int i = 0; i < 10; i++) {

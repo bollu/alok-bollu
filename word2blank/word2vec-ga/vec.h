@@ -245,7 +245,7 @@ struct Vec {
    // <full space>  . <anything> = dot product
    // x dotContainment  y == degree of x ∈ y
    // DELETES PREVIOUS GRADIENTS
-   inline real dotContainmentGA(const Vec &other, float *gbufthis,
+   inline real dotContainment(const Vec &other, float *gbufthis,
                               float *gbufother) const {
       real dot = 0;
       for (unsigned int i = 0; i < len; i++) {
@@ -280,7 +280,7 @@ struct Vec {
 
 
    // vector product as a baseline. NOTE: DELETES PREVIOUS GRADIENTS
-   inline real dotContainment(const Vec &other, float *gbufthis,
+   inline real dotContainmentVec(const Vec &other, float *gbufthis,
                               float *gbufother) const {
       real dot = 0;
       for (unsigned int i = 0; i < len; i++) {

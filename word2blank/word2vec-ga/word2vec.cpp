@@ -503,6 +503,7 @@ void *TrainModelThread(void *id) {
             sentence_position = 0;
         }
         if (eof || (word_count > train_words / num_threads)) {
+            eof = 0;
             word_count_actual += word_count - last_word_count;
             local_iter--;
             if (local_iter == 0) break;

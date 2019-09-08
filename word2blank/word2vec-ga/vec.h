@@ -257,8 +257,7 @@ struct Vec {
             // provide larger dot products for more dimensions they
             // share accurately in common
             const real weight = [&]() {
-               return 1.0;
-
+               // return 1.0;
                const int delta = __builtin_popcount(j) - __builtin_popcount(i);
                assert(delta >= 0);
 

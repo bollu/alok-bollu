@@ -35,8 +35,7 @@ void cosine(Vec vec) {
     for (int a = 0; a < N; a++) bestd[a] = 0;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-        float dist = M[c].dotContainment(vec,
-                                         /*grad=*/false, nullptr, nullptr);
+        float dist = M[c].dotContainment(vec, nullptr, nullptr);
         for (int a = 0; a < N; a++) {
             if (fabs(dist) > fabs(bestd[a])) {
                 for (int d = N - 1; d > a; d--) {
@@ -225,7 +224,7 @@ std::pair<Vec, bool> interpret(AST ast) {
                 if (!b) return std::make_pair(Vec(), b);
 
                 std::cout << "dot: "
-                          << v.dotContainment(w, /*grad=*/false, nullptr,
+                          << v.dotContainment(w, nullptr,
                                               nullptr)
                           << "\n";
                 return std::make_pair(Vec(), false);

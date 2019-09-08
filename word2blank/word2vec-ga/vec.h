@@ -244,7 +244,8 @@ struct Vec {
    // <scalar> . <anything other than scalar> = 0
    // <full space>  . <anything> = dot product
    // x dotContainment  y == degree of x ∈ y
-   inline real dotContainment(const Vec &other, float *gbufthis,
+   // DELETES PREVIOUS GRADIENTS
+   inline real dotContainmentGA(const Vec &other, float *gbufthis,
                               float *gbufother) const {
       real dot = 0;
       for (unsigned int i = 0; i < len; i++) {
@@ -276,6 +277,21 @@ struct Vec {
 
       return dot;
    }
+
+
+   // vector product as a baseline. NOTE: DELETES PREVIOUS GRADIENTS
+   inline real dotContainment(const Vec &other, float *gbufthis,
+                              float *gbufother) const {
+      real dot = 0;
+      for (unsigned int i = 0; i < len; i++) {
+            dot += this->v[i] * other.v[i];
+            if (gbufthis) gbufthis[i] = other.v[i];
+            if (gbufother) gbufother[i] = this->v[i];
+         }
+
+      return dot;
+   }
+
 
    // pick dimensions to take dot product with, and only the projection
    // of the GA object onto those subdimensions is taken when dotting.

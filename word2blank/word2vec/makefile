@@ -20,6 +20,8 @@ word-analogy : word-analogy.c
 compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh
+dump-vect : dump-vect.c
+	$(CC) dump-vect.c -o dump-vect $(CFLAGS)
 
 clean:
-	rm -rf word2vec word2phrase distance word-analogy compute-accuracy
+	rm -rf word2vec word2phrase distance word-analogy compute-accuracy dump-vect

@@ -53,6 +53,8 @@ int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
 
+real *dotContainmentMatrix;
+
 void InitUnigramTable() {
     int a, i;
     double train_words_pow = 0;
@@ -415,6 +417,18 @@ void InitNet() {
         }
     }
     printf("%callocated syn1neg.\t\t\t\t\n", 13);
+
+
+    printf("allocating dotContainmentMatrix...");
+    dotContainmentMatrix = NULL;
+    a = posix_memalign((void **)&dotContainmentMatrix, 128, layer1_size * layer1_size * sizeof(Vec));
+    if (dotContainmentMatrix == NULL) {
+        printf("Memory allocation failed\n");
+        exit(1);
+    }
+    setupDotContainmentMat(layer1_size, dotContainmentMatrix);
+    printf("%callocated dotContainmentMatrix.\t\t\t\t\n", 13);
+
     CreateBinaryTree();
 }
 
@@ -452,6 +466,9 @@ void *TrainModelThread(void *id) {
 
     Vec neu1e;
     neu1e.alloczero(layer1_size);
+    
+    // scratch for BLAS
+    real *scratch_Ay = (real *)malloc(layer1_size * layer1_size * sizeof(real));
 
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
@@ -675,12 +692,19 @@ void *TrainModelThread(void *id) {
                             gsyn0[i] = 0;
                         }
 
-                        f = syn0v->dotContainment(
-                            *syn1negv,
-                            gsyn0,  // collect gradient for syn0 in its
-                                          // buf
-                            gsyn1neg      // gradient for syn1neg in its buffer
-                        );
+                        // f = syn0v->dotContainment(
+                        //     *syn1negv,
+                        //     gsyn0,  // collect gradient for syn0 in its
+                        //                   // buf
+                        //     gsyn1neg      // gradient for syn1neg in its buffer
+                        // );
+                        f = mulQuadForm(layer1_size, 
+                                 syn0v->v, 
+                                 dotContainmentMatrix, 
+                                 syn1neg->v, 
+                                 gsyn0,
+                                 gsyn1neg);
+
                         // =======================
                         // for (c = 0; c < layer1_size; c++)
                         //     f += syn0[c + l1] * syn1neg[c + l2];

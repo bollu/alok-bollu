@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cmath>
+#include <cblas.h>
+
 typedef float real;  // Precision of float numbers
 
 template <typename T>
@@ -69,6 +71,69 @@ __attribute__((constructor)) void initCTable() {
       }
    }
 }
+
+// r = n * n * sizeof(real)
+// n = log2 d
+void setupDotContainmentMat(int n, real *r) {
+    int d = log2(n);
+    assert (1 << d == n);
+    for(int i = 0; i < n; ++i) {
+        for(int j = 0; j < n; ++j) {
+
+            // r[i*n+j] = i == j ? 1 : 0;
+
+
+            // whether i is a subset of j.
+            bool subset = (i & j) == i;
+            r[i*n + j] = subset;
+
+            if (subset) {
+                const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+                assert(delta >= 0);
+                r[i*n+j] *= 1.0 / pow2(delta);
+            }
+        }
+    }
+}
+
+// compute X^T A Y with BLAS
+// X: Nx1
+// A: NxN
+// Y: Nx1
+// gx: Nx1
+// gy: Nx1
+float mulQuadForm(int dim, float *x, float *A, float *y, float *Ay, float *xTA) {
+    float xAy = 0;
+    // Ay                                                                       
+    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,                      
+            1, dim, dim,                                                        
+            1, // alpha                                                         
+            y, dim,                                                             
+            A, dim,                                                             
+            0,  // beta                                                                 
+            Ay, dim);                                                           
+                                                                                
+    // xT Ay                                                                    
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,                        
+            1, 1, dim,                                                          
+            1, // alpha                                                         
+            x, 1,                                                               
+            Ay, 1,                                                              
+            0,  // beta                                                         
+            &xAy, dim);                                                           
+                                                                                
+    // Ay                                                                       
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,                      
+            1, dim, dim,                                                        
+            1, // alpha                                                         
+            x, 1,                                                             
+            A, dim,                                                             
+            0,  // beta                                                                 
+            xTA, dim);                                                           
+    return xAy;
+
+}
+
 
 // dumb encoding of GA. uses log2(n)elements.
 struct Vec {

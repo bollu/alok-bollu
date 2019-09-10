@@ -71,6 +71,37 @@ __attribute__((constructor)) void initCTable() {
       }
    }
 }
+// reference implementation
+inline real dotContainmentReference(int len, const real *vthis, const real *vother, float *gbufthis, float *gbufother)  {
+	real dot = 0;
+	for (unsigned int i = 0; i < len; i++) {
+		for (unsigned int j = 0; j < len; j++) {
+			// check if I is a subset of J
+			const bool subset = (i & j) == i;
+			if (!subset) continue;
+
+			// provide larger dot products for more dimensions they
+			// share accurately in common
+			const real weight = [&]() {
+				// return 1.0;
+				const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+				assert(delta >= 0);
+
+				return 1.0 / pow2(delta);
+			}();
+
+			dot += weight * vthis[i] * vother[j];
+			// make the gradients of larger dimensions expoentnially
+			// much larger, thereby forcing them to only be used
+			// if they truly exist. Otherwise, they will be squashed towards
+			// 0
+			if (gbufthis) gbufthis[i] += vother[j] * weight;
+			if (gbufother) gbufother[j] += vthis[i] * weight;
+		}
+	}
+	return dot;
+}
+
 
 // r = n * n * sizeof(real)
 // n = log2 d
@@ -133,6 +164,13 @@ float mulQuadForm(int dim, const float *x, const float *A, const float *y, float
                 0,  // beta                                                                 
                 xTA, dim);                                                           
     }
+
+    const float dotref = dotContainmentReference(dim, x, y, nullptr, nullptr);
+    printf("%4.2f %4.2f\n", xAy, dotref);
+
+    assert(fabs(dotref - xAy) < 1e-4);
+
+
     return xAy;
 
 }

@@ -23,7 +23,7 @@
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
-#define MAX_SENTENCE_LENGTH 1000
+#define MAX_SENTENCE_LENGTH 256
 #define MAX_CODE_LENGTH 40
 
 const int vocab_hash_size =
@@ -470,7 +470,7 @@ void *TrainModelThread(void *id) {
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 1000) {
+        if (word_count - last_word_count > 500) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {

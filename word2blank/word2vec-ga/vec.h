@@ -87,11 +87,11 @@ void setupDotContainmentMat(int n, real *r) {
             bool subset = (i & j) == i;
             r[i*n + j] = subset;
 
-            if (subset) {
-                const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-                assert(delta >= 0);
-                r[i*n+j] *= 1.0 / pow2(delta);
-            }
+            // * if (subset) {
+            // *     const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+            // *     assert(delta >= 0);
+            // *     r[i*n+j] *= 1.0 / pow2(delta);
+            // * }
         }
     }
 }
@@ -102,7 +102,8 @@ void setupDotContainmentMat(int n, real *r) {
 // Y: Nx1
 // gx: Nx1
 // gy: Nx1
-float mulQuadForm(int dim, float *x, float *A, float *y, float *Ay, float *xTA) {
+// Note that xTA is OPTIONAL, but Ay is _definitely not_.
+float mulQuadForm(int dim, const float *x, const float *A, const float *y, float *Ay, float *xTA) {
     float xAy = 0;
     // Ay                                                                       
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,                      
@@ -122,14 +123,16 @@ float mulQuadForm(int dim, float *x, float *A, float *y, float *Ay, float *xTA) 
             0,  // beta                                                         
             &xAy, dim);                                                           
                                                                                 
-    // Ay                                                                       
-    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,                      
-            1, dim, dim,                                                        
-            1, // alpha                                                         
-            x, 1,                                                             
-            A, dim,                                                             
-            0,  // beta                                                                 
-            xTA, dim);                                                           
+    if (xTA) {
+        // xT A                                                                       
+        cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,                      
+                1, dim, dim,                                                        
+                1, // alpha                                                         
+                x, 1,                                                             
+                A, dim,                                                             
+                0,  // beta                                                                 
+                xTA, dim);                                                           
+    }
     return xAy;
 
 }
@@ -187,12 +190,12 @@ struct Vec {
       }
    }
 
-   inline real lensq() const {
-       return dotContainment(*this, nullptr, nullptr);
+   inline real lensq(real *quadform) const {
+       return dotContainment(quadform, *this, nullptr, nullptr);
    }
 
-   inline void normalize() {
-     const float l = sqrt(lensq());
+   inline void normalize(real *quadform) {
+     const float l = sqrt(lensq(quadform));
      if (fabs(l) < 1e-4) return;
 
      scale(1.0 / l, nullptr);
@@ -310,36 +313,11 @@ struct Vec {
    // <full space>  . <anything> = dot product
    // x dotContainment  y == degree of x ∈ y
    // DELETES PREVIOUS GRADIENTS
-   inline real dotContainment(const Vec &other, float *gbufthis,
-                              float *gbufother) const {
-      real dot = 0;
-      for (unsigned int i = 0; i < len; i++) {
-         for (unsigned int j = 0; j < len; j++) {
-            // check if I is a subset of J
-            const bool subset = (i & j) == i;
-            if (!subset) continue;
+   inline real dotContainment(const real *quadform, const Vec &other, real
+           *gbufthis, real *gbufother) const {
 
-            // provide larger dot products for more dimensions they
-            // share accurately in common
-            const real weight = [&]() {
-               // return 1.0;
-               const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-               assert(delta >= 0);
-
-               return 1.0 / pow2(delta);
-            }();
-
-            dot += weight * v[i] * other.v[j];
-            // make the gradients of larger dimensions expoentnially
-            // much larger, thereby forcing them to only be used
-            // if they truly exist. Otherwise, they will be squashed towards
-            // 0
-            if (gbufthis) gbufthis[i] += other.v[j] * weight;
-            if (gbufother) gbufother[j] += this->v[i] * weight;
-         }
-      }
-
-      return dot;
+       return mulQuadForm(this->len, this->v, quadform, other.v, 
+               gbufthis, gbufother);
    }
 
 

@@ -32,6 +32,8 @@ Vec vec;
 long long words, size, a, b, c, d, cn, bi[100];
 Vec *M;
 char *vocab;
+real *quadform;
+real *Ay;
 
 // find dot product of two words
 void dot() {
@@ -43,14 +45,14 @@ void dot() {
     float d = 0;
     // for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] *
     // size];
-    d = M[bi[1]].dotContainment(M[bi[2]],  nullptr, nullptr);
+    d = M[bi[1]].dotContainment(quadform, M[bi[2]],  Ay, nullptr);
 
     // lensq = 0;
     // for (a = 0; a < size; a++)
     //     lensq += M[a + bi[2] * size] * M[a + bi[2] * size];
     // d /= sqrt(lensq);
-    d /= sqrt(M[bi[1]].lensq());
-    d /= sqrt(M[bi[2]].lensq());
+    d /= sqrt(M[bi[1]].lensq(quadform));
+    d /= sqrt(M[bi[2]].lensq(quadform));
 
     printf("dot: %f\n", d);
 }
@@ -59,7 +61,7 @@ real getNormalizationFactorL(int w) {
     // this . dot(other)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = M[w].dotContainment(M[i],  nullptr, nullptr);
+        const float dist = M[w].dotContainment(quadform, M[i],  Ay, nullptr);
         maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
@@ -69,7 +71,7 @@ real getNormalizationFactorR(int w) {
     // others . dot (this)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = M[i].dotContainment(M[w],  nullptr, nullptr);
+        const float dist = M[i].dotContainment(quadform, M[w],  Ay, nullptr);
         maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
@@ -118,7 +120,7 @@ void cosine() {
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
             const float curnorm = getNormalizationFactorR(c);
-            dist = vec.dotContainment(M[c],  nullptr, nullptr);
+            dist = vec.dotContainment(quadform, M[c],  Ay, nullptr);
             dist /= vecnorm; 
             dist /= curnorm;
 
@@ -167,7 +169,7 @@ void cosine() {
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             const float curnorm = getNormalizationFactorL(c);
-            dist = M[c].dotContainment(vec,  nullptr, nullptr);
+            dist = M[c].dotContainment(quadform, vec,  Ay, nullptr);
             dist /= curnorm;
             dist /= vecnorm;
 
@@ -202,6 +204,14 @@ int main(int argc, char **argv) {
     }
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
+
+    printf("setting up quadform...\n");
+    quadform = (float*)malloc(sizeof(float) * size * size);
+    setupDotContainmentMat(size, quadform);
+    printf("setting up Ay...\n");
+    Ay = (float *)malloc(sizeof(float) * size * size);
+
+
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
     M = (Vec *)malloc((long long)words * sizeof(Vec));
@@ -224,7 +234,7 @@ int main(int argc, char **argv) {
         readvec(f, M[b]);
         // M[b].normalize();
         printf("%s:", vocab + b * max_w);
-        printf(" lensq: %f  ", M[b].lensq());
+        // printf(" lensq: %f  ", M[b].lensq(quadform));
         for (int i = 0; i < 10; i++) {
             printf("%f ", M[b].ix(i));
         }

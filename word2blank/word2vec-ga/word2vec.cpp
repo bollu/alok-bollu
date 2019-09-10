@@ -778,6 +778,11 @@ void TrainModel() {
     long a, b, c, d;
     FILE *fo;
     pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
+    printf("model size:%d\n", layer1_size);
+    printf("window size:%d\n", window);
+    printf("negative samples:%d\n", negative);
+    printf("threads: %d\n", num_threads);
+    printf("Output file: %s\n", output_file);
     printf("Starting training using file %s\n", train_file);
     starting_alpha = alpha;
     if (read_vocab_file[0] != 0)

@@ -385,8 +385,7 @@ void InitNet() {
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
-                               layer1_size);
+            syn0[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
     }
     printf("%callocated syn0.\t\t\t\t\n", 13);
@@ -464,8 +463,6 @@ void *TrainModelThread(void *id) {
     // buffer to store gradient of syn0 in a train step.
     real *gsyn0 = (real *)calloc(layer1_size, sizeof(real));
 
-    Vec neu1e;
-    neu1e.alloczero(layer1_size);
     
     // scratch for BLAS
     real *scratch_Ay = (real *)malloc(layer1_size * layer1_size * sizeof(real));
@@ -535,7 +532,6 @@ void *TrainModelThread(void *id) {
 
         if (word == -1) continue;
         // for (c = 0; c < layer1_size; c++) neu1[c] = 0;
-        neu1e.fillzero();
         // for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
         next_random = next_random * (unsigned long long)25214903917 + 11;
         b = next_random % window;
@@ -701,7 +697,7 @@ void *TrainModelThread(void *id) {
                         f = mulQuadForm(layer1_size, 
                                  syn0v->v, 
                                  dotContainmentMatrix, 
-                                 syn1neg->v, 
+                                 syn1negv->v, 
                                  gsyn0,
                                  gsyn1neg);
 
@@ -775,7 +771,6 @@ void *TrainModelThread(void *id) {
     }
     fclose(fi);
     // free(neu1);
-    neu1e.freemem();
     pthread_exit(NULL);
 }
 

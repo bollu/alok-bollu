@@ -83,7 +83,8 @@ inline real dotContainmentReference(int len, const real *vthis, const real *voth
 			// provide larger dot products for more dimensions they
 			// share accurately in common
 			const real weight = [&]() {
-				// return 1.0;
+				return 1.0;
+
 				const int delta = __builtin_popcount(j) - __builtin_popcount(i);
 				assert(delta >= 0);
 
@@ -116,13 +117,12 @@ void setupDotContainmentMat(int n, real *r) {
 
             // whether i is a subset of j.
             bool subset = (i & j) == i;
-            r[i*n + j] = subset;
-
-            // * if (subset) {
-            // *     const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-            // *     assert(delta >= 0);
-            // *     r[i*n+j] *= 1.0 / pow2(delta);
-            // * }
+            if (subset) {
+                const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+                assert(delta >= 0);
+                // r[i*n+j] = 1.0 / pow2(delta);
+                r[i*n+j] = 1;
+            } else { r[i*n+j] = 0; }
         }
     }
 }
@@ -136,39 +136,70 @@ void setupDotContainmentMat(int n, real *r) {
 // Note that xTA is OPTIONAL, but Ay is _definitely not_.
 float mulQuadForm(int dim, const float *x, const float *A, const float *y, float *Ay, float *xTA) {
     float xAy = 0;
-    // Ay                                                                       
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,                      
-            1, dim, dim,                                                        
+    // A = DIM x DIM
+    // y = DIM x 1
+    // Ay = DIM x DIM x DIM x 1 = DIM x 1
+     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,                      
+            dim, 1, dim,                                                        
             1, // alpha                                                         
-            y, dim,                                                             
             A, dim,                                                             
+            y, 1,                                                             
             0,  // beta                                                                 
-            Ay, dim);                                                           
+            Ay, 1);                                                           
                                                                                 
-    // xT Ay                                                                    
-    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,                        
-            1, 1, dim,                                                          
-            1, // alpha                                                         
-            x, 1,                                                               
-            Ay, 1,                                                              
-            0,  // beta                                                         
-            &xAy, dim);                                                           
+    // xT Ay
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+            1, 1, dim,
+            1, // alpha
+            x, 1,
+            Ay, 1,
+            0,  // beta
+            &xAy, 1); 
                                                                                 
-    if (xTA) {
-        // xT A                                                                       
-        cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,                      
-                1, dim, dim,                                                        
-                1, // alpha                                                         
-                x, 1,                                                             
-                A, dim,                                                             
-                0,  // beta                                                                 
-                xTA, dim);                                                           
+    // X = DIM x 1
+    // xT = 1 x DIM
+    // A = DIM x DIM
+    // xTA = 1 x DIM x DIM x DIM = 1 x DIM
+    cblas_sgemv(CblasRowMajor, CblasTrans,
+            dim, dim, 
+            1, //alpha
+            A, dim,
+            x, 1,
+            0, // beta
+            xTA, 1);
+
+
+    
+#ifdef DEBUG
+    float xgrad[dim];
+    float ygrad[dim];
+    for(int i = 0; i < dim; ++i) {
+        xgrad[i] = ygrad[i] = 0;
     }
 
-    const float dotref = dotContainmentReference(dim, x, y, nullptr, nullptr);
-    printf("%4.2f %4.2f\n", xAy, dotref);
+    const float dotref = dotContainmentReference(dim, x, y, xgrad, ygrad);
+    if (!(fabs(dotref - xAy) < 1e-2)) {
+        printf("\ndot blas: %4.2f | real: %4.2f\n", xAy, dotref);
+        assert(false && "failed reference check");
+    }
 
-    assert(fabs(dotref - xAy) < 1e-4);
+     for(int i = 0; i < dim; ++i) {
+        if (!(fabs(Ay[i] - xgrad[i]) < 1e-2))  {
+            printf("\nxgrad[%d] blas: %4.2f | real: %4.2f\n", i, Ay[i], xgrad[i]);
+            assert(false && "failed reference check");
+        }
+    }
+
+     for(int i = 0; i < dim; ++i) {
+        if (!(fabs(xTA[i] - ygrad[i]) < 1e-2))  {
+            printf("\nygrad[%d] blas: %4.2f | real: %4.2f\n", i, xTA[i], ygrad[i]);
+            assert(false && "failed reference check");
+        }
+    }
+#endif
+
+
+    // assert(fabs(dotref - xAy) < 1e-2);
 
 
     return xAy;

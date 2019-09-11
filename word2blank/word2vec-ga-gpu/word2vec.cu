@@ -496,11 +496,17 @@ inline float sigmoid(float x) {
 
 //x, y = value
 //z = data point
+const int TX = 8, TY = 8, TZ = 1;
+const int CACHE_SIZE = TX * TY + 2;
 __global__ void dots(const int size, const int nsamples,
                 const real *syn0, const real *quadform, const real *syn1neg, 
                 real *dots, // dots: [z]
                 const unsigned long long *focuses,
                 const unsigned long long *ctxes) {
+
+        __shared__ float cache[CACHE_SIZE];
+
+
 
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
         const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -508,13 +514,32 @@ __global__ void dots(const int size, const int nsamples,
 
         if (x >= size || y >= size || z >= nsamples) { return; }
 
+
         // dot product of (aT Q b)_xy for sample 'z'.
         real xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
                 syn1neg[ctxes[z] * size + y];
 
-        // add into the dot produce
-        atomicAdd(&dots[z], xydot);
-        // dots[z] += xydot;
+        // threads are in a logical grid of [TY x TX]
+        if (true) {
+                const int curix = threadIdx.y *TX + threadIdx.x;
+                cache[curix] = xydot;
+
+                int partition = (TX * TY) / 2;
+                while (partition > 0) {
+                        if (curix < partition) {
+                                __syncthreads();
+                                cache[curix] += cache[curix + partition];
+                        }
+                        partition = partition / 2;
+                }
+                __syncthreads();
+                if (curix == 0) {
+                        atomicAdd(&dots[z], cache[0]);
+                }
+        } else{ 
+                // atomicAdd(&dots[z], xydot);
+                dots[z] += xydot;
+        }
 
 
 }
@@ -554,14 +579,19 @@ __global__ void train(const int size, const int nsamples,
 
         const float negval = syn1neg[ctxes[z] * size + y];
 
-        atomicAdd(&syn1neg[ctxes[z] * size + y],
-                        g * quadform[x * size + y] * syn0[focuses[z] * size + x]);
-        atomicAdd(&syn0[focuses[z] * size + x], 
-                g * quadform[x * size + y] * negval);
+        if (false) {
+                syn1neg[ctxes[z] * size + y] += 
+                        g * quadform[x * size + y] * syn0[focuses[z] * size + x];
+                syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
+        }
+        else {
+                atomicAdd(&syn1neg[ctxes[z] * size + y],
+                                g * quadform[x * size + y] * syn0[focuses[z] * size + x]);
+                atomicAdd(&syn0[focuses[z] * size + x], 
+                                g * quadform[x * size + y] * negval);
+        } 
 
-        // syn1neg[ctxes[z] * size + y] += 
-        //                 g * quadform[x * size + y] * syn0[focuses[z] * size + x];
-        // syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
+
 
 
 }
@@ -569,7 +599,6 @@ __global__ void train(const int size, const int nsamples,
 void runkernels(int nsamples, int *labels, 
                 unsigned long long *focuses, 
                 unsigned long long *ctxes) {
-        const int TX = 32, TY = 32, TZ = 1;
 
         dim3 threadDims(TX, TY, TZ);
         dim3 blockDims(layer1_size / TX + (layer1_size%TX != 0), 
@@ -641,7 +670,7 @@ void *TrainModelThread(void *id) {
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
-        if (word_count - last_word_count > 10) {
+        if (word_count - last_word_count > 1) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;
             if ((debug_mode > 1)) {

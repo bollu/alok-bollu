@@ -19,6 +19,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "vec.h"
+#include <cooperative_groups.h>
+
+using namespace cooperative_groups;
+
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -496,8 +500,8 @@ inline float sigmoid(float x) {
 
 //x, y = value
 //z = data point
-const int TX = 8, TY = 8, TZ = 1;
-const int CACHE_SIZE = TX * TY + 2;
+const int TX = 32, TY = 32, TZ = 1;
+const int CACHE_SIZE = TX * TY;
 __global__ void dots(const int size, const int nsamples,
                 const real *syn0, const real *quadform, const real *syn1neg, 
                 real *dots, // dots: [z]
@@ -516,8 +520,16 @@ __global__ void dots(const int size, const int nsamples,
 
 
         // dot product of (aT Q b)_xy for sample 'z'.
-        real xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
+        real xydot = 0;
+        if (false) {
+            xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
                 syn1neg[ctxes[z] * size + y];
+        } else {
+                const bool enabled = x == y;
+                if (enabled) {
+                        xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
+                }
+        }
 
         // threads are in a logical grid of [TY x TX]
         if (true) {
@@ -537,9 +549,10 @@ __global__ void dots(const int size, const int nsamples,
                         atomicAdd(&dots[z], cache[0]);
                 }
         } else{ 
-                // atomicAdd(&dots[z], xydot);
-                dots[z] += xydot;
+                atomicAdd(&dots[z], xydot);
+                // dots[z] += xydot;
         }
+
 
 
 }
@@ -585,16 +598,91 @@ __global__ void train(const int size, const int nsamples,
                 syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
         }
         else {
+                const bool enabled = x == y;
+                if (enabled) {
+                atomicAdd(&syn1neg[ctxes[z] * size + y],
+                                g  * syn0[focuses[z] * size + x]);
+                atomicAdd(&syn0[focuses[z] * size + x], 
+                                g  * negval);
+                }
+        } 
+
+
+}
+
+__global__ void combined(const int size, const int nsamples,
+                real *syn0, const real *quadform, real *syn1neg, 
+                real *dots, // dots: [z]
+                const unsigned long long *focuses,
+                const unsigned long long *ctxes,
+                const int *labels,
+                float alpha) {
+
+        __shared__ float cache[CACHE_SIZE];
+
+
+
+        const int x = blockIdx.x * blockDim.x + threadIdx.x;
+        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+        const int z = blockIdx.z * blockDim.z + threadIdx.z;
+
+        if (x >= size || y >= size || z >= nsamples) { return; }
+
+
+        // dot product of (aT Q b)_xy for sample 'z'.
+        real xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
+                syn1neg[ctxes[z] * size + y];
+
+        // threads are in a logical grid of [TY x TX]
+        if (true) {
+                const int curix = threadIdx.y *TX + threadIdx.x;
+                cache[curix] = xydot;
+
+                int partition = (TX * TY) / 2;
+                while (partition > 0) {
+                        if (curix < partition) {
+                                __syncthreads();
+                                cache[curix] += cache[curix + partition];
+                        }
+                        partition = partition / 2;
+                }
+                __syncthreads();
+                if (curix == 0) {
+                        atomicAdd(&dots[z], cache[0]);
+                }
+        } else{ 
+                atomicAdd(&dots[z], xydot);
+                // dots[z] += xydot;
+        }
+
+        // =============now pull gradients===================
+        // TODO: how to use grid groups?
+        // grid_group grid = grid_group::this_grid();
+
+        // error
+        const float err = labels[z] - sigmoidGPU(dots[z]);
+        // *total_loss += err * err;
+        // atomicAdd(total_loss, err * err);
+
+        // gradient
+        const float g = err * alpha;
+
+        const float negval = syn1neg[ctxes[z] * size + y];
+
+        if (false) {
+                syn1neg[ctxes[z] * size + y] += 
+                        g * quadform[x * size + y] * syn0[focuses[z] * size + x];
+                syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
+        }
+        else {
                 atomicAdd(&syn1neg[ctxes[z] * size + y],
                                 g * quadform[x * size + y] * syn0[focuses[z] * size + x]);
                 atomicAdd(&syn0[focuses[z] * size + x], 
                                 g * quadform[x * size + y] * negval);
         } 
 
-
-
-
 }
+
 
 void runkernels(int nsamples, int *labels, 
                 unsigned long long *focuses, 
@@ -622,16 +710,24 @@ void runkernels(int nsamples, int *labels,
                         nsamples * sizeof(int), 
                         cudaMemcpyHostToDevice); 
 
-        dots<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                        dev_syn0, dev_quadform, dev_syn1neg, 
-                        dev_dots, dev_focuses, dev_ctxes);
-        train<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                        dev_labels, 
-                        dev_dots,
-                        dev_syn0, dev_quadform, dev_syn1neg,
-                        alpha,
-                        dev_focuses,
-                        dev_ctxes);
+        if (false) {
+                combined<<<blockDims, threadDims>>>(layer1_size, nsamples,
+                                dev_syn0, dev_quadform, dev_syn1neg,
+                                dev_dots, 
+                                dev_focuses, dev_ctxes, dev_labels,
+                                alpha);
+        } else {
+                dots<<<blockDims, threadDims>>>(layer1_size, nsamples,
+                                dev_syn0, dev_quadform, dev_syn1neg, 
+                                dev_dots, dev_focuses, dev_ctxes);
+                train<<<blockDims, threadDims>>>(layer1_size, nsamples,
+                                dev_labels, 
+                                dev_dots,
+                                dev_syn0, dev_quadform, dev_syn1neg,
+                                alpha,
+                                dev_focuses,
+                                dev_ctxes);
+        }
         // float total_loss;
         // cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
         // printf("\ntotal loss: %4.2f\n", total_loss);

@@ -592,6 +592,7 @@ __global__ void train(const int size, const int nsamples,
 
         const float negval = syn1neg[ctxes[z] * size + y];
 
+        // these do really shittily without atomics.
         if (false) {
                 syn1neg[ctxes[z] * size + y] += 
                         g * quadform[x * size + y] * syn0[focuses[z] * size + x];
@@ -600,10 +601,10 @@ __global__ void train(const int size, const int nsamples,
         else {
                 const bool enabled = x == y;
                 if (enabled) {
-                atomicAdd(&syn1neg[ctxes[z] * size + y],
-                                g  * syn0[focuses[z] * size + x]);
-                atomicAdd(&syn0[focuses[z] * size + x], 
-                                g  * negval);
+                        atomicAdd(&syn1neg[ctxes[z] * size + y],
+                                        g  * syn0[focuses[z] * size + x]);
+                        atomicAdd(&syn0[focuses[z] * size + x], 
+                                        g  * negval);
                 }
         } 
 

@@ -536,8 +536,7 @@ __global__ void train(const int size, const int nsamples,
                  real *syn1neg,
                  const real alpha,
                  const unsigned long long *focuses,
-                 const unsigned long long *ctxes,
-                 float *total_loss) {
+                 const unsigned long long *ctxes) {
 
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
         const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -548,7 +547,7 @@ __global__ void train(const int size, const int nsamples,
         // error
         const float err = labels[z] - sigmoidGPU(dots[z]);
         // *total_loss += err * err;
-        atomicAdd(total_loss, err * err);
+        // atomicAdd(total_loss, err * err);
 
         // gradient
         const float g = err * alpha;
@@ -579,7 +578,7 @@ void runkernels(int nsamples, int *labels,
     
 
         cudaMemset(dev_dots, 0, nsamples * sizeof(real));
-        cudaMemset(dev_total_loss, 0, sizeof(real));
+        // cudaMemset(dev_total_loss, 0, sizeof(real));
 
         cudaMemcpy(dev_focuses, 
                         focuses, 
@@ -603,11 +602,9 @@ void runkernels(int nsamples, int *labels,
                         dev_syn0, dev_quadform, dev_syn1neg,
                         alpha,
                         dev_focuses,
-                        dev_ctxes,
-                        dev_total_loss);
-        float total_loss;
-
-        cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
+                        dev_ctxes);
+        // float total_loss;
+        // cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
         // printf("\ntotal loss: %4.2f\n", total_loss);
 }
 

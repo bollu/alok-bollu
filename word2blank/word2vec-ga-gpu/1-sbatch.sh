@@ -20,7 +20,7 @@ mkdir -p slurm/
 
 make word2vec
 head -c 1000000 text8 > text0
-cuda-memcheck ./word2vec -train text0 -output models/text8-size=128.bin -cbow 0 -size 16  \
+./word2vec -train text0 -output models/text8-size=128.bin -cbow 0 -size 16  \
     -window 4 -negative 10 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 15 \
     -alpha 0.01
 # ./1-save-models.sh

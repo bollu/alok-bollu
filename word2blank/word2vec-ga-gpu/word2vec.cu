@@ -525,7 +525,8 @@ __global__ void dots(const int size, const int nsamples,
             xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
                 syn1neg[ctxes[z] * size + y];
         } else {
-                const bool enabled = x == y;
+                const bool enabled = ((x & y) == x);
+                // const bool enabled = x == y;
                 if (enabled) {
                         xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
                 }
@@ -599,7 +600,8 @@ __global__ void train(const int size, const int nsamples,
                 syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
         }
         else {
-                const bool enabled = x == y;
+                const bool enabled = ((x & y) == x);
+                // const bool enabled = x == y;
                 if (enabled) {
                         atomicAdd(&syn1neg[ctxes[z] * size + y],
                                         g  * syn0[focuses[z] * size + x]);

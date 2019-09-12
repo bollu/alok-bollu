@@ -47,12 +47,15 @@ int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5,
     num_threads = 12, min_reduce = 1;
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
+long long log_layer1_size = -1;
+
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0,
           classes = 0;
 real alpha = 0.025, starting_alpha, sample = 1e-3;
 Vec *syn0, *syn1, *syn1neg;
 real *quadform;
 real *dev_syn0, *dev_syn1neg, *dev_quadform;
+real *dev_gsyn0, *dev_gsyn1neg;
 real *dev_dots;
 
 const int NSAMPLES_PER_KERNEL_LAUNCH = 4096;
@@ -401,14 +404,16 @@ void InitNet() {
     cudaMalloc((void **)&dev_syn0, 
                     (long long) vocab_size * layer1_size * sizeof(real));
 
+    cudaMalloc((void **)&dev_gsyn0, 
+                    (long long) vocab_size * layer1_size * sizeof(real));
+
     printf("allocating syn0...");
     for (a = 0; a < vocab_size; ++a) {
         new (Vec)(syn0[a]);
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
-                               layer1_size);
+            syn0[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
         // copy vector to host
         cudaMemcpy(dev_syn0 + layer1_size * a, syn0[a].v, layer1_size *
@@ -444,7 +449,11 @@ void InitNet() {
 
     cudaMalloc((void **)&dev_syn1neg, 
                     (long long) vocab_size * layer1_size * sizeof(real));
+
     cudaMemset(dev_syn1neg, 0, vocab_size * layer1_size * sizeof(real));
+
+    cudaMalloc((void **)&dev_gsyn1neg, 
+                    (long long) vocab_size * layer1_size * sizeof(real));
 
     printf("%callocated syn1neg.\t\t\t\t\n", 13);
 
@@ -502,7 +511,8 @@ inline float sigmoid(float x) {
 //z = data point
 const int TX = 32, TY = 32, TZ = 1;
 const int CACHE_SIZE = TX * TY;
-__global__ void dots(const int size, const int nsamples,
+
+__global__ void dots(const int size, const int logsize, const int nsamples,
                 const real *syn0, const real *quadform, const real *syn1neg, 
                 real *dots, // dots: [z]
                 const unsigned long long *focuses,
@@ -520,42 +530,34 @@ __global__ void dots(const int size, const int nsamples,
 
 
         // dot product of (aT Q b)_xy for sample 'z'.
+        const bool enabled = (x & y) == x;
         real xydot = 0;
-        if (false) {
-            xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
-                syn1neg[ctxes[z] * size + y];
-        } else {
-                const bool enabled = ((x & y) == x);
-                // const bool enabled = x == y;
-                if (enabled) {
-                        xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
-                }
+        if (enabled) {
+                xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
+                const int delta = __popc(y) - __popc(x);
+                // const int delta = 0;
+                assert(delta >= 0);
+                xydot /= (1 << delta);
         }
+
 
         // threads are in a logical grid of [TY x TX]
-        if (true) {
-                const int curix = threadIdx.y *TX + threadIdx.x;
-                cache[curix] = xydot;
+        const int curix = threadIdx.y *TX + threadIdx.x;
+        cache[curix] = xydot;
 
-                int partition = (TX * TY) / 2;
-                while (partition > 0) {
-                        if (curix < partition) {
-                                __syncthreads();
-                                cache[curix] += cache[curix + partition];
-                        }
-                        partition = partition / 2;
+        int partition = (TX * TY) / 2;
+        while (partition > 0) {
+                if (curix < partition) {
+                        __syncthreads();
+                        cache[curix] += cache[curix + partition];
                 }
-                __syncthreads();
-                if (curix == 0) {
-                        atomicAdd(&dots[z], cache[0]);
-                }
-        } else{ 
-                atomicAdd(&dots[z], xydot);
-                // dots[z] += xydot;
+                partition = partition / 2;
         }
-
-
-
+        __syncthreads();
+        // 0th thread
+        if (curix == 0) {
+                atomicAdd(&dots[z], cache[0]);
+        }
 }
 
 __device__ float sigmoidGPU(float x) {
@@ -563,16 +565,18 @@ __device__ float sigmoidGPU(float x) {
     if (x > 5) { return 1; }
     if (x < -5) { return 0; }
 
-    float e = powf(2, x);
-    return e / (1 + e);
+    float e = __powf(2, x);
+    return e / (1.0 + e);
 }
 
-__global__ void train(const int size, const int nsamples,
+__global__ void calc_gradients(const int size, const int logsize, const int nsamples,
                  const int *labels,
                  const real *dots,
-                 real *syn0,
+                 const real *syn0,
                  const real *quadform,
-                 real *syn1neg,
+                 const real *syn1neg,
+                 real *gsyn0, real *gsyn1neg,
+
                  const real alpha,
                  const unsigned long long *focuses,
                  const unsigned long long *ctxes) {
@@ -584,108 +588,38 @@ __global__ void train(const int size, const int nsamples,
         if (x >= size || y >= size || z >= nsamples) { return; }
 
         // error
-        const float err = labels[z] - sigmoidGPU(dots[z]);
-        // *total_loss += err * err;
-        // atomicAdd(total_loss, err * err);
+        const bool enabled = (x & y) == x;
+        // const bool enabled = ((y & x) == x);
 
-        // gradient
-        const float g = err * alpha;
-
-        const float negval = syn1neg[ctxes[z] * size + y];
-
-        // these do really shittily without atomics.
-        if (false) {
-                syn1neg[ctxes[z] * size + y] += 
-                        g * quadform[x * size + y] * syn0[focuses[z] * size + x];
-                syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
+        if (enabled) {
+            const float err = (labels[z] - sigmoidGPU(dots[z])) * alpha;
+            const int delta = __popc(y) - __popc(x);
+            // const int delta = 0;
+            assert(delta >= 0);
+            atomicAdd(&gsyn1neg[ctxes[z] * size + y], err * syn0[focuses[z] * size + x] / (1 << delta));
+            atomicAdd(&gsyn0[focuses[z] * size + x], err  * syn1neg[ctxes[z] * size + y] / (1 << delta));
         }
-        else {
-                const bool enabled = ((x & y) == x);
-                // const bool enabled = x == y;
-                if (enabled) {
-                        atomicAdd(&syn1neg[ctxes[z] * size + y],
-                                        g  * syn0[focuses[z] * size + x]);
-                        atomicAdd(&syn0[focuses[z] * size + x], 
-                                        g  * negval);
-                }
-        } 
-
-
 }
 
-__global__ void combined(const int size, const int nsamples,
-                real *syn0, const real *quadform, real *syn1neg, 
-                real *dots, // dots: [z]
-                const unsigned long long *focuses,
-                const unsigned long long *ctxes,
-                const int *labels,
-                float alpha) {
-
-        __shared__ float cache[CACHE_SIZE];
-
+// LAYER1SIZE x NSAMPLES
+__global__ void backprop(const int layer1_size, const int vocab_size,
+        real *syn0, const real *gsyn0, 
+        real *syn1neg, const real *gsyn1neg,
+        unsigned long long *focuses,
+        unsigned long long *ctxes) {
 
 
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
         const int y = blockIdx.y * blockDim.y + threadIdx.y;
-        const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-        if (x >= size || y >= size || z >= nsamples) { return; }
+        if (x >= layer1_size || y >= vocab_size) { return; }
 
+        atomicAdd(&syn0[y * layer1_size + x], gsyn0[y * layer1_size + x]);
+        atomicAdd(&syn1neg[y * layer1_size + x], gsyn1neg[y * layer1_size + x]);
 
-        // dot product of (aT Q b)_xy for sample 'z'.
-        real xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
-                syn1neg[ctxes[z] * size + y];
-
-        // threads are in a logical grid of [TY x TX]
-        if (true) {
-                const int curix = threadIdx.y *TX + threadIdx.x;
-                cache[curix] = xydot;
-
-                int partition = (TX * TY) / 2;
-                while (partition > 0) {
-                        if (curix < partition) {
-                                __syncthreads();
-                                cache[curix] += cache[curix + partition];
-                        }
-                        partition = partition / 2;
-                }
-                __syncthreads();
-                if (curix == 0) {
-                        atomicAdd(&dots[z], cache[0]);
-                }
-        } else{ 
-                atomicAdd(&dots[z], xydot);
-                // dots[z] += xydot;
-        }
-
-        // =============now pull gradients===================
-        // TODO: how to use grid groups?
-        // grid_group grid = grid_group::this_grid();
-
-        // error
-        const float err = labels[z] - sigmoidGPU(dots[z]);
-        // *total_loss += err * err;
-        // atomicAdd(total_loss, err * err);
-
-        // gradient
-        const float g = err * alpha;
-
-        const float negval = syn1neg[ctxes[z] * size + y];
-
-        if (false) {
-                syn1neg[ctxes[z] * size + y] += 
-                        g * quadform[x * size + y] * syn0[focuses[z] * size + x];
-                syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
-        }
-        else {
-                atomicAdd(&syn1neg[ctxes[z] * size + y],
-                                g * quadform[x * size + y] * syn0[focuses[z] * size + x]);
-                atomicAdd(&syn0[focuses[z] * size + x], 
-                                g * quadform[x * size + y] * negval);
-        } 
-
+        // syn0[focuses[y] * layer1_size + x] +=  gsyn0[focuses[y] * layer1_size + x];
+        // syn1neg[ctxes[y] * layer1_size + x] += gsyn1neg[ctxes[y] * layer1_size + x];
 }
-
 
 void runkernels(int nsamples, int *labels, 
                 unsigned long long *focuses, 
@@ -697,8 +631,9 @@ void runkernels(int nsamples, int *labels,
                         nsamples / TZ + (nsamples % TZ != 0));
     
 
-        cudaMemset(dev_dots, 0, nsamples * sizeof(real));
-        // cudaMemset(dev_total_loss, 0, sizeof(real));
+        cudaMemset(dev_dots, 0, NSAMPLES_PER_KERNEL_LAUNCH * sizeof(real));
+        cudaMemset(dev_gsyn1neg, 0, layer1_size * vocab_size * sizeof(real));
+        cudaMemset(dev_gsyn0, 0, layer1_size * vocab_size * sizeof(real));
 
         cudaMemcpy(dev_focuses, 
                         focuses, 
@@ -713,24 +648,28 @@ void runkernels(int nsamples, int *labels,
                         nsamples * sizeof(int), 
                         cudaMemcpyHostToDevice); 
 
-        if (false) {
-                combined<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                                dev_syn0, dev_quadform, dev_syn1neg,
-                                dev_dots, 
-                                dev_focuses, dev_ctxes, dev_labels,
-                                alpha);
-        } else {
-                dots<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                                dev_syn0, dev_quadform, dev_syn1neg, 
-                                dev_dots, dev_focuses, dev_ctxes);
-                train<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                                dev_labels, 
-                                dev_dots,
-                                dev_syn0, dev_quadform, dev_syn1neg,
-                                alpha,
-                                dev_focuses,
-                                dev_ctxes);
-        }
+        dots<<<blockDims, threadDims>>>(layer1_size, log_layer1_size, nsamples,
+                dev_syn0, dev_quadform, dev_syn1neg, 
+                dev_dots, dev_focuses, dev_ctxes);
+        calc_gradients<<<blockDims, threadDims>>>(layer1_size, log_layer1_size, nsamples,
+                dev_labels, 
+                dev_dots,
+                dev_syn0, dev_quadform, dev_syn1neg,
+                dev_gsyn0, dev_gsyn1neg,
+                alpha,
+                dev_focuses,
+                dev_ctxes);
+
+        const int TX_BACKPROP = 512;
+        const int TY_BACKPROP = 2;
+        dim3 backpropThreadDims(TX_BACKPROP, TY_BACKPROP);
+        dim3 backpropDims(layer1_size / TX_BACKPROP + (layer1_size%TX_BACKPROP != 0), 
+                        vocab_size / TY_BACKPROP + (vocab_size % TY_BACKPROP != 0));
+
+        backprop<<<backpropDims, backpropThreadDims>>>(layer1_size, vocab_size,
+                dev_syn0, dev_gsyn0,
+                dev_syn1neg, dev_gsyn1neg,
+                dev_focuses, dev_ctxes);
         // float total_loss;
         // cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
         // printf("\ntotal loss: %4.2f\n", total_loss);
@@ -932,7 +871,6 @@ void *TrainModelThread(void *id) {
                 if (last_word == -1) continue;
                 l1 = last_word * layer1_size;
 
-                Vec *syn0v = &syn0[last_word];
                 // neu1e.fillzero();
                 // for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
                 // HIERARCHICAL SOFTMAX
@@ -1012,7 +950,7 @@ void *TrainModelThread(void *id) {
     assert(ix < NSAMPLES_PER_KERNEL_LAUNCH);
 
     // consume leftover data.
-    runkernels(ix, labels, focuses, ctxes);
+    // runkernels(ix, labels, focuses, ctxes);
     fclose(fi);
     // free(neu1);
     neu1e.freemem();
@@ -1034,9 +972,12 @@ void TrainModel() {
     InitNet();
     if (negative > 0) InitUnigramTable();
     start = clock();
-    for (a = 0; a < num_threads; a++)
-        pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
-    for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+
+    if (iter > 0) {
+            for (a = 0; a < num_threads; a++)
+                    pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
+            for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+    }
     fo = fopen(output_file, "wb");
     if (classes == 0) {
         // Save the word vectors
@@ -1205,6 +1146,9 @@ int mainw2v(int argc, char **argv) {
     if ((i = ArgPos((char *)"-size", argc, argv)) > 0)
         layer1_size = atoi(argv[i + 1]);
     fprintf(stdout, "size: %lld\n", layer1_size);
+    log_layer1_size = log2((int) layer1_size);
+    assert(1 << log_layer1_size == layer1_size);
+
     if ((i = ArgPos((char *)"-train", argc, argv)) > 0)
         strcpy(train_file, argv[i + 1]);
     if ((i = ArgPos((char *)"-save-vocab", argc, argv)) > 0)

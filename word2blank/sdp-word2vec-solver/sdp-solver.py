@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 import picos
 from picos.solvers import *
+import cvxopt as cvx
+import numpy as np
+import cvxopt.lapack
+import networkx as nx
 import sys
 from random import *
 
@@ -42,16 +46,18 @@ def unit_vector_constraint(problem, v, eps):
 
 def test_solver():
     P = picos.Problem()
-    x = P.add_variable("x", 1, vtype="continuous");
+    X = P.add_variable("X",(4,4),"symmetric")
+    Y = P.add_variable("Y",(4,4),"symmetric")
+    #C1 = P.add_constraint(1-X|Y<=0)
+    C2 = P.add_constraint(X|0<=3)
     one = picos.new_param("one", 1)
-    P.set_objective("min", x | x)
+    #P.set_objective("min", X|Y) 
     # P.set_objective("find", 0)
     print("problem:")
     print(P)
     print("solution:")
-    # P.solve(solver='mosek')
-    P.solve()
-    print("x: ", x.value)
+    P.solve(verbose = 0, solver='cvxopt')
+    print("X: ", X.value)
 
 if __name__ == "__main__":
     test_solver()

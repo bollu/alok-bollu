@@ -407,8 +407,7 @@ void InitNet() {
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
-                               layer1_size);
+            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) / (layer1_size));
         }
         // copy vector to host
         cudaMemcpy(dev_syn0 + layer1_size * a, syn0[a].v, layer1_size *
@@ -489,12 +488,12 @@ void InitNet() {
     CreateBinaryTree();
 }
 
-inline float sigmoid(float x) {
+inline real sigmoid(real x) {
     // we are trying to calculate sigmoid(127)
     if (x > 5) { return 1; }
     if (x < -5) { return 0; }
 
-    float exp = powf(2, x);
+    real exp = powf(2, x);
     return exp / (1 + exp);
 }
 
@@ -508,7 +507,7 @@ __global__ void dots(const int size, const int nsamples,
                 const unsigned long long *focuses,
                 const unsigned long long *ctxes) {
 
-        __shared__ float cache[CACHE_SIZE];
+        __shared__ real cache[CACHE_SIZE];
 
 
 
@@ -521,7 +520,8 @@ __global__ void dots(const int size, const int nsamples,
 
         // dot product of (aT Q b)_xy for sample 'z'.
         real xydot = 0;
-        // const bool enabled = ((x & y) == x);
+        // const bool enabled = ((x & y) == x) & ((x & y) == y);
+        // const bool enabled = (x & y) == x && (__popc(y) - __popc(x) == 0);
         const bool enabled = x == y;
         if (enabled) {
                 xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
@@ -547,12 +547,12 @@ __global__ void dots(const int size, const int nsamples,
 
 }
 
-__device__ float sigmoidGPU(float x) {
+__device__ real sigmoidGPU(real x) {
     // we are trying to calculate sigmoid(127)
     if (x > 5) { return 1; }
     if (x < -5) { return 0; }
 
-    float e = powf(2, x);
+    real e = powf(2, x);
     return e / (1 + e);
 }
 
@@ -573,17 +573,19 @@ __global__ void train(const int size, const int nsamples,
         if (x >= size || y >= size || z >= nsamples) { return; }
 
         // error
-        const float err = labels[z] - sigmoidGPU(dots[z]);
+        const real err = labels[z] - sigmoidGPU(dots[z]);
         // *total_loss += err * err;
         // atomicAdd(total_loss, err * err);
 
         // gradient
-        const float g = err * alpha;
+        const real g = err * alpha;
 
-        const float negval = syn1neg[ctxes[z] * size + y];
+        const real negval = syn1neg[ctxes[z] * size + y];
 
         // these do really shittily without atomics.
         const bool enabled = x == y;
+        // const bool enabled = ((x & y) == x) & ((x & y) == y);
+        // const bool enabled = ((x & y) == x) && (__popc(y) - __popc(x) == 0);
         if (enabled) {
                 atomicAdd(&syn1neg[ctxes[z] * size + y], g  * syn0[focuses[z] * size + x]);
                 atomicAdd(&syn0[focuses[z] * size + x], g  * negval);
@@ -598,9 +600,9 @@ __global__ void combined(const int size, const int nsamples,
                 const unsigned long long *focuses,
                 const unsigned long long *ctxes,
                 const int *labels,
-                float alpha) {
+                real alpha) {
 
-        __shared__ float cache[CACHE_SIZE];
+        __shared__ real cache[CACHE_SIZE];
 
 
 
@@ -642,14 +644,14 @@ __global__ void combined(const int size, const int nsamples,
         // grid_group grid = grid_group::this_grid();
 
         // error
-        const float err = labels[z] - sigmoidGPU(dots[z]);
+        const real err = labels[z] - sigmoidGPU(dots[z]);
         // *total_loss += err * err;
         // atomicAdd(total_loss, err * err);
 
         // gradient
-        const float g = err * alpha;
+        const real g = err * alpha;
 
-        const float negval = syn1neg[ctxes[z] * size + y];
+        const real negval = syn1neg[ctxes[z] * size + y];
 
         if (false) {
                 syn1neg[ctxes[z] * size + y] += 
@@ -710,7 +712,7 @@ void runkernels(int nsamples, int *labels,
                                 dev_focuses,
                                 dev_ctxes);
         }
-        // float total_loss;
+        // real total_loss;
         // cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
         // printf("\ntotal loss: %4.2f\n", total_loss);
 }

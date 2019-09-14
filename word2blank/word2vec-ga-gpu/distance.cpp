@@ -123,7 +123,7 @@ void cosine() {
                 // bool enabled = a & b == a;
                 bool enabled = a == b;
                 if (!enabled) continue;
-                dist += vec[a] * M[a + c * size];
+                dist += vec[a] * M[b + c * size];
             }
         }
 

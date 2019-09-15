@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -412,6 +413,10 @@ void *TrainModelThread(void *id) {
     char eof = 0;
     real f, g;
     clock_t now;
+
+    real *random_arr = (real *)calloc(1000 + vocab_size, sizeof(real));
+    int random_ix = 0;
+
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
     real *neu1e = (real *)calloc(layer1_size, sizeof(real));
     real total_loss = 0;
@@ -638,8 +643,16 @@ void *TrainModelThread(void *id) {
                                 neu1e[c] += g * syn1neg[c + l2];
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] += g * syn0[c + l1];
+
+                            random_arr[random_ix++] = l2;
+                            if (random_ix > 1000) random_ix = 0;
+
                         }
                     // Learn weights input -> hidden
+                    next_random =
+                        next_random *
+                        (unsigned long long)25214903917 +
+                        11;
                     for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
                 }
         }

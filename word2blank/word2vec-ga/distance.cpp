@@ -35,6 +35,35 @@ char *vocab;
 real *quadform;
 real *Ay;
 
+void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
+    // number of values in each bucket.
+    int buckets[nbuckets];
+    for(int i = 0; i < nbuckets; ++i) buckets[i] = 0;
+
+    real vmax = vals[0];
+    real vmin = vals[0];
+    for(int i = 0; i < n; ++i) vmax = vals[i] > vmax ? vals[i] : vmax;
+    for(int i = 0; i < n; ++i) vmin = vals[i] < vmin ? vals[i] : vmin;
+
+    real multiple = (vmax - vmin) / nbuckets;
+
+    for(int i = 0; i < n; ++i) {
+        int b = floor((vals[i] - vmin) / multiple);
+        b = b >= nbuckets ? (nbuckets -1): (b < 0 ? 0 : b);
+        buckets[b]++;
+    }
+    
+    int total = 0;
+    for(int i = 0; i < nbuckets; ++i) total += buckets[i];
+
+    printf("%s: |", name);
+    for(int i = 0; i < nbuckets; ++i) {
+        printf(" %f ", ((buckets[i] / (real)total)) * 100.0);
+    }
+    printf("|");
+
+}
+
 // find dot product of two words
 void dot() {
     float lensq;
@@ -78,6 +107,7 @@ real getNormalizationFactorR(int w) {
 }
 
 void cosine() {
+    real vals[words];
 
     
     {
@@ -123,6 +153,7 @@ void cosine() {
             dist = vec.dotContainment(quadform, M[c],  Ay, nullptr);
             dist /= vecnorm; 
             dist /= curnorm;
+            vals[c] = dist;
 
             for (a = 0; a < N; a++) {
                 if (dist > bestd[a]) {
@@ -137,6 +168,7 @@ void cosine() {
             }
         }
         for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+        plotHistogram("distances", vals, words, 10);
     }
 
 
@@ -172,6 +204,7 @@ void cosine() {
             dist = M[c].dotContainment(quadform, vec,  Ay, nullptr);
             dist /= curnorm;
             dist /= vecnorm;
+            vals[c] = dist;
 
             for (a = 0; a < N; a++) {
                 if (dist > bestd[a]) {
@@ -186,6 +219,8 @@ void cosine() {
             }
         }
         for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+        plotHistogram("distances", vals, words, 10);
     }
 }
 

@@ -21,6 +21,8 @@
 #define N 40
 #define max_w 50
 
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
 typedef float real;
 
 FILE *f;
@@ -116,7 +118,14 @@ void cosine() {
             if (bi[b] == c) a = 1;
         if (a == 1) continue;
         dist = 0;
-        for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+        for (a = 0; a < size; a++) { 
+            for(int b = 0; b < size; b++) {
+                // bool enabled = a & b == a;
+                bool enabled = a == b;
+                if (!enabled) continue;
+                dist += vec[a] * M[b + c * size];
+            }
+        }
 
         // store the distance value
         vals[c] = dist;
@@ -178,8 +187,11 @@ int main(int argc, char **argv) {
         len = 0;
         for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
         len = sqrt(len);
-        printf("%s len: %4.2f\n", &vocab[b * max_w], len);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
+
+        printf("%20s: ", &vocab[b * max_w]);
+        for(a = 0; a < min(size, 30); a++) printf("%10.3e ", M[a + b * size]);
+        printf("\n");
     }
     fclose(f);
     while (1) {

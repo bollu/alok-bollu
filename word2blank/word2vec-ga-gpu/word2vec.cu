@@ -53,11 +53,17 @@ real alpha = 0.025, starting_alpha, sample = 1e-3;
 Vec *syn0, *syn1, *syn1neg;
 real *quadform;
 real *dev_syn0, *dev_syn1neg, *dev_quadform;
+real *dev_gsyn0, *dev_gsyn1neg;
+// mask for whether gradient has been updated
+bool *dev_mask_syn0;
+bool *dev_mask_syn1neg;
 real *dev_dots;
 
-const int NSAMPLES_PER_KERNEL_LAUNCH = 4096;
+
+const int NSAMPLES_PER_KERNEL_LAUNCH = 1e3;
 int *dev_labels;
 unsigned long long *dev_focuses, *dev_ctxes;
+unsigned long long *dev_uniq_focuses, *dev_uniq_ctxes;
 
 
 real *expTable;
@@ -70,6 +76,16 @@ int *table;
 real *dev_total_loss;
 
 
+unsigned long long calcBlockSize(unsigned long long total, unsigned long long thread) {
+    if (total / thread == 0) return 1;
+    return (total / thread) + (total % thread != 0);
+}
+
+__global__ void zeroRealKernel(const int size, real *r) {
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= size) return;
+    r[x] = 0.0;
+}
 
 
 void InitUnigramTable() {
@@ -401,14 +417,16 @@ void InitNet() {
     cudaMalloc((void **)&dev_syn0, 
                     (long long) vocab_size * layer1_size * sizeof(real));
 
+    cudaMalloc((void **)&dev_gsyn0, 
+                    (long long) vocab_size * layer1_size * sizeof(real));
+
     printf("allocating syn0...");
     for (a = 0; a < vocab_size; ++a) {
         new (Vec)(syn0[a]);
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) /
-                               layer1_size);
+            syn0[a].set(b, (((next_random & 0xFFFF) / (real)65536) - 0.5) / (layer1_size));
         }
         // copy vector to host
         cudaMemcpy(dev_syn0 + layer1_size * a, syn0[a].v, layer1_size *
@@ -444,7 +462,12 @@ void InitNet() {
 
     cudaMalloc((void **)&dev_syn1neg, 
                     (long long) vocab_size * layer1_size * sizeof(real));
-    cudaMemset(dev_syn1neg, 0, vocab_size * layer1_size * sizeof(real));
+
+    // cudaMemset(dev_syn1neg, 1132462080, vocab_size * layer1_size * sizeof(real));
+    zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_syn1neg);
+
+    cudaMalloc((void **)&dev_gsyn1neg, 
+                    (long long) vocab_size * layer1_size * sizeof(real));
 
     printf("%callocated syn1neg.\t\t\t\t\n", 13);
 
@@ -484,31 +507,53 @@ void InitNet() {
                     (long long) NSAMPLES_PER_KERNEL_LAUNCH * sizeof(unsigned long long));
 
 
+    cudaMalloc((void **)&dev_uniq_focuses, 
+                    (long long) NSAMPLES_PER_KERNEL_LAUNCH * sizeof(unsigned long long));
+
+    cudaMalloc((void **)&dev_uniq_ctxes, 
+                    (long long) NSAMPLES_PER_KERNEL_LAUNCH * sizeof(unsigned long long));
+
+
+
     cudaMalloc((void **)&dev_total_loss, (long long) sizeof(real));
+
+
+    cudaMalloc((void **)&dev_mask_syn0, 
+                    (long long) vocab_size * sizeof(bool));
+
+    cudaMalloc((void **)&dev_mask_syn1neg, 
+                    (long long) vocab_size * sizeof(bool));
 
     CreateBinaryTree();
 }
 
-inline float sigmoid(float x) {
+inline real sigmoid(real x) {
     // we are trying to calculate sigmoid(127)
     if (x > 5) { return 1; }
     if (x < -5) { return 0; }
 
-    float exp = powf(2, x);
+    real exp = powf(2, x);
     return exp / (1 + exp);
+}
+
+__device__  bool vecenabled(int x, int y) {
+        return x == y;
 }
 
 //x, y = value
 //z = data point
-const int TX = 32, TY = 32, TZ = 1;
+const int TX = 16, TY = 16, TZ = 4;
 const int CACHE_SIZE = TX * TY;
+
+
 __global__ void dots(const int size, const int nsamples,
                 const real *syn0, const real *quadform, const real *syn1neg, 
                 real *dots, // dots: [z]
                 const unsigned long long *focuses,
-                const unsigned long long *ctxes) {
+                const unsigned long long *ctxes,
+                const int dimsize) {
 
-        __shared__ float cache[CACHE_SIZE];
+        __shared__ real cache[CACHE_SIZE];
 
 
 
@@ -521,61 +566,52 @@ __global__ void dots(const int size, const int nsamples,
 
         // dot product of (aT Q b)_xy for sample 'z'.
         real xydot = 0;
-        if (false) {
-            xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
-                syn1neg[ctxes[z] * size + y];
-        } else {
-                const bool enabled = ((x & y) == x) && ((x | y) == y);
-                // const bool enabled = x == y;
-                if (enabled) {
-                        xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
-                }
+        const bool enabled = vecenabled(x, y);
+        if (enabled) {
+                xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
         }
 
-        // threads are in a logical grid of [TY x TX]
-        if (true) {
-                const int curix = threadIdx.y *TX + threadIdx.x;
-                cache[curix] = xydot;
+        const int curix = threadIdx.y *TX + threadIdx.x;
+        cache[curix] = xydot;
 
-                int partition = (TX * TY) / 2;
-                while (partition > 0) {
-                        if (curix < partition) {
-                                __syncthreads();
-                                cache[curix] += cache[curix + partition];
-                        }
-                        partition = partition / 2;
+        int partition = (TX * TY) / 2;
+        while (partition > 0) {
+                if (curix < partition) {
+                        __syncthreads();
+                        cache[curix] += cache[curix + partition];
                 }
-                __syncthreads();
-                if (curix == 0) {
-                        atomicAdd(&dots[z], cache[0]);
-                }
-        } else{ 
-                atomicAdd(&dots[z], xydot);
-                // dots[z] += xydot;
+                partition = partition / 2;
+        }
+        __syncthreads();
+        if (curix == 0) {
+                atomicAdd(&dots[z], cache[0]);
         }
 
 
 
 }
 
-__device__ float sigmoidGPU(float x) {
+__device__ real sigmoidGPU(real x) {
     // we are trying to calculate sigmoid(127)
     if (x > 5) { return 1; }
     if (x < -5) { return 0; }
 
-    float e = powf(2, x);
+    real e = powf(2, x);
     return e / (1 + e);
 }
 
-__global__ void train(const int size, const int nsamples,
+__global__ void grad(const int size, const int nsamples,
                  const int *labels,
                  const real *dots,
                  real *syn0,
+                 real *gsyn0,
                  const real *quadform,
                  real *syn1neg,
+                 real *gsyn1neg,
                  const real alpha,
                  const unsigned long long *focuses,
-                 const unsigned long long *ctxes) {
+                 const unsigned long long *ctxes,
+                 const int dimsize) {
 
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
         const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -584,120 +620,135 @@ __global__ void train(const int size, const int nsamples,
         if (x >= size || y >= size || z >= nsamples) { return; }
 
         // error
-        const float err = labels[z] - sigmoidGPU(dots[z]);
+        const real err = labels[z] - sigmoidGPU(dots[z]);
         // *total_loss += err * err;
         // atomicAdd(total_loss, err * err);
 
         // gradient
-        const float g = err * alpha;
-
-        const float negval = syn1neg[ctxes[z] * size + y];
+        const real g = err * alpha;
 
         // these do really shittily without atomics.
-        if (false) {
-                syn1neg[ctxes[z] * size + y] += 
-                        g * quadform[x * size + y] * syn0[focuses[z] * size + x];
-                syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
+        const bool enabled = vecenabled(x, y);
+        // const bool enabled = ((x & y) == x) && (__popc(y) - __popc(x) == 0);
+        if (enabled) {
+                atomicAdd(&gsyn1neg[ctxes[z] * size + y], 
+                        g*syn0[focuses[z] * size + x]);
+                atomicAdd(&gsyn0[focuses[z] * size + x], 
+                        g*syn1neg[ctxes[z]*size + y]);
         }
-        else {
-                const bool enabled = ((x & y) == x) && ((x | y) == y);
-                // const bool enabled = x == y;
-                if (enabled) {
-                        atomicAdd(&syn1neg[ctxes[z] * size + y],
-                                        g  * syn0[focuses[z] * size + x]);
-                        atomicAdd(&syn0[focuses[z] * size + x], 
-                                        g  * negval);
-                }
-        } 
-
-
 }
 
-__global__ void combined(const int size, const int nsamples,
-                real *syn0, const real *quadform, real *syn1neg, 
-                real *dots, // dots: [z]
-                const unsigned long long *focuses,
-                const unsigned long long *ctxes,
-                const int *labels,
-                float alpha) {
 
-        __shared__ float cache[CACHE_SIZE];
+// __global__ void backprop(const int size, const int nsamples,
+//                  const int *labels,
+//                  const real *dots,
+//                  real *syn0,
+//                  real *gsyn0,
+//                  const real *quadform,
+//                  real *syn1neg,
+//                  real *gsyn1neg,
+//                  bool *mask_syn0,
+//                  bool *mask_syn1neg,
+//                  const real alpha,
+//                  const unsigned long long *focuses,
+//                  const unsigned long long *ctxes,
+//                  const int dimsize) {
+// 
+//         const int x = blockIdx.x * blockDim.x + threadIdx.x;
+//         const int y = blockIdx.y * blockDim.y + threadIdx.y;
+//         const int z = blockIdx.z * blockDim.z + threadIdx.z;
+// 
+//         if (x >= size || y >= size || z >= nsamples) { return; }
+// 
+//         // error
+//         const real err = labels[z] - sigmoidGPU(dots[z]);
+//         // *total_loss += err * err;
+//         // atomicAdd(total_loss, err * err);
+// 
+//         // gradient
+//         const real g = err * alpha;
+// 
+//         // these do really shittily without atomics.
+//         const bool enabled = vecenabled(x, y);
+//         // const bool enabled = ((x & y) == x) && (__popc(y) - __popc(x) == 0);
+//         if (enabled) {
+//                 if (!mask_syn0[focuses[z]]) {
+//                         atomicAdd(&syn0[focuses[z] * size + x], gsyn0[focuses[z] * size + x]);
+//                         mask_syn0[focuses[z]] = true;
+//                 }
+// 
+//                 if (!mask_syn1neg[ctxes[z]]) {
+//                         mask_syn1neg[ctxes[z]] = true;
+//                         atomicAdd(&syn1neg[focuses[z] * size + y], gsyn1neg[ctxes[z] * size + y]);
+//                 }
+//         }
+// }
 
-
+// SIZE x NSAMPLES
+__global__ void backprop2(const int size, const int nsamples,
+                 const int *labels,
+                 const real *dots,
+                 real *syn0,
+                 real *gsyn0,
+                 const real *quadform,
+                 real *syn1neg,
+                 real *gsyn1neg,
+                 bool *mask_syn0,
+                 bool *mask_syn1neg,
+                 const real alpha,
+                 const unsigned long long *focuses,
+                 const unsigned long long *ctxes,
+                 const int n_uniq_focuses,
+                 unsigned long long *uniq_focuses,
+                 const int n_uniq_ctxes,
+                 const unsigned long long *uniq_ctxes,
+                 const int dimsize) {
 
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
         const int y = blockIdx.y * blockDim.y + threadIdx.y;
-        const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-        if (x >= size || y >= size || z >= nsamples) { return; }
+        if (x >= size) { return; }
 
-
-        // dot product of (aT Q b)_xy for sample 'z'.
-        real xydot = syn0[focuses[z] * size + x] * quadform[x * size+y] *
-                syn1neg[ctxes[z] * size + y];
-
-        // threads are in a logical grid of [TY x TX]
-        if (true) {
-                const int curix = threadIdx.y *TX + threadIdx.x;
-                cache[curix] = xydot;
-
-                int partition = (TX * TY) / 2;
-                while (partition > 0) {
-                        if (curix < partition) {
-                                __syncthreads();
-                                cache[curix] += cache[curix + partition];
-                        }
-                        partition = partition / 2;
-                }
-                __syncthreads();
-                if (curix == 0) {
-                        atomicAdd(&dots[z], cache[0]);
-                }
-        } else{ 
-                atomicAdd(&dots[z], xydot);
-                // dots[z] += xydot;
+        if (y < n_uniq_focuses) {
+            atomicAdd(&syn0[uniq_focuses[y]*size + x], 
+                    0.01 * gsyn0[uniq_focuses[y]*size + x]);
         }
 
-        // =============now pull gradients===================
-        // TODO: how to use grid groups?
-        // grid_group grid = grid_group::this_grid();
-
-        // error
-        const float err = labels[z] - sigmoidGPU(dots[z]);
-        // *total_loss += err * err;
-        // atomicAdd(total_loss, err * err);
-
-        // gradient
-        const float g = err * alpha;
-
-        const float negval = syn1neg[ctxes[z] * size + y];
-
-        if (false) {
-                syn1neg[ctxes[z] * size + y] += 
-                        g * quadform[x * size + y] * syn0[focuses[z] * size + x];
-                syn0[focuses[z] * size + x] += g * quadform[x * size + y] * negval;
+        if (y < n_uniq_ctxes) {
+            atomicAdd(&syn1neg[uniq_ctxes[y]*size +x],
+                    gsyn1neg[uniq_ctxes[y]*size + x]);
         }
-        else {
-                atomicAdd(&syn1neg[ctxes[z] * size + y],
-                                g * quadform[x * size + y] * syn0[focuses[z] * size + x]);
-                atomicAdd(&syn0[focuses[z] * size + x], 
-                                g * quadform[x * size + y] * negval);
-        } 
-
 }
+
+
 
 
 void runkernels(int nsamples, int *labels, 
                 unsigned long long *focuses, 
-                unsigned long long *ctxes) {
+                unsigned long long *ctxes,
+                int n_uniq_focuses,
+                int n_uniq_ctxes,
+                unsigned long long *uniq_focuses,
+                unsigned long long *uniq_ctxes) {
 
         dim3 threadDims(TX, TY, TZ);
-        dim3 blockDims(layer1_size / TX + (layer1_size%TX != 0), 
-                        layer1_size / TY + (layer1_size % TY != 0), 
-                        nsamples / TZ + (nsamples % TZ != 0));
+        dim3 blockDims(calcBlockSize(layer1_size, TX),
+                calcBlockSize(layer1_size, TY),
+                calcBlockSize(nsamples, TZ));
     
 
-        cudaMemset(dev_dots, 0, nsamples * sizeof(real));
+        zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)), 
+                dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
+
+        zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn0);
+        zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn1neg);
+
+        // cudaMemset(dev_dots, 1132462080, nsamples * sizeof(real));
+        // TODO: do this on the GPU after a syncthreads
+        // cudaMemset(dev_mask_syn0, false, vocab_size * sizeof(bool));
+        // cudaMemset(dev_mask_syn1neg, true, vocab_size * sizeof(bool));
+        // cudaMemset(dev_gsyn0, 1132462080, vocab_size * layer1_size * sizeof(real));
+        // cudaMemset(dev_gsyn1neg, 1132462080, vocab_size * layer1_size * sizeof(real));
         // cudaMemset(dev_total_loss, 0, sizeof(real));
 
         cudaMemcpy(dev_focuses, 
@@ -708,30 +759,83 @@ void runkernels(int nsamples, int *labels,
                         ctxes, 
                         nsamples * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
+
+        cudaMemcpy(dev_uniq_focuses, 
+                        uniq_focuses, 
+                        n_uniq_focuses * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
+
+        cudaMemcpy(dev_uniq_ctxes, 
+                        uniq_ctxes, 
+                        n_uniq_ctxes * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
         cudaMemcpy(dev_labels, 
                         labels, 
                         nsamples * sizeof(int), 
                         cudaMemcpyHostToDevice); 
 
-        if (false) {
-                combined<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                                dev_syn0, dev_quadform, dev_syn1neg,
-                                dev_dots, 
-                                dev_focuses, dev_ctxes, dev_labels,
-                                alpha);
-        } else {
-                dots<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                                dev_syn0, dev_quadform, dev_syn1neg, 
-                                dev_dots, dev_focuses, dev_ctxes);
-                train<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                                dev_labels, 
-                                dev_dots,
-                                dev_syn0, dev_quadform, dev_syn1neg,
-                                alpha,
-                                dev_focuses,
-                                dev_ctxes);
-        }
-        // float total_loss;
+        assert(n_uniq_ctxes < nsamples);
+        assert(n_uniq_focuses < nsamples);
+
+        // printf("fs: %d | ctxes: %d\n", n_uniq_focuses, n_uniq_ctxes);
+        const int dimsize = 1;
+        dots<<<blockDims, threadDims>>>(layer1_size, nsamples,
+                        dev_syn0, dev_quadform, dev_syn1neg, 
+                        dev_dots, dev_focuses, dev_ctxes, dimsize);
+        grad<<<blockDims, threadDims>>>(layer1_size, nsamples,
+                        dev_labels, 
+                        dev_dots,
+                        dev_syn0, 
+                        dev_gsyn0,
+                        dev_quadform, 
+                        dev_syn1neg,
+                        dev_gsyn1neg,
+                        alpha,
+                        dev_focuses,
+                        dev_ctxes,
+                        dimsize);
+        // backprop<<<blockDims,threadDims>>>(layer1_size, nsamples,
+        //                 dev_labels,
+        //                 dev_dots,
+        //                 dev_syn0,
+        //                 dev_gsyn0,
+        //                 dev_quadform,
+        //                 dev_syn1neg,
+        //                 dev_gsyn1neg,
+        //                 dev_mask_syn0,
+        //                 dev_mask_syn1neg,
+        //                 alpha,
+        //                 dev_focuses,
+        //                 dev_ctxes,
+        //                 dimsize);
+
+        
+        const int BACKPROPTX = 32;
+        const int BACKPROPTY = 4;
+
+        dim3 backpropThreadDims(BACKPROPTX, BACKPROPTY);
+        dim3 backpropBlockDims(calcBlockSize(layer1_size, BACKPROPTX),
+                calcBlockSize(nsamples, BACKPROPTY));
+
+        backprop2<<<backpropBlockDims,backpropThreadDims>>>(layer1_size, nsamples,
+                        dev_labels,
+                        dev_dots,
+                        dev_syn0,
+                        dev_gsyn0,
+                        dev_quadform,
+                        dev_syn1neg,
+                        dev_gsyn1neg,
+                        dev_mask_syn0,
+                        dev_mask_syn1neg,
+                        alpha,
+                        dev_focuses,
+                        dev_ctxes,
+                        n_uniq_focuses,
+                        dev_uniq_focuses,
+                        n_uniq_ctxes,
+                        dev_uniq_ctxes,
+                        dimsize);
+        // real total_loss;
         // cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
         // printf("\ntotal loss: %4.2f\n", total_loss);
 }
@@ -764,7 +868,16 @@ void *TrainModelThread(void *id) {
     int ix = 0;
     int labels[NSAMPLES_PER_KERNEL_LAUNCH];
     unsigned long long ctxes[NSAMPLES_PER_KERNEL_LAUNCH],
-            focuses[NSAMPLES_PER_KERNEL_LAUNCH];
+            focuses[NSAMPLES_PER_KERNEL_LAUNCH],
+            uniq_focuses[NSAMPLES_PER_KERNEL_LAUNCH],
+            uniq_ctxes[NSAMPLES_PER_KERNEL_LAUNCH];
+    int n_uniq_focuses = 0;
+    int n_uniq_ctxes = 0;
+    bool focuses_mask[vocab_size],
+        ctxes_mask[vocab_size];
+
+    for(int i = 0; i < vocab_size; ++i) focuses_mask[i] = false;
+    for(int i = 0; i < vocab_size; ++i) ctxes_mask[i] = false;
 
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
@@ -984,12 +1097,40 @@ void *TrainModelThread(void *id) {
                         focuses[ix] = last_word;
                         ctxes[ix] = target;
 
+                        if (!focuses_mask[last_word]) {
+                            uniq_focuses[n_uniq_focuses] = last_word;
+                            n_uniq_focuses++;
+                            focuses_mask[last_word] = true;
+                        }
+
+                        if (!ctxes_mask[target]) {
+                            uniq_ctxes[n_uniq_ctxes] = target;
+                            n_uniq_ctxes++;
+                            ctxes_mask[target] = true;
+                        }
+
 
                         if (ix == NSAMPLES_PER_KERNEL_LAUNCH - 1) {
-                                runkernels(NSAMPLES_PER_KERNEL_LAUNCH,labels,
-                                                focuses, ctxes);
+                                runkernels(NSAMPLES_PER_KERNEL_LAUNCH,
+                                        labels,
+                                        focuses,
+                                        ctxes,
+                                        n_uniq_focuses,
+                                        n_uniq_ctxes,
+                                        uniq_focuses,
+                                        uniq_ctxes);
+
 
                                 ix = 0;
+                                n_uniq_ctxes = 0;
+                                n_uniq_focuses = 0;
+                                for(int i = 0; i < vocab_size; ++i) {
+                                    ctxes_mask[i] = false;
+                                }
+
+                                for(int i = 0; i < vocab_size; ++i) {
+                                    focuses_mask[i] = false;
+                                }
                         } else {
                            ix++;
                         }
@@ -1012,7 +1153,10 @@ void *TrainModelThread(void *id) {
     assert(ix < NSAMPLES_PER_KERNEL_LAUNCH);
 
     // consume leftover data.
-    runkernels(ix, labels, focuses, ctxes);
+    runkernels(ix, labels, focuses, ctxes, 
+            n_uniq_focuses, n_uniq_ctxes,
+            uniq_focuses,
+            uniq_ctxes);
     fclose(fi);
     // free(neu1);
     neu1e.freemem();
@@ -1255,6 +1399,8 @@ int mainw2v(int argc, char **argv) {
         expTable[i] =
             expTable[i] / (expTable[i] + 1);  // Precompute f(x) = x / (x + 1)
     }
+    printf("INT: %d\n", float(0.0));
+    printf("FLOAT: %f\n", 1132462080);
     TrainModel();
     return 0;
 }

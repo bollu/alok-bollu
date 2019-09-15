@@ -20,7 +20,7 @@ word2vec : word2vec.cpp vec.h
 word2phrase : word2phrase.c vec.h
 	$(CC)  word2phrase.c -o word2phrase $(CFLAGS)
 distance : distance.cpp vec.h
-	$(CC) -std=c++11 -fno-exceptions distance.cpp -o distance $(CFLAGS)
+	$(CC) -std=c++11 -fno-exceptions distance.cpp  -o distance $(CFLAGS)
 word-analogy : word-analogy.cpp vec.h
 	$(CC) -std=c++11 word-analogy.cpp -o word-analogy $(CFLAGS)
 compute-accuracy : compute-accuracy.cpp vec.h

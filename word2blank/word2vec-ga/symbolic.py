@@ -22,7 +22,8 @@ def AContainment(dim):
         for j in range(dim):
             # i subset j => i & j == i
             if i & j == i:
-                A[i][j] = 1
+                if i | j != j: raise Exception("ERROR")
+            A[i][j] = 1
     return A
 
 

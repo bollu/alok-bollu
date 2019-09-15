@@ -72,7 +72,8 @@ __attribute__((constructor)) void initCTable() {
    }
 }
 // reference implementation
-inline real dotContainmentReference(int len, const real *vthis, const real *vother, float *gbufthis, float *gbufother)  {
+inline real dotContainmentReference(int len, const real *vthis, const real
+        *vother, float *gbufthis, float *gbufother)  {
 	real dot = 0;
 	for (unsigned int i = 0; i < len; i++) {
 		for (unsigned int j = 0; j < len; j++) {
@@ -83,12 +84,7 @@ inline real dotContainmentReference(int len, const real *vthis, const real *voth
 			// provide larger dot products for more dimensions they
 			// share accurately in common
 			const real weight = [&]() {
-				return 1.0;
-
-				const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-				assert(delta >= 0);
-
-				return 1.0 / pow2(delta);
+				return 1.0 / pow2(log2((int)j));
 			}();
 
 			dot += weight * vthis[i] * vother[j];
@@ -112,17 +108,15 @@ void setupDotContainmentMat(int n, real *r) {
     for(int i = 0; i < n; ++i) {
         for(int j = 0; j < n; ++j) {
 
-            // r[i*n+j] = i == j ? 1 : 0;
-
-
             // whether i is a subset of j.
             bool subset = (i & j) == i;
             if (subset) {
-                const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-                assert(delta >= 0);
-                // r[i*n+j] = 1.0 / pow2(delta);
-                r[i*n+j] = 1;
-            } else { r[i*n+j] = 0; }
+				const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+				assert(delta >= 0);
+                r[i*n+j] = 1.0 / pow2(delta);
+            } else { 
+                r[i*n+j] = 0;
+            }
         }
     }
 }
@@ -155,22 +149,26 @@ float mulQuadForm(int dim, const float *x, const float *A, const float *y, float
             Ay, 1,
             0,  // beta
             &xAy, 1); 
+
+    if (xTA) {
                                                                                 
-    // X = DIM x 1
-    // xT = 1 x DIM
-    // A = DIM x DIM
-    // xTA = 1 x DIM x DIM x DIM = 1 x DIM
-    cblas_sgemv(CblasRowMajor, CblasTrans,
-            dim, dim, 
-            1, //alpha
-            A, dim,
-            x, 1,
-            0, // beta
-            xTA, 1);
+        // X = DIM x 1
+        // xT = 1 x DIM
+        // A = DIM x DIM
+        // xTA = 1 x DIM x DIM x DIM = 1 x DIM
+        cblas_sgemv(CblasRowMajor, CblasTrans,
+                dim, dim, 
+                1, //alpha
+                A, dim,
+                x, 1,
+                0, // beta
+                xTA, 1);
+    }
 
 
     
 #ifdef DEBUG
+    printf("debugging...\n");
     float xgrad[dim];
     float ygrad[dim];
     for(int i = 0; i < dim; ++i) {
@@ -260,7 +258,8 @@ struct Vec {
    }
 
    inline real lensq(real *quadform) const {
-       return dotContainment(quadform, *this, nullptr, nullptr);
+       return 1.0;
+       // return dotContainment(quadform, *this, nullptr, nullptr);
    }
 
    inline void normalize(real *quadform) {

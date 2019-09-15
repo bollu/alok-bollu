@@ -413,7 +413,14 @@ void InitNet() {
             new (Vec)(syn1neg[a]);
             syn1neg[a].alloc(layer1_size);
             for (b = 0; b < layer1_size; b++) syn1neg[a].set(b, 0);
+
+            printf("RANDOM INITIALIZING SYN1NEG...\n");
+            for (b = 0; b < layer1_size; b++) {
+                next_random = next_random * (unsigned long long)25214903917 + 11;
+                syn1neg[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+            }
         }
+
     }
     printf("%callocated syn1neg.\t\t\t\t\n", 13);
 
@@ -477,7 +484,7 @@ void *TrainModelThread(void *id) {
                 now = clock();
                 printf(
                     "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: "
-                    "%.2fk  Total loss: %4.2f",
+                    "%.2fk  Total loss: %6.4f",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
@@ -680,6 +687,7 @@ void *TrainModelThread(void *id) {
                             label = 0;
                         }
 
+                        // Vec *syn1negv = &syn1neg[target];
                         Vec *syn1negv = &syn1neg[target];
 
                         // clear the buffers of syn1neg, syn0
@@ -741,18 +749,25 @@ void *TrainModelThread(void *id) {
                         //  update weights of syn1neg according to gradient
                         for (int i = 0; i < layer1_size; ++i) {
                             syn1negv->v[i] += err * gsyn1neg[i];
+                            assert(fabs(syn1negv->v[i]) <= 10);
                         }
 
                         // store weights of gsync0 in gsyn0_accum
                         // to be accumulated.
+                        // for (int i = 0; i < layer1_size; ++i) {
+                        //     gsyn0_accum[i] += err * gsyn0[i];
+                        // }
+
                         for (int i = 0; i < layer1_size; ++i) {
-                            gsyn0_accum[i] += err * gsyn0[i];
+                            syn0v->v[i] += err * gsyn0[i];
+                            assert(fabs(syn0v->v[i]) <= 10);
                         }
                     } // end for loop for negative sampling
                 } // end condition around negative samples
                 // Learn weights input -> hidden
                 // for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
 
+                /*
                 // update syn0 in one large step
                 for (int i = 0; i < layer1_size; ++i) {
                     syn0v->v[i] += gsyn0_accum[i];
@@ -761,6 +776,7 @@ void *TrainModelThread(void *id) {
                 for (int i = 0; i < layer1_size; ++i) {
                     gsyn0_accum[i] = 0;
                 }
+                */
             } // end a != window
 
         sentence_position++;

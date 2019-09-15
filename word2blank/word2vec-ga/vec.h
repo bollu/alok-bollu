@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cmath>
+#include <cblas.h>
+
 typedef float real;  // Precision of float numbers
 
 template <typename T>
@@ -69,6 +71,141 @@ __attribute__((constructor)) void initCTable() {
       }
    }
 }
+// reference implementation
+inline real dotContainmentReference(int len, const real *vthis, const real *vother, float *gbufthis, float *gbufother)  {
+	real dot = 0;
+	for (unsigned int i = 0; i < len; i++) {
+		for (unsigned int j = 0; j < len; j++) {
+			// check if I is a subset of J
+			const bool subset = (i & j) == i;
+			if (!subset) continue;
+
+			// provide larger dot products for more dimensions they
+			// share accurately in common
+			const real weight = [&]() {
+				return 1.0;
+
+				const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+				assert(delta >= 0);
+
+				return 1.0 / pow2(delta);
+			}();
+
+			dot += weight * vthis[i] * vother[j];
+			// make the gradients of larger dimensions expoentnially
+			// much larger, thereby forcing them to only be used
+			// if they truly exist. Otherwise, they will be squashed towards
+			// 0
+			if (gbufthis) gbufthis[i] += vother[j] * weight;
+			if (gbufother) gbufother[j] += vthis[i] * weight;
+		}
+	}
+	return dot;
+}
+
+
+// r = n * n * sizeof(real)
+// n = log2 d
+void setupDotContainmentMat(int n, real *r) {
+    int d = log2(n);
+    assert (1 << d == n);
+    for(int i = 0; i < n; ++i) {
+        for(int j = 0; j < n; ++j) {
+
+            // r[i*n+j] = i == j ? 1 : 0;
+
+
+            // whether i is a subset of j.
+            bool subset = (i & j) == i;
+            if (subset) {
+                const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+                assert(delta >= 0);
+                // r[i*n+j] = 1.0 / pow2(delta);
+                r[i*n+j] = 1;
+            } else { r[i*n+j] = 0; }
+        }
+    }
+}
+
+// compute X^T A Y with BLAS
+// X: Nx1
+// A: NxN
+// Y: Nx1
+// gx: Nx1
+// gy: Nx1
+// Note that xTA is OPTIONAL, but Ay is _definitely not_.
+float mulQuadForm(int dim, const float *x, const float *A, const float *y, float *Ay, float *xTA) {
+    float xAy = 0;
+    // A = DIM x DIM
+    // y = DIM x 1
+    // Ay = DIM x DIM x DIM x 1 = DIM x 1
+     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,                      
+            dim, 1, dim,                                                        
+            1, // alpha                                                         
+            A, dim,                                                             
+            y, 1,                                                             
+            0,  // beta                                                                 
+            Ay, 1);                                                           
+                                                                                
+    // xT Ay
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+            1, 1, dim,
+            1, // alpha
+            x, 1,
+            Ay, 1,
+            0,  // beta
+            &xAy, 1); 
+                                                                                
+    // X = DIM x 1
+    // xT = 1 x DIM
+    // A = DIM x DIM
+    // xTA = 1 x DIM x DIM x DIM = 1 x DIM
+    cblas_sgemv(CblasRowMajor, CblasTrans,
+            dim, dim, 
+            1, //alpha
+            A, dim,
+            x, 1,
+            0, // beta
+            xTA, 1);
+
+
+    
+#ifdef DEBUG
+    float xgrad[dim];
+    float ygrad[dim];
+    for(int i = 0; i < dim; ++i) {
+        xgrad[i] = ygrad[i] = 0;
+    }
+
+    const float dotref = dotContainmentReference(dim, x, y, xgrad, ygrad);
+    if (!(fabs(dotref - xAy) < 1e-2)) {
+        printf("\ndot blas: %4.2f | real: %4.2f\n", xAy, dotref);
+        assert(false && "failed reference check");
+    }
+
+     for(int i = 0; i < dim; ++i) {
+        if (!(fabs(Ay[i] - xgrad[i]) < 1e-2))  {
+            printf("\nxgrad[%d] blas: %4.2f | real: %4.2f\n", i, Ay[i], xgrad[i]);
+            assert(false && "failed reference check");
+        }
+    }
+
+     for(int i = 0; i < dim; ++i) {
+        if (!(fabs(xTA[i] - ygrad[i]) < 1e-2))  {
+            printf("\nygrad[%d] blas: %4.2f | real: %4.2f\n", i, xTA[i], ygrad[i]);
+            assert(false && "failed reference check");
+        }
+    }
+#endif
+
+
+    // assert(fabs(dotref - xAy) < 1e-2);
+
+
+    return xAy;
+
+}
+
 
 // dumb encoding of GA. uses log2(n)elements.
 struct Vec {
@@ -122,12 +259,12 @@ struct Vec {
       }
    }
 
-   inline real lensq() const {
-       return dotContainment(*this, nullptr, nullptr);
+   inline real lensq(real *quadform) const {
+       return dotContainment(quadform, *this, nullptr, nullptr);
    }
 
-   inline void normalize() {
-     const float l = sqrt(lensq());
+   inline void normalize(real *quadform) {
+     const float l = sqrt(lensq(quadform));
      if (fabs(l) < 1e-4) return;
 
      scale(1.0 / l, nullptr);
@@ -244,38 +381,28 @@ struct Vec {
    // <scalar> . <anything other than scalar> = 0
    // <full space>  . <anything> = dot product
    // x dotContainment  y == degree of x ∈ y
-   inline real dotContainment(const Vec &other, float *gbufthis,
+   // DELETES PREVIOUS GRADIENTS
+   inline real dotContainment(const real *quadform, const Vec &other, real
+           *gbufthis, real *gbufother) const {
+
+       return mulQuadForm(this->len, this->v, quadform, other.v, 
+               gbufthis, gbufother);
+   }
+
+
+   // vector product as a baseline. NOTE: DELETES PREVIOUS GRADIENTS
+   inline real dotContainmentVec(const Vec &other, float *gbufthis,
                               float *gbufother) const {
       real dot = 0;
       for (unsigned int i = 0; i < len; i++) {
-         for (unsigned int j = 0; j < len; j++) {
-            // check if I is a subset of J
-            const bool subset = (i & j) == i;
-            if (!subset) continue;
-
-            // provide larger dot products for more dimensions they
-            // share accurately in common
-            const real weight = [&]() {
-               return 1.0;
-
-               const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-               assert(delta >= 0);
-
-               return 1.0 / pow2(delta);
-            }();
-
-            dot += weight * v[i] * other.v[j];
-            // make the gradients of larger dimensions expoentnially
-            // much larger, thereby forcing them to only be used
-            // if they truly exist. Otherwise, they will be squashed towards
-            // 0
-            if (gbufthis) gbufthis[i] += other.v[j] * weight;
-            if (gbufother) gbufother[j] += this->v[i] * weight;
+            dot += this->v[i] * other.v[i];
+            if (gbufthis) gbufthis[i] = other.v[i];
+            if (gbufother) gbufother[i] = this->v[i];
          }
-      }
 
       return dot;
    }
+
 
    // pick dimensions to take dot product with, and only the projection
    // of the GA object onto those subdimensions is taken when dotting.

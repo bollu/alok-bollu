@@ -20,8 +20,8 @@ mkdir -p slurm/
 
 make word2vec
 head -c 1000000 text8 > text0
-time ./word2vec -train text0 -output models/XXXX -cbow 0 -size 16  \
-    -window 8 -negative 15 -hs 0 -sample 1e-4 -threads 20 -binary 1 -iter 15 \
+time ./word2vec -train text8 -output models/text8-size=8-unweighed.bin -cbow 0 -size 8  \
+    -window 8 -negative 15 -hs 0 -sample 1e-4 -threads 38 -binary 1 -iter 50 \
     -alpha 0.01
 # ./1-save-models.sh
 # $(cd models; ln -s $GITNAME.bin $NAME.bin; cd ../)

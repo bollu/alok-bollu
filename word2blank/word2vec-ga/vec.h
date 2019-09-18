@@ -111,9 +111,9 @@ void setupDotContainmentMat(int n, real *r) {
             // whether i is a subset of j.
             bool subset = (i & j) == i;
             if (subset) {
-				const int delta = __builtin_popcount(j) - __builtin_popcount(i);
-				assert(delta >= 0);
-                r[i*n+j] = 1.0 / pow2(delta);
+                else {
+                    r[i*n+j] = 1.0;
+                }
             } else { 
                 r[i*n+j] = 0;
             }

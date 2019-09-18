@@ -11,8 +11,9 @@
 #include <algorithm>
 
 #define max_size 2000
-#define N 10
+#define N 40
 #define max_w 50
+#define max(x, y) ((x) > (y) ? (x) : (y))
 
 Vec *M;
 char *vocab;
@@ -20,6 +21,8 @@ long long words, size;
 char *bestw[N];
 real *quadform;
 real *Ay;
+real *normalizationFactorR;
+real *normalizationFactorL;
 
 void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
     // number of values in each bucket.
@@ -51,7 +54,7 @@ void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
 }
 
 
-real getNormalizationFactorL(Vec v) {
+real getNormalizationFactorL(Vec &v) {
     // this . dot(other)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
@@ -60,15 +63,49 @@ real getNormalizationFactorL(Vec v) {
     }
     return maxdot;
 }
+void buildNormalizationFactorLCache() {
+    printf("building L cache...\n");
+    normalizationFactorL = (real *)malloc(sizeof(real) * words);
+    for(int i = 0; i < words; ++ i) {
+        printf("\r%20d / %d", i, words);
+        fflush(stdout);
+        normalizationFactorL[i] = getNormalizationFactorL(M[i]);
+    }
+    printf("\n");
+}
 
-real getNormalizationFactorR(Vec v) {
+real getNormalizationFactorR(Vec &v) {
+    // others . dot (this)
+    float maxdot = 0;
+    for (int i = 0; i < words; ++i) {
+       const float dist = M[i].dotContainment(quadform, v,  Ay, nullptr);
+        maxdot = max(maxdot, fabs(dist));
+    }
+    return maxdot;
+}
+
+real getNormalizationFactorR(int w) {
     // others . dot (this)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = M[i].dotContainment(quadform, v,  Ay, nullptr);
-        maxdot = std::max<float>(maxdot, fabs(dist));
+        const float dist = M[i].dotContainment(quadform, M[w],  Ay, nullptr);
+        maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
+}
+
+
+void buildNormalizationFactorRCache() {
+    printf("building R cache...\n");
+    normalizationFactorR = (real *)malloc(sizeof(real) * words);
+    printf("\rallocated R cache...\n");
+    for(int i = 0; i < words; ++i) {
+        printf("\r%d / %d", i, words);
+        fflush(stdout);
+        // normalizationFactorR[i] = getNormalizationFactorR(M[i]);
+        normalizationFactorR[i] = getNormalizationFactorR(i);
+    }
+    printf("\n");
 }
 
 void cosine(Vec vec) {
@@ -98,6 +135,7 @@ void cosine(Vec vec) {
 
         // get the length of largest dot with bi.
         const float vecnorm = getNormalizationFactorL(vec);
+        printf("%s:%d\n", __FILE__, __LINE__);
 
         // for (a = 0; a < size; a++) len += vec[a] * vec[a];
         // len = sqrt(len);
@@ -109,7 +147,8 @@ void cosine(Vec vec) {
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
-            const float curnorm = getNormalizationFactorR(M[c]);
+            const float curnorm = normalizationFactorR[c];
+            // const float curnorm = normalizationFactorR[c];
             dist = vec.dotContainment(quadform, M[c],  Ay, nullptr);
             dist /= vecnorm; 
             dist /= curnorm;
@@ -127,6 +166,7 @@ void cosine(Vec vec) {
                 }
             }
         }
+        printf("%s:%d\n", __FILE__, __LINE__);
         for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
         plotHistogram("distances", vals, words, 10);
     }
@@ -150,7 +190,7 @@ void cosine(Vec vec) {
         for (int a = 0; a < N; a++) bestd[a] = -1;
         for (int a = 0; a < N; a++) bestw[a][0] = 0;
         for (int c = 0; c < words; c++) {
-            const float curnorm = getNormalizationFactorL(M[c]);
+            const float curnorm = normalizationFactorL[c];
             dist = M[c].dotContainment(quadform, vec,  Ay, nullptr);
             dist /= curnorm;
             dist /= vecnorm;
@@ -380,9 +420,17 @@ void completion(const char *buf, linenoiseCompletions *lc) {
 void dimension_usage() {
     double *f = (double *)malloc(size * sizeof(double));
     double *fnorm = (double *)malloc(size * sizeof(double));
-    for (int w = 0; w < words; w++)
-        for (int i = 0; i < size; i++)
-            f[i] += fabs(M[w].ix(i));
+
+    for (int i = 0; i < size; i++) {
+        f[i] = 0;
+        fnorm[i] = 0;
+    }
+    for (int w = 0; w < words; w++) {
+        for (int i = 0; i < size; i++) {
+            const float cur =  M[w].ix(i);
+            f[i] += fabs(cur);
+        }
+    }
 
     double total = 0;
     for (int i = 0; i < size; ++i) total += f[i];
@@ -452,12 +500,16 @@ int main(int argc, char **argv) {
         // size] /= len;
     }
 
+
     fclose(f);
 
-    printf("HACK: CLEARNING 0th and LAST DIMENSION\n");
-    for(int i = 0; i < words; i++) {
-        M[i].v[0] = M[i].v[size - 1] = 0;
-    }
+    buildNormalizationFactorLCache();
+    buildNormalizationFactorRCache();
+
+    // printf("HACK: CLEARNING 0th and LAST DIMENSION\n");
+    // for(int i = 0; i < words; i++) {
+    //     M[i].v[0] = M[i].v[size - 1] = 0;
+    // }
 
     dimension_usage();
 

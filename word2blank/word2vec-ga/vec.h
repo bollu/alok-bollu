@@ -213,6 +213,8 @@ struct Vec {
 
   public:
    inline void freemem() { free(v); }
+   Vec() : len(0), ndims(0), v(nullptr){}
+   Vec(const Vec &other) : len(other.len), ndims(other.ndims), v(other.v) {};
 
 
    // return the allocation size needed for a vector of dimension len

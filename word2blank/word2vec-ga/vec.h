@@ -111,9 +111,7 @@ void setupDotContainmentMat(int n, real *r) {
             // whether i is a subset of j.
             bool subset = (i & j) == i;
             if (subset) {
-                else {
                     r[i*n+j] = 1.0;
-                }
             } else { 
                 r[i*n+j] = 0;
             }

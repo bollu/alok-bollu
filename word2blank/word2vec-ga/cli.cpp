@@ -386,14 +386,30 @@ std::pair<Vec, bool> interpret(AST ast) {
                 std::tie(w, b) = interpret(ast.at(2));
                 if (!b) return std::make_pair(Vec(), b);
 
-                std::cout << "dot: "
-                          << v.dotContainment(quadform, w, Ay, nullptr)
-                          << "\n";
+                const float d = v.dotContainment(quadform, w, Ay, nullptr);
+                std::cout << "rawdot: " << d
+                    << "dotnorm: " << d / (getNormalizationFactorL(v) * getNormalizationFactorR(w))
+                    << "\n";
                 return std::make_pair(Vec(), false);
             }
 
             // left projection.
             if (s == "<." || s == ".<" || s == "lproject" || s == "projectl") {
+                if (ast.size() != 4) {
+                    std::cout << "left projection needs 3 arguments\n";
+                    // p : q :: x : y?
+                    // q - p = y - x
+                    // y = b - a + x
+                    Vec p, q, x;
+                    std::tie(p, b) = interpret(ast.at(1));
+                    if (!b) return std::make_pair(Vec(), b);
+                    std::tie(q, b) = interpret(ast.at(2));
+                    if (!b) return std::make_pair(Vec(), b);
+                    std::tie(x, b) = interpret(ast.at(3));
+                    if (!b) return std::make_pair(Vec(), b);
+                }
+
+                
             }
 
             return interpret(ast.at(0));
@@ -505,6 +521,13 @@ int main(int argc, char **argv) {
 
     buildNormalizationFactorLCache();
     buildNormalizationFactorRCache();
+
+    // scale a vector such that <v . v> = 1
+    for(int i = 0; i < words; ++i) {
+        float f = normalizationFactorL[i] * normalizationFactorR[i];
+        f /= M[i].dotContainment(quadform, M[i], Ay, nullptr);
+        M[i].scale(f, nullptr);
+    }
 
     // printf("HACK: CLEARNING 0th and LAST DIMENSION\n");
     // for(int i = 0; i < words; i++) {

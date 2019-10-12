@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "params.h"
+#include <iostream>
 
 #define max_size 2000
 #define N 40
@@ -27,9 +29,10 @@ FILE *f;
 char st1[max_size];
 char *bestw[N];
 char file_name[max_size], st[100][max_size];
-float dist, len, bestd[N], vec[max_size];
+float dist, len, bestd[N];
 long long words, size, a, b, c, d, cn, bi[100];
-float *M;
+bitvector *M;
+bitvector vec;
 char *vocab;
 
 #define NUM_SPARKS 100
@@ -64,6 +67,10 @@ void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
 
 }
 
+real computeDot(const bitvector &w1, const bitvector &w2) {
+    return ((real)(w1 & w2).count());
+}
+
 
 // find dot product of two words
 void dot() {
@@ -72,20 +79,9 @@ void dot() {
         printf("ERROR: expected two vectors to find dot product\n");
     }
 
-    float d = 0;
-    for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] * size];
-
-    lensq = 0;
-    for (a = 0; a < size; a++)
-        lensq += M[a + bi[2] * size] * M[a + bi[2] * size];
-    d /= sqrt(lensq);
-
-    lensq = 0;
-    for (a = 0; a < size; a++)
-        lensq += M[a + bi[1] * size] * M[a + bi[1] * size];
-    d /= sqrt(lensq);
-    lensq = 0;
-
+    bitvector &v1 = M[bi[1]];
+    bitvector &v2 = M[bi[2]];
+    float d = (computeDot(v1, v2) / computeDot(v1, v1)) / computeDot(v2, v2);
     printf("dot: %f\n", d);
 }
 
@@ -99,25 +95,22 @@ void cosine() {
         "distance\n----------------------------------------------------"
         "----"
         "----------------\n");
-    for (a = 0; a < size; a++) vec[a] = 0;
+    vec = vec ^ vec; // clear vec
     for (b = 0; b < cn; b++) {
         if (bi[b] == -1) continue;
-        for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
+        vec |= M[bi[b]];
     }
-    len = 0;
-    for (a = 0; a < size; a++) len += vec[a] * vec[a];
-    len = sqrt(len);
-    for (a = 0; a < size; a++) vec[a] /= len;
+
+    len = sqrt(computeDot(a, a));
     for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
-        a = 0;
-        for (b = 0; b < cn; b++)
-            if (bi[b] == c) a = 1;
-        if (a == 1) continue;
+        // a = 0;
+        // for (b = 0; b < cn; b++)
+        //     if (bi[b] == c) a = 1;
+        // if (a == 1) continue;
         dist = 0;
-        for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-
+        dist = computeDot(vec, M[c]) / len / computeDot(M[c], M[c]);
         // store the distance value
         vals[c] = dist;
 
@@ -160,7 +153,7 @@ int main(int argc, char **argv) {
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
-    M = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    M = (bitvector *)malloc((long long)words * sizeof(bitvector));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);
@@ -174,11 +167,18 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-        len = 0;
-        for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
-        len = sqrt(len);
-        for (a = 0; a < size; a++) M[a + b * size] /= len;
+        for (a = 0; a < size; a++) { 
+            int val;
+            fread(&val, sizeof(bool), 1, f);
+            M[b][a] = val;
+        }
+
+        // std::cout << "\n" << &vocab[b * max_w] << " ==> " << M[b] << "\n";
+    
+        // len = 0;
+        // for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) M[a + b * size] /= len;
     }
     fclose(f);
     while (1) {

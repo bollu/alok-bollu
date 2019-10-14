@@ -749,7 +749,7 @@ void *TrainModelThread(void *id) {
                         //  update weights of syn1neg according to gradient
                         for (int i = 0; i < layer1_size; ++i) {
                             syn1negv->v[i] += err * gsyn1neg[i];
-                            assert(fabs(syn1negv->v[i]) <= 10);
+                            assert(fabs(syn1negv->v[i]) <= 1e5);
                         }
 
                         // store weights of gsync0 in gsyn0_accum
@@ -760,7 +760,7 @@ void *TrainModelThread(void *id) {
 
                         for (int i = 0; i < layer1_size; ++i) {
                             syn0v->v[i] += err * gsyn0[i];
-                            assert(fabs(syn0v->v[i]) <= 10);
+                            assert(fabs(syn0v->v[i]) <= 1e5);
                         }
                     } // end for loop for negative sampling
                 } // end condition around negative samples

@@ -58,7 +58,7 @@ real getNormalizationFactorL(Vec &v) {
     // this . dot(other)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = v.dotContainment(quadform, M[i],  Ay, nullptr);
+        const float dist = mulQuadForm(size, v.v, quadform, M[i].v,  Ay, nullptr);
         maxdot = std::max<float>(maxdot, fabs(dist));
     }
     return maxdot;
@@ -78,7 +78,7 @@ real getNormalizationFactorR(Vec &v) {
     // others . dot (this)
     float maxdot = 0;
     for (int i = 0; i < words; ++i) {
-       const float dist = M[i].dotContainment(quadform, v,  Ay, nullptr);
+        const float dist = mulQuadForm(size, M[i].v, quadform, v.v,  Ay, nullptr);
         maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
@@ -88,7 +88,8 @@ real getNormalizationFactorR(int w) {
     // others . dot (this)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = M[i].dotContainment(quadform, M[w],  Ay, nullptr);
+
+        const float dist = mulQuadForm(size, M[i].v, quadform, M[w].v,  Ay, nullptr);
         maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
@@ -127,7 +128,7 @@ void cosine(Vec vec) {
         //     vec.accumscaleadd(1.0, M[bi[b]]);
         //     // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
         // }
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < std::min<int>(size, 10); i++) {
             printf("%3.2f  ", vec.ix(i));
         }
         printf("\n");
@@ -148,8 +149,7 @@ void cosine(Vec vec) {
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
             const float curnorm = normalizationFactorR[c];
-            // const float curnorm = normalizationFactorR[c];
-            dist = vec.dotContainment(quadform, M[c],  Ay, nullptr);
+            dist = mulQuadForm(size, vec.v, quadform, M[c].v,   Ay, nullptr);
             dist /= vecnorm; 
             dist /= curnorm;
             vals[c] = dist;
@@ -191,7 +191,7 @@ void cosine(Vec vec) {
         for (int a = 0; a < N; a++) bestw[a][0] = 0;
         for (int c = 0; c < words; c++) {
             const float curnorm = normalizationFactorL[c];
-            dist = M[c].dotContainment(quadform, vec,  Ay, nullptr);
+            dist = mulQuadForm(size, M[c].v, quadform, vec.v,   Ay, nullptr);
             dist /= curnorm;
             dist /= vecnorm;
             vals[c] = dist;
@@ -386,9 +386,9 @@ std::pair<Vec, bool> interpret(AST ast) {
                 std::tie(w, b) = interpret(ast.at(2));
                 if (!b) return std::make_pair(Vec(), b);
 
-                const float d = v.dotContainment(quadform, w, Ay, nullptr);
+                const float d = mulQuadForm(size, v.v, quadform, w.v,  Ay, nullptr);
                 std::cout << "rawdot: " << d
-                    << "dotnorm: " << d / (getNormalizationFactorL(v) * getNormalizationFactorR(w))
+                    << "\ndotnorm: " << d / (getNormalizationFactorL(v) * getNormalizationFactorR(w))
                     << "\n";
                 return std::make_pair(Vec(), false);
             }
@@ -506,7 +506,7 @@ int main(int argc, char **argv) {
         M[b].alloc(size);
         readvec(f, M[b]);
         printf("%s:", vocab + b * max_w);
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < std::min<int>(size, 10); i++) {
             printf("%3.4f ", M[b].ix(i));
         }
         printf("\n");
@@ -521,13 +521,6 @@ int main(int argc, char **argv) {
 
     buildNormalizationFactorLCache();
     buildNormalizationFactorRCache();
-
-    // scale a vector such that <v . v> = 1
-    for(int i = 0; i < words; ++i) {
-        float f = normalizationFactorL[i] * normalizationFactorR[i];
-        f /= M[i].dotContainment(quadform, M[i], Ay, nullptr);
-        M[i].scale(f, nullptr);
-    }
 
     // printf("HACK: CLEARNING 0th and LAST DIMENSION\n");
     // for(int i = 0; i < words; i++) {

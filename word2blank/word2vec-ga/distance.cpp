@@ -22,6 +22,7 @@
 #define N 40
 #define max_w 50
 #define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 
 FILE *f;
 char st1[max_size];
@@ -60,7 +61,7 @@ void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
     for(int i = 0; i < nbuckets; ++i) {
         printf(" %f ", ((buckets[i] / (real)total)) * 100.0);
     }
-    printf("|");
+    printf("|\n");
 
 }
 
@@ -74,33 +75,33 @@ void dot() {
     float d = 0;
     // for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] *
     // size];
-    d = M[bi[1]].dotContainment(quadform, M[bi[2]],  Ay, nullptr);
+    d = mulQuadForm(size, M[bi[1]].v, quadform, M[bi[2]].v,  Ay, nullptr);
 
-    // lensq = 0;
-    // for (a = 0; a < size; a++)
-    //     lensq += M[a + bi[2] * size] * M[a + bi[2] * size];
-    // d /= sqrt(lensq);
-    d /= sqrt(M[bi[1]].lensq(quadform));
-    d /= sqrt(M[bi[2]].lensq(quadform));
+    float l1 = mulQuadForm(size, M[bi[1]].v, quadform, M[bi[1]].v,  Ay, nullptr);
+    float l2 = mulQuadForm(size, M[bi[2]].v, quadform, M[bi[2]].v,  Ay, nullptr);
+
+    d /= sqrt(fabs(l1));
+    d /= sqrt(fabs(l2));
 
     printf("dot: %f\n", d);
 }
 
-real getNormalizationFactorL(int w) {
+real getNormalizationFactorL(Vec w) {
     // this . dot(other)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = M[w].dotContainment(quadform, M[i],  Ay, nullptr);
+
+        const float  dist = mulQuadForm(size, w.v, quadform, M[i].v,  Ay, nullptr);
         maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
 }
 
-real getNormalizationFactorR(int w) {
+real getNormalizationFactorR(Vec w) {
     // others . dot (this)
     float maxdot = 0;
     for(int i = 0; i < N; ++i) {
-        const float dist = M[i].dotContainment(quadform, M[w],  Ay, nullptr);
+        const float  dist = mulQuadForm(size, M[i].v, quadform, w.v,  Ay, nullptr);
         maxdot = max(maxdot, fabs(dist));
     }
     return maxdot;
@@ -126,14 +127,12 @@ void cosine() {
         //     vec.accumscaleadd(1.0, M[bi[b]]);
         //     // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
         // }
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < min(size, 10); i++) {
             printf("%3.2f  ", vec.ix(i));
         }
         printf("\n");
         len = 0;
 
-        // get the length of largest dot with bi.
-        const float vecnorm = getNormalizationFactorL(bi[0]);
 
         // for (a = 0; a < size; a++) len += vec[a] * vec[a];
         // len = sqrt(len);
@@ -149,10 +148,13 @@ void cosine() {
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
-            const float curnorm = getNormalizationFactorR(c);
-            dist = vec.dotContainment(quadform, M[c],  Ay, nullptr);
-            dist /= vecnorm; 
-            dist /= curnorm;
+            // const float curnorm = getNormalizationFactorR(c);
+            dist = mulQuadForm(size, vec.v, quadform, M[c].v, Ay, nullptr);
+            float l1 = getNormalizationFactorL(vec);
+            float l2 = getNormalizationFactorR(M[c]);
+
+            dist /= sqrt(fabs(l1));
+            dist /= sqrt(fabs(l2));
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {
@@ -184,8 +186,6 @@ void cosine() {
         vec.fillzero();
         vec.accumscaleadd(1.0, M[bi[0]]);
 
-        // get the length of largest dot with bi.
-        const float vecnorm = getNormalizationFactorR(bi[0]);
         len = 0;
         // for (a = 0; a < size; a++) len += vec[a] * vec[a];
         // len = sqrt(len);
@@ -200,10 +200,12 @@ void cosine() {
             if (a == 1) continue;
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            const float curnorm = getNormalizationFactorL(c);
-            dist = M[c].dotContainment(quadform, vec,  Ay, nullptr);
-            dist /= curnorm;
-            dist /= vecnorm;
+            dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
+            float l1 = getNormalizationFactorL(M[c]);
+            float l2 = getNormalizationFactorR(vec);
+
+            dist /= sqrt(fabs(l1));
+            dist /= sqrt(fabs(l2));
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {
@@ -270,7 +272,7 @@ int main(int argc, char **argv) {
         // M[b].normalize();
         printf("%s:", vocab + b * max_w);
         // printf(" lensq: %f  ", M[b].lensq(quadform));
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < min(10, size); i++) {
             printf("%f ", M[b].ix(i));
         }
         printf("\n");

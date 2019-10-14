@@ -401,7 +401,7 @@ void InitNet() {
     //         for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     // }
     printf("allocating syn1neg...");
-    if (negative > 0) {
+    if (negative >= 0) {
         a = posix_memalign((void **)&syn1neg, 128,
                            (long long)vocab_size * sizeof(Vec));
         if (syn1neg == NULL) {
@@ -671,7 +671,7 @@ void *TrainModelThread(void *id) {
                     }
                 */
                 // NEGATIVE SAMPLING
-                if (negative > 0) {
+                if (negative >= 0) {
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;
@@ -684,7 +684,7 @@ void *TrainModelThread(void *id) {
                             if (target == 0)
                                 target = next_random % (vocab_size - 1) + 1;
                             if (target == word) continue;
-                            label = 0;
+                            label = -1;
                         }
 
                         // Vec *syn1negv = &syn1neg[target];
@@ -730,7 +730,7 @@ void *TrainModelThread(void *id) {
                         // else
                         //     err = (label - expTable[index]) * alpha;
                         // =======================
-                        err = (label - sigmoid(f)) * alpha;
+                        err = (label - tanh(f)) * alpha;
 
                         total_loss += err * err;
 
@@ -808,7 +808,7 @@ void TrainModel() {
     if (save_vocab_file[0] != 0) SaveVocab();
     if (output_file[0] == 0) return;
     InitNet();
-    if (negative > 0) InitUnigramTable();
+    if (negative >= 0) InitUnigramTable();
     start = clock();
     for (a = 0; a < num_threads; a++)
         pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);

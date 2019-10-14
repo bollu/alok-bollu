@@ -103,12 +103,12 @@ void setupDotContainmentMat(int n, real *r) {
         for(int j = 0; j < n; ++j) {
 
             // whether i is a subset of j.
-            // bool subset = (i & j) == i;
-            bool subset = (i & j) == i;
+            const bool subset = (i & j) == i;
+            // const bool subset = i == j;
             if (subset) {
                     r[i*n+j] = 1.0;
             } else { 
-                r[i*n+j] = -1.0;
+                r[i*n+j] = 0;
             }
         }
     }

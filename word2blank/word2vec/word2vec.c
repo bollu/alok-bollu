@@ -385,7 +385,7 @@ void InitNet() {
         for (a = 0; a < vocab_size; a++)
             for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     }
-    if (negative > 0) {
+    if (negative >= 0) {
         a = posix_memalign((void **)&syn1neg, 128,
                            (long long)vocab_size * layer1_size * sizeof(real));
         if (syn1neg == NULL) {
@@ -526,7 +526,7 @@ void *TrainModelThread(void *id) {
                             syn1[c + l2] += g * neu1[c];
                     }
                 // NEGATIVE SAMPLING
-                if (negative > 0)
+                if (negative >= 0)
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;
@@ -582,7 +582,7 @@ void *TrainModelThread(void *id) {
                     l1 = last_word * layer1_size;
                     for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
                     // HIERARCHICAL SOFTMAX
-                    if (hs)
+                    if (hs) {
                         for (d = 0; d < vocab[word].codelen; d++) {
                             f = 0;
                             l2 = vocab[word].point[d] * layer1_size;
@@ -607,8 +607,9 @@ void *TrainModelThread(void *id) {
                             for (c = 0; c < layer1_size; c++)
                                 syn1[c + l2] += g * syn0[c + l1];
                         }
+                    }
                     // NEGATIVE SAMPLING
-                    if (negative > 0)
+                    if (negative >= 0) {
                         for (d = 0; d < negative + 1; d++) {
                             if (d == 0) {
                                 target = word;
@@ -648,6 +649,7 @@ void *TrainModelThread(void *id) {
                             if (random_ix > 1000) random_ix = 0;
 
                         }
+                    }
                     // Learn weights input -> hidden
                     next_random =
                         next_random *
@@ -681,7 +683,7 @@ void TrainModel() {
     if (save_vocab_file[0] != 0) SaveVocab();
     if (output_file[0] == 0) return;
     InitNet();
-    if (negative > 0) InitUnigramTable();
+    if (negative >= 0) InitUnigramTable();
     start = clock();
     if (iter > 0) {
         for (a = 0; a < num_threads; a++)

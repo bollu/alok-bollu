@@ -17,6 +17,9 @@ distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c
 	$(CC) word-analogy.c -o word-analogy $(CFLAGS)
+
+word-analogy-concept : word-analogy-concept.c
+	$(CC) word-analogy-concept.c -o word-analogy-concept $(CFLAGS)
 compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh

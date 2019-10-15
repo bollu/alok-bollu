@@ -18,6 +18,10 @@ distance : distance.c
 word-analogy : word-analogy.c
 	$(CC) word-analogy.c -o word-analogy $(CFLAGS)
 
+
+word-analogy-context : word-analogy-context.c
+	$(CC) word-analogy-context.c -o word-analogy-context $(CFLAGS)
+
 word-analogy-concept : word-analogy-concept.c
 	$(CC) word-analogy-concept.c -o word-analogy-concept $(CFLAGS)
 compute-accuracy : compute-accuracy.c

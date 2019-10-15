@@ -1,4 +1,3 @@
-//  Return the vector ctx in whose context a: b :: c : d | ctx  makes most sense
 //  Copyright 2013 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +38,7 @@ int main(int argc, char **argv) {
   char st1[max_size];
   char bestw[N][max_size];
   char file_name[max_size], st[100][max_size];
-  float dist, len, bestd[N], vec[max_size], vec2[max_size];
+  float dist, len, bestd[N], vec[max_size];
   long long words, size, a, b, c, d, cn, bi[100];
   float *M;
   char *vocab;
@@ -122,18 +121,14 @@ int main(int argc, char **argv) {
     }
     if (b == 0) continue;
     printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
-    for (a = 0; a < size; a++) vec[a] = M[a + bi[1] * size] - M[a + bi[0] * size] ;
+    for (a = 0; a < size; a++) vec[a] = M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
     len = 0;
     for (a = 0; a < size; a++) len += vec[a] * vec[a];
     len = sqrt(len);
     for (a = 0; a < size; a++) vec[a] /= len;
 
-    for (a = 0; a < size; a++) vec2[a] = M[a + bi[3] * size] - M[a + bi[2] * size];
-    len = 0;
-    for (a = 0; a < size; a++) len += vec2[a] * vec2[a];
-    len = sqrt(len);
-    for (a = 0; a < size; a++) vec2[a] /= len;
-
+    float proj1[size];
+    projectalong(size, vec, &M[bi[3] * size], proj1);
 
     for (a = 0; a < N; a++) bestd[a] = -2;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
@@ -145,12 +140,10 @@ int main(int argc, char **argv) {
       // a = 0;
       // for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
       // if (a == 1) continue;
-      float proj1[size];
-      projectalong(size, &M[c*size], vec, proj1);
 
 
       float proj2[size]; 
-      projectalong(size, &M[c*size], vec2, proj2);
+      projectalong(size, &M[c*size], &M[bi[3] * size], proj2);
 
       dist = 0;
       for(int i = 0; i< size; ++i) {

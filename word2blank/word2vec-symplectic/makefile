@@ -23,6 +23,11 @@ distance : distance.cpp vec.h
 	$(CC) -std=c++11 -fno-exceptions distance.cpp  -o distance $(CFLAGS)
 word-analogy : word-analogy.cpp vec.h
 	$(CC) -std=c++11 word-analogy.cpp -o word-analogy $(CFLAGS)
+
+word-analogy-context : word-analogy-context.cpp vec.h
+	$(CC) -std=c++11 word-analogy-context.cpp -o word-analogy-context $(CFLAGS)
+word-analogy-concept : word-analogy-concept.cpp vec.h
+	$(CC) -std=c++11 word-analogy-concept.cpp -o word-analogy-concept $(CFLAGS)
 compute-accuracy : compute-accuracy.cpp vec.h
 	$(CC) -std=c++11 -fno-exceptions compute-accuracy.cpp -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh

@@ -705,8 +705,7 @@ void *TrainModelThread(void *id) {
                             label = 0;
                         }
 
-                        // Vec *syn1negv = &syn1neg[target];
-                        Vec *syn1negv = &syn1neg[target];
+                        const Vec *syn1negv = &syn1neg[target];
 
                         // clear the buffers of syn1neg, syn0
                         for (int i = 0; i < layer1_size; ++i) {
@@ -714,12 +713,24 @@ void *TrainModelThread(void *id) {
                             gsyn0[i] = 0;
                         }
 
-                        f = mulQuadForm(layer1_size, 
-                                 syn0v->v, 
-                                 dotContainmentMatrix, 
-                                 syn1negv->v, 
-                                 gsyn0,
-                                 gsyn1neg);
+                        f = 0;
+                        for(int i = 0; i <layer1_size/2; ++i) {
+                            f += syn0v->v[i] * syn1negv->v[i];
+                            gsyn1neg[i] += syn0v->v[i];
+                            gsyn0[i] += syn1negv->v[i];
+                        }
+
+                        f += dotSymplectic(layer1_size/2, syn0v->v + layer1_size/2, syn1negv->v + layer1_size/2);
+                        gradLeftSymplectic(layer1_size/2, syn1negv->v + layer1_size/2, gsyn0 + layer1_size/2);
+                        gradRightSymplectic(layer1_size/2, syn0->v + layer1_size/2, gsyn1neg + layer1_size/2);
+
+
+                        // f = mulQuadForm(layer1_size, 
+                        //          syn0v->v, 
+                        //          dotContainmentMatrix, 
+                        //          syn1negv->v, 
+                        //          gsyn0,
+                        //          gsyn1neg);
                         err = (label - sigmoid(f)) * alpha;
 
                         total_loss += err * err;

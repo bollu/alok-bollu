@@ -72,29 +72,68 @@ __attribute__((constructor)) void initCTable() {
    }
 }
 
+// multiply r and s with the dot product r^T A s where A is the standard
+// symplectic form: all notations written with einstein convention
+// (A s)[i] = A[i][j] s[j]
+// (r^T A s) = r[i] A s[i] = R[i] A[i][j] s[j] = 
+// \sum{i=0}^n/2 r[i]s[i] - \sum_{i=n/2}^n r[i]s[i] 
+real dotSymplectic(int n, real *r, real *s) {
+    real sum = 0;
+    // dim = 10
+    // -x5*y0 - x6*y1 - x7*y2 - x8*y3 - x9*y4 + x0*y5 + x1*y6 + x2*y7 + x3*y8 + x4*y9
+    for(int i = 0; i < n/2; ++i) {
+        sum += -1 * r[n/2 + i] * s[i];
+    }
+    for(int i = 0; i < n/2; ++i) {
+        sum += 1 * r[i] * s[n/2 + i];
+    }
+    return sum;
+}
+
+// accum_r +=  d omega(r, s) / dr.
+void gradLeftSymplectic(int n, real *s, real *accum) {
+    for(int i = 0; i < n / 2; ++i) {
+        accum[i] += s[n/2 + i];
+    }
+
+    for(int i = n/2; i < n; ++i) {
+        accum[i] += -1 * s[i - n/2];
+    }
+}
+
+// accum_s += g * d omega(r, s) / ds.
+void gradRightSymplectic(int n, real *r, real *accum) {
+    for(int i = 0; i < n / 2; ++i) {
+        accum[i] += - r[n/2 + i];
+    }
+    for(int i = n/2; i < n; ++i) {
+        accum[i] += r[i - n/2];
+    }
+}
+
 // r = n * n * sizeof(real)
 // n = log2 d
-void setupDotContainmentMat(int n, real *r) {
-    assert (n % 2 == 0);
+void setupDotContainmentMat(int len, real *r) {
+    assert (len % 2 == 0);
+    int n = len;
 
-    // *--j->
-    // |
-    // i O I
-    // | -I 0
-    // |
-    // v
-    // int d = log2(n);
-    // assert (1 << d == n);
-    for(int i = 0; i < n; ++i) {
-        for(int j = 0; j < n; ++j) {
-            r[i*n+j] = 0;
+    for(int i = 0; i < len; ++i) {
+        for(int j = 0; j < len; ++j) {
+            r[i*len+j] = 0;
         }
     }
 
+    // *--j->
+    // |
+    // i  I I
+    // | -I I
+    // |
+    // |
+    // v
     for(int i = 0; i < n/2; ++i) {
         for(int j = n/2; j < n; ++j) {
             if (i + n/2 == j) {
-                r[i*n+j] = 1;
+                r[i*len+j] = 1;
             }
 
         }
@@ -103,18 +142,23 @@ void setupDotContainmentMat(int n, real *r) {
     for(int i = n/2; i < n; ++i) {
         for(int j = 0; j < n/2; ++j) {
             if (i == j + n/2) {
-                r[i*n+j] = -1;
+                r[i*len+j] = -1;
             }
         }
     }
 
+    for(int i = 0; i < len; ++i) {
+        r[i*len+i] = 1;
+    }
+
     printf("\nprinting r:\n");
-    for(int i = 0; i < n; ++i) {
-        for(int j = 0;  j < n; ++ j) {
-            printf("%4.1f ", r[i*n+j]);
+    for(int i = 0; i < len; ++i) {
+        for(int j = 0;  j < len; ++ j) {
+            printf("%4.1f ", r[i*len+j]);
         }
         printf("\n");
     }
+
 }
 
 // compute X^T A Y with BLAS
@@ -185,7 +229,7 @@ struct Vec {
    inline void alloc(int len) {
       this->len = len;
       // make sure that the length given is a power of two.
-      assert(len % 2 == 0  && "symplectic manifold must be divisible by 2");
+      assert(len % 4 == 0  && "symplectic manifold must be divisible by 2");
       int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
       assert(v != nullptr && "memory allocation failed");
       (void)a;

@@ -21,6 +21,20 @@ const long long max_size = 2000;  // max length of strings
 const long long N = 40;           // number of closest words that will be shown
 const long long max_w = 50;       // max length of vocabulary entries
 
+
+real project(int size, Vec v, Vec w) {
+    real dist = 0;
+
+    dist = 0;
+    for(int i = 0; i < size; ++i) {
+        dist += v.v[i] * w.v[i];
+    }
+
+    dist += dotSymplectic(size, v.v, w.v);
+    return dist;
+}
+
+
 int main(int argc, char **argv) {
     FILE *f;
     char st1[max_size];
@@ -148,12 +162,15 @@ int main(int argc, char **argv) {
                 if (bi[b] == c) a = 1;
             if (a == 1) continue;
 
-            dist = 0;
-            for(int i = 0; i < size; ++i) {
-                dist += v.v[i] * M[c].v[i];
-            }
 
-            dist += dotSymplectic(size, v.v, M[c].v);
+            dist = project(size, v, M[bi[3]]) * project(size, M[c], M[bi[3]]);
+
+            // dist = 0;
+            // for(int i = 0; i < size; ++i) {
+            //     dist += v.v[i] * M[c].v[i];
+            // }
+
+            // dist += dotSymplectic(size, v.v, M[c].v);
 
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];

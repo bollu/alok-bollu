@@ -21,6 +21,28 @@ const long long max_size = 2000;  // max length of strings
 const long long N = 40;           // number of closest words that will be shown
 const long long max_w = 50;       // max length of vocabulary entries
 
+real project(int size, Vec v, Vec w) {
+    real dist = 0;
+
+    dist = 0;
+    for(int i = 0; i < size; ++i) {
+        dist += v.v[i] * w.v[i];
+    }
+
+    dist += dotSymplectic(size, v.v, w.v);
+    return dist;
+}
+
+// assumes dir is normalized. Out will contain (toproject . dir) dir
+void projectAlong(int size, Vec toproject, Vec dir, Vec *out) {
+    real dot = project(size, toproject, dir);
+
+    for(int = 0; i < size; ++i) {
+        out->v[i] = dot * dir[i];
+    }
+}
+
+
 int main(int argc, char **argv) {
     FILE *f;
     char st1[max_size];
@@ -73,6 +95,7 @@ int main(int argc, char **argv) {
 
 
     fclose(f);
+
     while (1) {
         for (a = 0; a < N; a++) bestd[a] = 0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
@@ -103,9 +126,9 @@ int main(int argc, char **argv) {
             }
         }
         cn++;
-        if (cn < 3) {
+        if (cn < 4) {
             printf(
-                "Only %lld words were entered.. three words are needed at the "
+                "Only %lld words were entered.. four words are needed at the "
                 "input to perform the calculation\n",
                 cn);
             continue;
@@ -127,16 +150,12 @@ int main(int argc, char **argv) {
             "Distance\n--------------------------------------------------------"
             "----------------\n");
 
-        for(int i = 0; i < size; ++i) {
-            v.v[i] = M[bi[1]].v[i] - M[bi[0]].v[i] + M[bi[2]].v[i];
-        }
 
 
-        /*
-        for (a = 0; a < size; a++)
-            vec[a] =
-                M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
-        */
+
+
+
+
         for (a = 0; a < N; a++) bestd[a] = 0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
         for (c = 0; c < words; c++) {
@@ -148,12 +167,19 @@ int main(int argc, char **argv) {
                 if (bi[b] == c) a = 1;
             if (a == 1) continue;
 
-            dist = 0;
+            float proj1[size], proj2[size];
+            float vec[size];
             for(int i = 0; i < size; ++i) {
-                dist += v.v[i] * M[c].v[i];
+                vec[i] = M[bi[1]] - M[bi[0]];
+            }
+            len = project(size, vec, vec);
+            for(int i = 0; i < size; ++i) {
+                vec[i] /= len;
             }
 
-            dist += dotSymplectic(size, v.v, M[c].v);
+            projectAlong(size, vec, M[c], proj1);
+
+            projectAlong(size, vec, M[c], proj1);
 
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];

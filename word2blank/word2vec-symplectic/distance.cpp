@@ -65,26 +65,6 @@ void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
 
 }
 
-// find dot product of two words
-void dot() {
-    float lensq;
-    if (cn != 3) {
-        printf("ERROR: expected two vectors to find dot product\n");
-    }
-
-    float d = 0;
-    // for (a = 0; a < size; a++) d += M[a + bi[1] * size] * M[a + bi[2] *
-    // size];
-    d = mulQuadForm(size, M[bi[1]].v, quadform, M[bi[2]].v,  Ay, nullptr);
-
-    float l1 = 1.0; // mulQuadForm(size, M[bi[1]].v, quadform, M[bi[1]].v,  Ay, nullptr);
-    float l2 = 1.0; // mulQuadForm(size, M[bi[2]].v, quadform, M[bi[2]].v,  Ay, nullptr);
-
-    d /= sqrt(fabs(l1));
-    d /= sqrt(fabs(l2));
-
-    printf("dot: %f\n", d);
-}
 
 real getNormalizationFactorL(Vec w) {
     // this . dot(other)
@@ -149,12 +129,17 @@ void cosine() {
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
             // const float curnorm = getNormalizationFactorR(c);
-            dist = mulQuadForm(size, vec.v, quadform, M[c].v, Ay, nullptr);
-            float l1 = 1; getNormalizationFactorL(vec);
-            float l2 = 1; getNormalizationFactorR(M[c]);
+            dist = 0;
+            float l1 = 0;
+            float l2 = 0;
+            for(int i = 0; i < size/2; ++i) {
+                dist += vec.v[i] * M[c].v[i];
+                l1 += vec.v[i] * vec.v[i];
+                l2 += M[c].v[i] * M[c].v[i];
+            }
+            dist = dist / l1 / l2;
 
-            dist /= sqrt(fabs(l1));
-            dist /= sqrt(fabs(l2));
+            dist += dotSymplectic(size, M[c].v+size/2, vec.v + size/2);
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {
@@ -198,14 +183,80 @@ void cosine() {
             for (b = 0; b < cn; b++)
                 if (bi[b] == c) a = 1;
             if (a == 1) continue;
-            // dist = 0;
-            // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
-            float l1 = 1; getNormalizationFactorL(M[c]);
-            float l2 = 1; getNormalizationFactorR(vec);
+            dist = 0;
+            float l1 = 0;
+            float l2 = 0;
 
-            dist /= sqrt(fabs(l1));
-            dist /= sqrt(fabs(l2));
+            for(int i = 0; i < size; ++i) {
+                dist += vec.v[i] * M[c].v[i];
+                l1 += vec.v[i] * vec.v[i];
+                l2 += M[c].v[i] * M[c].v[i];
+            }
+            l1 = sqrt(l1);
+            l2 = sqrt(l2);
+            dist = dist / l1 / l2;
+
+            dist += dotSymplectic(size/2, vec.v+size/2, M[c].v+size/2);
+            vals[c] = dist;
+
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
+        }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+        plotHistogram("distances", vals, words, 10);
+    }
+
+
+
+    {
+        printf(
+                "\n                                              Word       "
+                "Cosine "
+                "distance\n----------------------------------------------------"
+                "----"
+                "----------------\n");
+        // for (a = 0; a < size; a++) vec[a] = 0;
+
+        vec.fillzero();
+        vec.accumscaleadd(1.0, M[bi[0]]);
+
+        len = 0;
+        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) vec[a] /= len;
+        // vec.normalize();
+        for (a = 0; a < N; a++) bestd[a] = -1;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            a = 0;
+            for (b = 0; b < cn; b++)
+                if (bi[b] == c) a = 1;
+            if (a == 1) continue;
+            dist = 0;
+            float l1 = 0;
+            float l2 = 0;
+
+            for(int i = 0; i < size/2; ++i) {
+                dist += vec.v[i] * M[c].v[i];
+                l1 += vec.v[i] * vec.v[i];
+                l2 += M[c].v[i] * M[c].v[i];
+            }
+            l1 = sqrt(l1);
+            l2 = sqrt(l2);
+            dist = dist / l1 / l2;
+
+            // dist += dotSymplectic(size, vec.v, M[c].v);
+
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {
@@ -324,13 +375,7 @@ int main(int argc, char **argv) {
                 break;
             }
         }
-        if (b == -1 && strcmp(st[0], "DOT") != 0) continue;
-
-        if (!strcmp(st[0], "DOT")) {
-            dot();
-        } else {
-            cosine();
-        }
+        cosine();
     }
     return 0;
 }

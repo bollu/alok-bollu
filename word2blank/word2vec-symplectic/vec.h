@@ -92,12 +92,12 @@ real dotSymplectic(int n, real *r, real *s) {
 
 // accum_r +=  d omega(r, s) / dr.
 void gradLeftSymplectic(int n, real *s, real *accum) {
-    for(int i = 0; i < n / 2; ++i) {
-        accum[i] += s[n/2 + i];
+    for(int i = 0; i < n/2; ++i) {
+        accum[n/2 + i] += -1 * s[i];
     }
 
-    for(int i = n/2; i < n; ++i) {
-        accum[i] += -1 * s[i - n/2];
+    for(int i = 0; i < n/2; ++i) {
+        accum[i] += 1 * s[n/2 + i];
     }
 }
 
@@ -106,8 +106,8 @@ void gradRightSymplectic(int n, real *r, real *accum) {
     for(int i = 0; i < n / 2; ++i) {
         accum[i] += - r[n/2 + i];
     }
-    for(int i = n/2; i < n; ++i) {
-        accum[i] += r[i - n/2];
+    for(int i = 0; i < n/2; ++i) {
+        accum[n/2 + i] += r[i];
     }
 }
 

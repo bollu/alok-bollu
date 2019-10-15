@@ -66,9 +66,9 @@ int main(int argc, char **argv) {
         M[b].alloc(size);
         readvec(f, M[b]);
         len = 0; 
-        for (a = 0; a < size; a++) len += M[b].v[a] * M[b].v[a];
-        len =sqrt(len);
-        for (a = 0; a < size; a++) M[b].v[a] /= len;
+        for (a = 0; a < size/2; a++) len += M[b].v[a] * M[b].v[a];
+        len = sqrt(len);
+        for (a = 0; a < size/2; a++) M[b].v[a] /= len;
     }
 
 
@@ -131,12 +131,16 @@ int main(int argc, char **argv) {
             v.v[i] = M[bi[1]].v[i] - M[bi[0]].v[i] + M[bi[2]].v[i];
         }
 
+        len = 0;
+        for(int i = 0; i < size/2; ++i) {
+            len += v.v[i] * v.v[i];
+        }
 
-        /*
-        for (a = 0; a < size; a++)
-            vec[a] =
-                M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
-        */
+        for(int i = 0; i < size/2; ++i) {
+            v.v[i] /= len;
+        }
+
+
         for (a = 0; a < N; a++) bestd[a] = 0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
         for (c = 0; c < words; c++) {
@@ -149,11 +153,11 @@ int main(int argc, char **argv) {
             if (a == 1) continue;
 
             dist = 0;
-            for(int i = 0; i < size; ++i) {
+            for(int i = 0; i < size/2; ++i) {
                 dist += v.v[i] * M[c].v[i];
             }
 
-            dist += dotSymplectic(size, v.v, M[c].v);
+            dist += dotSymplectic(size/2, v.v + size/2, M[c].v + size/2);
 
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];

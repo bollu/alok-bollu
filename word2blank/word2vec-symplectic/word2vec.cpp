@@ -470,7 +470,7 @@ void *TrainModelThread(void *id) {
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
         last_save += 1;
-        if (last_save >= 1000 && ((long long) id == 0)) {
+        if (last_save >= 10000 && ((long long) id == 0)) {
             last_save = 0;
             SaveModel(/*last_save=*/false);
         }
@@ -722,7 +722,7 @@ void *TrainModelThread(void *id) {
 
                         f += dotSymplectic(layer1_size/2, syn0v->v + layer1_size/2, syn1negv->v + layer1_size/2);
                         gradLeftSymplectic(layer1_size/2, syn1negv->v + layer1_size/2, gsyn0 + layer1_size/2);
-                        gradRightSymplectic(layer1_size/2, syn0->v + layer1_size/2, gsyn1neg + layer1_size/2);
+                        gradRightSymplectic(layer1_size/2, syn0v->v + layer1_size/2, gsyn1neg + layer1_size/2);
 
 
                         // f = mulQuadForm(layer1_size, 
@@ -731,7 +731,10 @@ void *TrainModelThread(void *id) {
                         //          syn1negv->v, 
                         //          gsyn0,
                         //          gsyn1neg);
+                        err = 0;
                         err = (label - sigmoid(f)) * alpha;
+
+
 
                         total_loss += err * err;
 

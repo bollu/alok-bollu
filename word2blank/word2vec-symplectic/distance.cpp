@@ -139,7 +139,7 @@ void cosine() {
             }
             dist = dist / l1 / l2;
 
-            dist += dotSymplectic(size, M[c].v+size/2, vec.v + size/2);
+            dist += dotSymplectic(size/2, M[c].v+size/2, vec.v + size/2);
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {

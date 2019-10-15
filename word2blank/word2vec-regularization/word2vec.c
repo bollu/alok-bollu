@@ -23,6 +23,7 @@
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
+#define LENGTH_STRENGTH 0.5
 
 #define TARGETLEN 1
 
@@ -637,14 +638,13 @@ void *TrainModelThread(void *id) {
 
                             // add length term
                             float len = 0;
-                            // loss += (1 - len)^4
+                            // loss += (1 - len)^2
                             for (c = 0; c < layer1_size; c++) 
-                                len += syn1neg[c + l2] * syn1neg[c + l2];
-
+                              len += syn1neg[c + l2] * syn1neg[c + l2];
+                            len = sqrt(len);
                             // backprop grad[i] = -2(1 - len) * (d/dxi syn1[i])
-                            const float loss = (TARGETLEN - len);
                             for (c = 0; c < layer1_size; c++) 
-                                syn1neg[c + l2] += syn1neg[c + l2] * loss * alpha * 0.01;
+                              syn1neg[c + l2] += syn1neg[c + l2] * (5.0  - len) * alpha * LENGTH_STRENGTH;
                         }
                     // Learn weights input -> hidden
                     for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
@@ -657,11 +657,11 @@ void *TrainModelThread(void *id) {
                     // loss += (1 - len)^4
                     for (c = 0; c < layer1_size; c++) 
                         len += syn0[c + l1] * syn0[c + l1];
-
+                    len = sqrt(len);
                     // backprop grad[i] = -2(1 - len) * (d/dxi syn1[i])
                     const float loss = (TARGETLEN - len);
                     for (c = 0; c < layer1_size; c++) 
-                        syn0[c + l1] += syn0[c + l1] * loss*  alpha * 0.01;
+                        syn0[c + l1] += syn0[c + l1] * (5.0  - len) * alpha * LENGTH_STRENGTH;
                 }
         }
         sentence_position++;

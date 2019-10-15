@@ -438,6 +438,88 @@ inline float sigmoid(float x) {
 }
 
 
+
+
+void SaveModel(int is_final_save) {
+    FILE* fo;
+    int a, b, c, d;
+    static int prefix = 0;
+
+    if (is_final_save) {
+      fo = fopen(output_file, "wb");
+    } else {
+      char filepath[1024];
+      sprintf(filepath, "%s.%d", output_file, prefix);
+      prefix = (prefix + 1) % 2;
+      fo = fopen(filepath, "wb");
+    }
+
+    if (classes == 0) {
+        // Save the word vectors
+        fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+        for (a = 0; a < vocab_size; a++) {
+            fprintf(fo, "%s ", vocab[a].word);
+            if (binary)
+                for (b = 0; b < layer1_size; b++) {
+                    real r = syn0[a].ix(b);
+                    fwrite(&r, sizeof(real), 1, fo);
+                }
+            else
+                for (b = 0; b < layer1_size; b++)
+                    fprintf(fo, "%lf ", syn0[a].ix(b));
+            fprintf(fo, "\n");
+        }
+    } else {
+        // Run K-means on the word vectors
+        int clcn = classes, iter = 10, closeid;
+        int *centcn = (int *)malloc(classes * sizeof(int));
+        int *cl = (int *)calloc(vocab_size, sizeof(int));
+        real closev, x;
+        real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
+        for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
+        for (a = 0; a < iter; a++) {
+            for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;
+            for (b = 0; b < clcn; b++) centcn[b] = 1;
+            for (c = 0; c < vocab_size; c++) {
+                for (d = 0; d < layer1_size; d++)
+                    cent[layer1_size * cl[c] + d] += syn0[c].ix(d);
+                centcn[cl[c]]++;
+            }
+            for (b = 0; b < clcn; b++) {
+                closev = 0;
+                for (c = 0; c < layer1_size; c++) {
+                    cent[layer1_size * b + c] /= centcn[b];
+                    closev +=
+                        cent[layer1_size * b + c] * cent[layer1_size * b + c];
+                }
+                closev = sqrt(closev);
+                for (c = 0; c < layer1_size; c++)
+                    cent[layer1_size * b + c] /= closev;
+            }
+            for (c = 0; c < vocab_size; c++) {
+                closev = -10;
+                closeid = 0;
+                for (d = 0; d < clcn; d++) {
+                    x = 0;
+                    for (b = 0; b < layer1_size; b++)
+                        x += cent[layer1_size * d + b] * syn0[c].ix(b);
+                    if (x > closev) {
+                        closev = x;
+                        closeid = d;
+                    }
+                }
+                cl[c] = closeid;
+            }
+        }
+        // Save the K-means classes
+        for (a = 0; a < vocab_size; a++)
+            fprintf(fo, "%s %d\n", vocab[a].word, cl[a]);
+        free(centcn);
+        free(cent);
+        free(cl);
+    }
+    fclose(fo);
+}
 void *TrainModelThread(void *id) {
     long long a, b, d, word, last_word, sentence_length = 0,
                                         sentence_position = 0;
@@ -767,39 +849,11 @@ void *TrainModelThread(void *id) {
     pthread_exit(NULL);
 }
 
-void SaveModel(int final_save) {
-    static int save_count = 0;
-    save_count = (save_count + 1) % 2;
-
-    char modelpath[512];
-    if (final_save) {
-        strcpy(modelpath, output_file);
-    } else {
-        sprintf(modelpath, "%s.%d", output_file, save_count);
-    }
-
-    FILE *fo = fopen(modelpath, "wb");
-    fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
-    for (int a = 0; a < vocab_size; a++) {
-        fprintf(fo, "%s ", vocab[a].word);
-        if (binary)
-            for (int b = 0; b < layer1_size; b++) {
-                real r = syn0[a].ix(b);
-                fwrite(&r, sizeof(real), 1, fo);
-            }
-        else
-            for (int b = 0; b < layer1_size; b++)
-                fprintf(fo, "%lf ", syn0[a].ix(b));
-        fprintf(fo, "\n");
-    }
-    fclose(fo);
-}
 
 void TrainModel() {
-    long a, b, c, d;
-    FILE *fo;
+    long long int a;
     pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
-    printf("model size:%d\n", layer1_size);
+    printf("model size:%lld\n", layer1_size);
     printf("window size:%d\n", window);
     printf("negative samples:%d\n", negative);
     printf("threads: %d\n", num_threads);
@@ -818,72 +872,7 @@ void TrainModel() {
     for (a = 0; a < num_threads; a++)
         pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
     for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
-    fo = fopen(output_file, "wb");
-    if (classes == 0) {
-        // Save the word vectors
-        fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
-        for (a = 0; a < vocab_size; a++) {
-            fprintf(fo, "%s ", vocab[a].word);
-            if (binary)
-                for (b = 0; b < layer1_size; b++) {
-                    real r = syn0[a].ix(b);
-                    fwrite(&r, sizeof(real), 1, fo);
-                }
-            else
-                for (b = 0; b < layer1_size; b++)
-                    fprintf(fo, "%lf ", syn0[a].ix(b));
-            fprintf(fo, "\n");
-        }
-    } else {
-        // Run K-means on the word vectors
-        int clcn = classes, iter = 10, closeid;
-        int *centcn = (int *)malloc(classes * sizeof(int));
-        int *cl = (int *)calloc(vocab_size, sizeof(int));
-        real closev, x;
-        real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
-        for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
-        for (a = 0; a < iter; a++) {
-            for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;
-            for (b = 0; b < clcn; b++) centcn[b] = 1;
-            for (c = 0; c < vocab_size; c++) {
-                for (d = 0; d < layer1_size; d++)
-                    cent[layer1_size * cl[c] + d] += syn0[c].ix(d);
-                centcn[cl[c]]++;
-            }
-            for (b = 0; b < clcn; b++) {
-                closev = 0;
-                for (c = 0; c < layer1_size; c++) {
-                    cent[layer1_size * b + c] /= centcn[b];
-                    closev +=
-                        cent[layer1_size * b + c] * cent[layer1_size * b + c];
-                }
-                closev = sqrt(closev);
-                for (c = 0; c < layer1_size; c++)
-                    cent[layer1_size * b + c] /= closev;
-            }
-            for (c = 0; c < vocab_size; c++) {
-                closev = -10;
-                closeid = 0;
-                for (d = 0; d < clcn; d++) {
-                    x = 0;
-                    for (b = 0; b < layer1_size; b++)
-                        x += cent[layer1_size * d + b] * syn0[c].ix(b);
-                    if (x > closev) {
-                        closev = x;
-                        closeid = d;
-                    }
-                }
-                cl[c] = closeid;
-            }
-        }
-        // Save the K-means classes
-        for (a = 0; a < vocab_size; a++)
-            fprintf(fo, "%s %d\n", vocab[a].word, cl[a]);
-        free(centcn);
-        free(cent);
-        free(cl);
-    }
-    fclose(fo);
+    SaveModel(/*is_final_save=*/1);
 }
 
 int ArgPos(char *str, int argc, char **argv) {

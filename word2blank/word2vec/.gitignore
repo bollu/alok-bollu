@@ -10,3 +10,4 @@ word2phrase
 word-analogy
 *.bin
 word-analogy-concept
+dump-vect

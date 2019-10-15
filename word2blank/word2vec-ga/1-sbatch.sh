@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH -p long
-#SBATCH --time=72:00:00
+#SBATCH --time=200:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name=w2v
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
+#SBATCH -A nlp
 
 
 mkdir -p models/

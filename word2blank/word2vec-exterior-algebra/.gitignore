@@ -1,0 +1,21 @@
+vectors.bin
+same-vector-for-negsamples
+negsampling-random
+original
+distance
+word2vec
+compute-accuracy
+text8
+word2phrase
+word-analogy
+*.bin
+test
+cli
+# object files.t
+*.o
+text7
+slurm/
+models/
+.clihistory.txt
+word-analogy-concept
+word-analogy-context

@@ -275,6 +275,91 @@ void cosine() {
 
         plotHistogram("distances", vals, words, 10);
     }
+
+
+
+    {
+        printf(
+                "\n                                              Word       "
+                "Cosine "
+                "distance\n----------------------------------------------------"
+                "----"
+                "----------------\n");
+        // for (a = 0; a < size; a++) vec[a] = 0;
+
+        vec.fillzero();
+        vec.accumscaleadd(1.0, M[bi[0]]);
+
+        len = 0;
+        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) vec[a] /= len;
+        // vec.normalize();
+        for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            a = 0;
+            for (b = 0; b < cn; b++)
+                if (bi[b] == c) a = 1;
+            if (a == 1) continue;
+            dist = 0;
+
+            const int n = size/2;
+            float vec1symp[n];
+            float vec2symp[n];
+            for(int i = 0; i < size/2; ++i){
+                vec1symp[i] = vec.v[size/2 + i];
+                vec2symp[i] = M[c].v[size/2 + i];
+            }
+
+            for(int i = 0; i < n/2; ++i) {
+                float len1 = vec1symp[i] * vec1symp[i] + vec1symp[n/2 + i] * vec1symp[n/2 + i];
+                len1 = sqrt(len1);
+                vec1symp[i] /= len1;
+                vec1symp[n/2 + i] /= len1;
+
+                float len2 = vec2symp[i] * vec2symp[i] + 
+                    vec2symp[n/2 + i] * vec2symp[n/2 + i];
+                len2 = sqrt(len2);
+                vec2symp[i] /= len2;
+                vec2symp[n/2 + i] /= len2;
+
+            }
+
+            dist = dotSymplectic(n, vec2symp, vec1symp);
+            dist /= (real) n/2;
+
+
+            float dot = 0;
+            float l1 = 0;
+            float l2 = 0;
+            for(int i = 0; i < size/2; ++i) {
+                dot += vec.v[i] * M[c].v[i];
+                l1 += vec.v[i] * vec.v[i];
+                l2 += M[c].v[i] * M[c].v[i];
+            }
+            l1 = sqrt(l1);
+            l2 = sqrt(l2);
+            dist += dot/ l1 / l2;
+
+            vals[c] = dist;
+
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
+        }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+        plotHistogram("distances", vals, words, 10);
+    }
 }
 
 int main(int argc, char **argv) {

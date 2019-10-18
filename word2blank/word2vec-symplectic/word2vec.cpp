@@ -689,7 +689,7 @@ void *TrainModelThread(void *id) {
                     }
                 }
                 // NEGATIVE SAMPLING
-                if (negative >= 0) {
+                if (negative >= 0 && !hs) {
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;

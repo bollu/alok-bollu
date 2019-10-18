@@ -72,6 +72,7 @@ __attribute__((constructor)) void initCTable() {
    }
 }
 
+// https://unapologetic.wordpress.com/2009/10/30/inner-products-on-exterior-algebras-and-determinants/
 // multiply r and s with the dot product r^T A s where A is the standard
 // symplectic form: all notations written with einstein convention
 // (A s)[i] = A[i][j] s[j]

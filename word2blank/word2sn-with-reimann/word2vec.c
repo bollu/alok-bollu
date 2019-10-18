@@ -486,8 +486,10 @@ void *TrainModelThread(void *id) {
         
         if (last_save >= 10000 && ((long long) id == 0)) {
             last_save = 0;
+            printf("\nsaving\n"); fflush(stdout);
             SaveModel(/*last_save=*/1);
         }
+        last_save++;
 
         if (word_count - last_word_count > 100) {
             word_count_actual += word_count - last_word_count;

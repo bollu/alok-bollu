@@ -399,7 +399,7 @@ void InitNet() {
         for (a = 0; a < vocab_size; a++)
             for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     }
-    if (negative > 0) {
+    if (negative >= 0) {
         a = posix_memalign((void **)&syn1neg, 128,
                            (long long)vocab_size * layer1_size * sizeof(real));
         if (syn1neg == NULL) {
@@ -595,7 +595,7 @@ void *TrainModelThread(void *id) {
                             syn1[c + l2] += g * neu1[c];
                     }
                 // NEGATIVE SAMPLING
-                if (negative > 0)
+                if (negative >= 0 && !hs)
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;
@@ -653,28 +653,40 @@ void *TrainModelThread(void *id) {
                     // HIERARCHICAL SOFTMAX
                     if (hs)
                         for (d = 0; d < vocab[word].codelen; d++) {
-                            f = 0;
+
                             l2 = vocab[word].point[d] * layer1_size;
-                            // Propagate hidden -> output
+
+
+                            float dot = 0;
                             for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1[c + l2];
-                            if (f <= -MAX_EXP)
+                                dot += syn0[c + l1] * syn1neg[c + l2];
+
+                            if (dot <= -MAX_EXP)
                                 continue;
-                            else if (f >= MAX_EXP)
+                            else if (dot >= MAX_EXP)
                                 continue;
                             else
                                 f = expTable[(
-                                    int)((f + MAX_EXP) *
+                                    int)((dot + MAX_EXP) *
                                          (EXP_TABLE_SIZE / MAX_EXP / 2))];
                             // 'g' is the gradient multiplied by the learning
                             // rate
                             g = (1 - vocab[word].code[d] - f) * alpha;
-                            // Propagate errors output -> hidden
+
+                            total_loss += g * g;
+
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1[c + l2];
-                            // Learn weights hidden -> output
+                                neu1e[c] = g * syn1neg[c + l2] -
+                                        g * syn1neg[c + l2] * dot;
+
                             for (c = 0; c < layer1_size; c++)
-                                syn1[c + l2] += g * syn0[c + l1];
+                                syn1neg[c + l2] += g * syn0[c + l1] -
+                                        g * syn0[c + l1] * dot;
+                            normalizeVec(syn1neg + l2);
+
+                            for (c = 0; c < layer1_size; c++)
+                                syn0[c + l1] += neu1e[c];
+                            normalizeVec(syn0 + l1);
                         }
                     // NEGATIVE SAMPLING
                     // p
@@ -696,7 +708,7 @@ void *TrainModelThread(void *id) {
                     // x_{t+1} = retract(x_t - eta * (grad_x Loss))
                     //         = normalize(x_t + eta y)
                     //
-                    if (negative > 0) {
+                    if (negative >= 0 && !hs) {
                         for (d = 0; d < negative + 1; d++) {
                             if (d == 0) {
                                 target = word;
@@ -713,35 +725,42 @@ void *TrainModelThread(void *id) {
                                 if (target == word) continue;
                                 lbl = 0;
                             }
+
                             l2 = target * layer1_size;
                             float dot = 0;
                             for (c = 0; c < layer1_size; c++)
                                 dot += syn0[c + l1] * syn1neg[c + l2];
+
                             if (dot > MAX_EXP)
                                 g = (lbl - 1) * alpha;
                             else if (dot < -MAX_EXP)
                                 g = (lbl - 0) * alpha;
                             else {
-                                g = (lbl - sigmoid(dot)) * alpha;
-                                // g = (lbl - expTable[(int)((dot + MAX_EXP) *
-                                //             (EXP_TABLE_SIZE /
-                                //              MAX_EXP / 2))]) *
-                                //     alpha;
+                                // g = (lbl - sigmoid(dot)) * alpha;
+                                g = (lbl - expTable[(int)((dot + MAX_EXP) *
+                                            (EXP_TABLE_SIZE /
+                                             MAX_EXP / 2))]) *
+                                    alpha;
                             }
 
                             total_loss += g * g;
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1neg[c + l2] -
+                                neu1e[c] = g * syn1neg[c + l2] -
                                         g * syn1neg[c + l2] * dot;
+
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] += g * syn0[c + l1] -
                                         g * syn0[c + l1] * dot;
                             normalizeVec(syn1neg + l2);
+
+                            for (c = 0; c < layer1_size; c++)
+                                syn0[c + l1] += neu1e[c];
+                            normalizeVec(syn0 + l1);
                         }
                     }
                     // Learn weights input -> hidden
-                    for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
-                    normalizeVec(syn0 + l1);
+                    // for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+                    // normalizeVec(syn0 + l1);
                 }
         }
         sentence_position++;
@@ -769,7 +788,7 @@ void TrainModel() {
     if (save_vocab_file[0] != 0) SaveVocab();
     if (output_file[0] == 0) return;
     InitNet();
-    if (negative > 0) InitUnigramTable();
+    if (negative >= 0) InitUnigramTable();
     start = clock();
     if (iter > 0) {
         for (a = 0; a < num_threads; a++)

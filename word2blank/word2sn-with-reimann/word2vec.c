@@ -35,6 +35,8 @@ struct vocab_word {
     char *word, *code, codelen;
 };
 
+void SaveModel(int final_save);
+
 char train_file[MAX_STRING], output_file[MAX_STRING];
 char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
@@ -377,6 +379,7 @@ void ReadVocab() {
     fclose(fin);
 }
 
+
 void InitNet() {
     long long a, b;
     unsigned long long next_random = 1;
@@ -435,6 +438,34 @@ float sigmoid(float x) {
     return exp / (1 + exp);
 }
 
+void SaveModel(int final_save) {
+    static int save_count = 0;
+    save_count = (save_count + 1) % 2;
+
+    char modelpath[512];
+    if (final_save) {
+        strcpy(modelpath, output_file);
+    } else {
+        sprintf(modelpath, "%s.%d", output_file, save_count);
+    }
+
+    FILE *fo = fopen(modelpath, "wb");
+    fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+    for (int a = 0; a < vocab_size; a++) {
+        fprintf(fo, "%s ", vocab[a].word);
+        if (binary)
+            for (int b = 0; b < layer1_size; b++) {
+                real r = syn0[a*layer1_size + b];
+                fwrite(&r, sizeof(real), 1, fo);
+            }
+        else
+            for (int b = 0; b < layer1_size; b++)
+                fprintf(fo, "%lf ", syn0[a*layer1_size+b]);
+        fprintf(fo, "\n");
+    }
+    fclose(fo);
+}
+
 void *TrainModelThread(void *id) {
     long long a, b, d, cw, word, last_word, sentence_length = 0,
                                             sentence_position = 0;
@@ -449,7 +480,15 @@ void *TrainModelThread(void *id) {
     real total_loss = 0;
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
+    unsigned long long last_save = 0;
+
     while (1) {
+        
+        if (last_save >= 10000 && ((long long) id == 0)) {
+            last_save = 0;
+            SaveModel(/*last_save=*/1);
+        }
+
         if (word_count - last_word_count > 100) {
             word_count_actual += word_count - last_word_count;
             last_word_count = word_count;

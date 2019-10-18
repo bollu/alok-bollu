@@ -426,11 +426,20 @@ void InitNet() {
     CreateBinaryTree();
 }
 
+float sigmoid(float x) {
+    // we are trying to calculate sigmoid(127)
+    if (x > 5) { return 1; }
+    if (x < -5) { return 0; }
+
+    float exp = powf(2, x);
+    return exp / (1 + exp);
+}
+
 void *TrainModelThread(void *id) {
     long long a, b, d, cw, word, last_word, sentence_length = 0,
                                             sentence_position = 0;
     long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
-    long long l1, l2, c, target, label, local_iter = iter;
+    long long l1, l2, c, target, lbl, local_iter = iter;
     unsigned long long next_random = (long long)id;
     char eof = 0;
     real f, g;
@@ -549,7 +558,7 @@ void *TrainModelThread(void *id) {
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;
-                            label = 1;
+                            lbl = 1;
                         } else {
                             next_random =
                                 next_random * (unsigned long long)25214903917 +
@@ -558,18 +567,18 @@ void *TrainModelThread(void *id) {
                             if (target == 0)
                                 target = next_random % (vocab_size - 1) + 1;
                             if (target == word) continue;
-                            label = 0;
+                            lbl = 0;
                         }
                         l2 = target * layer1_size;
                         f = 0;
                         for (c = 0; c < layer1_size; c++)
                             f += neu1[c] * syn1neg[c + l2];
                         if (f > MAX_EXP)
-                            g = (label - 1) * alpha;
+                            g = (lbl - 1) * alpha;
                         else if (f < -MAX_EXP)
-                            g = (label - 0) * alpha;
+                            g = (lbl - 0) * alpha;
                         else
-                            g = (label - expTable[(int)((f + MAX_EXP) *
+                            g = (lbl - expTable[(int)((f + MAX_EXP) *
                                                         (EXP_TABLE_SIZE /
                                                          MAX_EXP / 2))]) *
                                 alpha;
@@ -627,11 +636,30 @@ void *TrainModelThread(void *id) {
                                 syn1[c + l2] += g * syn0[c + l1];
                         }
                     // NEGATIVE SAMPLING
-                    if (negative > 0)
+                    // p
+                    // Loss = (lbl - sigmoid(x . y))^2 = g^2
+                    // Rgrad_x Loss = - g * y (in R^n)
+                    // Sgrad_x = (I - xx^T) [-gy]
+                    // x_{t+1} = ret(x_t - eps * Sgrad_x)
+                    //= ret(x_t - eps * [(I - xx^T) [- gy]])
+                    //= ret(x_t - eps * [- gy + gy(x.y)]
+                    //= ret(x_t + eps * [ gy - gy(x.y)]
+                    //         
+
+                    // Rgrad_y Loss = - (lbl - x . y) * x (in R^n)
+                    // 
+                    // (x_t, y_t) Step -> (x_{t+1}, y_{t+1}
+                    // (x_t, y_t) Step_x -> x_{t+1}
+                    // (x_t, y_t) Step_y -> y_{t+1}
+                    // 
+                    // x_{t+1} = retract(x_t - eta * (grad_x Loss))
+                    //         = normalize(x_t + eta y)
+                    //
+                    if (negative > 0) {
                         for (d = 0; d < negative + 1; d++) {
                             if (d == 0) {
                                 target = word;
-                                label = 1;
+                                lbl = 1;
                             } else {
                                 next_random =
                                     next_random *
@@ -642,28 +670,34 @@ void *TrainModelThread(void *id) {
                                 if (target == 0)
                                     target = next_random % (vocab_size - 1) + 1;
                                 if (target == word) continue;
-                                label = 0;
+                                lbl = 0;
                             }
                             l2 = target * layer1_size;
-                            f = 0;
+                            float dot = 0;
                             for (c = 0; c < layer1_size; c++)
-                                f += syn0[c + l1] * syn1neg[c + l2];
-                            if (f > MAX_EXP)
-                                g = (label - 1) * alpha;
-                            else if (f < -MAX_EXP)
-                                g = (label - 0) * alpha;
-                            else
-                                g = (label - expTable[(int)((f + MAX_EXP) *
-                                                            (EXP_TABLE_SIZE /
-                                                             MAX_EXP / 2))]) *
-                                    alpha;
+                                dot += syn0[c + l1] * syn1neg[c + l2];
+                            if (dot > MAX_EXP)
+                                g = (lbl - 1) * alpha;
+                            else if (dot < -MAX_EXP)
+                                g = (lbl - 0) * alpha;
+                            else {
+                                g = (lbl - sigmoid(dot)) * alpha;
+                                // g = (lbl - expTable[(int)((dot + MAX_EXP) *
+                                //             (EXP_TABLE_SIZE /
+                                //              MAX_EXP / 2))]) *
+                                //     alpha;
+                            }
+
                             total_loss += g * g;
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1neg[c + l2];
+                                neu1e[c] += g * syn1neg[c + l2] -
+                                        g * syn1neg[c + l2] * dot;
                             for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0[c + l1];
-                        normalizeVec(syn1neg + l2);
+                                syn1neg[c + l2] += g * syn0[c + l1] -
+                                        g * syn0[c + l1] * dot;
+                            normalizeVec(syn1neg + l2);
                         }
+                    }
                     // Learn weights input -> hidden
                     for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
                     normalizeVec(syn0 + l1);

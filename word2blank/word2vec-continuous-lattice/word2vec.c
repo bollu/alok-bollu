@@ -624,6 +624,7 @@ void *TrainModelThread(void *id) {
                             // 'g' is the gradient multiplied by the learning
                             // rate
                             g = (1 - vocab[word].code[d] - f) * alpha;
+                            total_loss += (1 - vocab[word].code[d] - f) * (1 - vocab[word].code[d] - f);
                             // Propagate errors output -> hidden
                             for (c = 0; c < layer1_size; c++)
                                 neu1e[c] += g * syn1[c + l2];
@@ -632,7 +633,7 @@ void *TrainModelThread(void *id) {
                                 syn1[c + l2] += g * syn0[c + l1];
                         }
                     // NEGATIVE SAMPLING
-                    if (negative >= 0) {
+                    if (negative >= 0 && !hs) {
                         for (d = 0; d < negative + 1; d++) {
                             if (d == 0) {
                                 target = word;

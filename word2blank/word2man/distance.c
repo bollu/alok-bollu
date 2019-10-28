@@ -28,7 +28,8 @@ char *bestw[N];
 char file_name[max_size], st[100][max_size];
 float dist, len, bestd[N], vec[max_size];
 long long words, size, a, b, c, d, cn, bi[100];
-float *M;
+float *M, *sqrtm;
+float *TransformedM;
 char *vocab;
 
 // find dot product of two words
@@ -65,24 +66,21 @@ void cosine() {
     for (a = 0; a < size; a++) vec[a] = 0;
     for (b = 0; b < cn; b++) {
         if (bi[b] == -1) continue;
-        for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
+        for (a = 0; a < size; a++) vec[a] += TransformedM[a + bi[b] * size];
     }
-    // len = 0;
-    // for (a = 0; a < size; a++) len +=  (c == 0 ? -1 : 1) * vec[a] * vec[a];
-    // assert(len >= 0);
-    // len = sqrt(len);
-    // for (a = 0; a < size; a++) vec[a] /= len;
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    len = 0;
+    for (a = 0; a < size; a++) len +=  (c == 0 ? -1 : 1) * vec[a] * vec[a];
+    assert(len >= 0);
+    len = sqrt(len);
+    for (a = 0; a < size; a++) vec[a] /= len;
+
+    for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
-        a = 0;
-        for (b = 0; b < cn; b++)
-            if (bi[b] == c) a = 1;
-        if (a == 1) continue;
         dist = 0;
-        for (a = 0; a < size; a++) dist += (a == 0 ? -1 : 1) * vec[a] * M[a + c * size];
+        for (a = 0; a < size; a++) dist += vec[a] * TransformedM[a + c * size];
         for (a = 0; a < N; a++) {
-            if (fabs(dist) > fabs(bestd[a])) {
+            if ((dist) > (bestd[a])) {
                 for (d = N - 1; d > a; d--) {
                     bestd[d] = bestd[d - 1];
                     strcpy(bestw[d], bestw[d - 1]);
@@ -119,6 +117,35 @@ int main(int argc, char **argv) {
                (long long)words * size * sizeof(float) / 1048576, words, size);
         return -1;
     }
+
+    TransformedM = NULL;
+    TransformedM = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    if (TransformedM == NULL) {
+        printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
+               (long long)words * size * sizeof(float) / 1048576, words, size);
+        return -1;
+    }
+
+    sqrtm = (float *)malloc((long long)size * (long long)size * sizeof(float));
+    if (sqrtm == NULL) {
+        printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
+               (long long)size * size * sizeof(float) / 1048576, size, size);
+        return -1;
+    }
+
+    char token[100];
+    fscanf(f, "%s", token);
+    printf("token: (%s)\n", token);
+    for(int i = 0; i < size; ++i) {
+        for(int j = 0; j < size; ++j) {
+            // fread(&sqrtm[i*size+j], sizeof(float), 1, f);
+            fscanf(f, "%f", &sqrtm[i*size+j]);
+            printf("%f ", sqrtm[i*size+j]);
+        }
+        printf("\n\t");
+    }
+
+
     for (b = 0; b < words; b++) {
         a = 0;
         while (1) {
@@ -126,15 +153,25 @@ int main(int argc, char **argv) {
             if (feof(f) || (vocab[b * max_w + a] == ' ')) break;
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
+
         vocab[b * max_w + a] = 0;
         for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+
+        for(int i = 0; i < size; ++i) {
+            TransformedM[b * size +i] = 0;
+            for(int j = 0; j < size; ++j) {
+                TransformedM[b * size +i] += sqrtm[i * size + j] * M[b * size + j];
+            }
+        }
+
         len = 0;
-        for (a = 0; a < size; a++) len += (c == 0 ? -1 : 1) * M[a + b * size] * M[a + b * size];
-        printf("len: %3.2f\n", len);
-        // if (len < 0) len = 0;
-        // assert(len >= 0);
-        // len = sqrt(len);
-        // for (a = 0; a < size; a++) M[a + b * size] /= len;
+        for (a = 0; a < size; a++) len += TransformedM[b * size + a] * TransformedM[b * size + a];
+        // printf("%s\n", &vocab[b * max_w]);
+        // printf("len: %3.2f\n", len);
+        if (len < 0) len = 0;
+        assert(len >= 0);
+        len = sqrt(len);
+        for (a = 0; a < size; a++) TransformedM[a + b * size] /= len;
     }
     fclose(f);
     while (1) {

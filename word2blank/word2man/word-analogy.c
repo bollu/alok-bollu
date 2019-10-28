@@ -169,6 +169,7 @@ int main(int argc, char **argv) {
   float dist, len, bestd[N], vec[max_size];
   long long words, size, a, b, c, d, cn, bi[100];
   float *M;
+  float *TransformedM;
   char *vocab;
   if (argc < 2) {
     printf("Usage: ./word-analogy <FILE>\nwhere FILE contains word projections in the BINARY FORMAT\n");
@@ -184,6 +185,38 @@ int main(int argc, char **argv) {
   fscanf(f, "%lld", &size);
   vocab = (char *)malloc((long long)words * max_w * sizeof(char));
   M = (float *)malloc((long long)words * (long long)size * sizeof(float));
+  if (M == NULL) {
+    printf("Cannot allocate memory: %lld MB    %lld  %lld\n", (long long)words * size * sizeof(float) / 1048576, words, size);
+    return -1;
+  }
+
+  TransformedM = NULL;
+  TransformedM = (float *)malloc((long long)words * (long long)size * sizeof(float));
+  if (TransformedM == NULL) {
+      printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
+              (long long)words * size * sizeof(float) / 1048576, words, size);
+      return -1;
+  }
+
+  float *sqrtm = (float *)malloc((long long)size * (long long)size * sizeof(float));
+  if (sqrtm == NULL) {
+      printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
+              (long long)size * size * sizeof(float) / 1048576, size, size);
+      return -1;
+  }
+
+  char token[100];
+  fscanf(f, "%s", token);
+  printf("token: (%s)\n", token);
+  for(int i = 0; i < size; ++i) {
+      for(int j = 0; j < size; ++j) {
+          // fread(&sqrtm[i*size+j], sizeof(float), 1, f);
+          fscanf(f, "%f", &sqrtm[i*size+j]);
+          printf("%f ", sqrtm[i*size+j]);
+      }
+      printf("\n\t");
+  }
+
   // a : b :: x : ?
   real sins[size-1];
   real coss[size-1];
@@ -194,10 +227,6 @@ int main(int argc, char **argv) {
   real anglesY[size-1];
   real anglesZ[size-1];
 
-  if (M == NULL) {
-    printf("Cannot allocate memory: %lld MB    %lld  %lld\n", (long long)words * size * sizeof(float) / 1048576, words, size);
-    return -1;
-  }
   for (b = 0; b < words; b++) {
     a = 0;
     while (1) {
@@ -207,10 +236,18 @@ int main(int argc, char **argv) {
     }
     vocab[b * max_w + a] = 0;
     for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+
+    for(int i = 0; i < size; ++i) {
+        TransformedM[b * size +i] = 0;
+        for(int j = 0; j < size; ++j) {
+            TransformedM[b * size +i] += sqrtm[i * size + j] * M[b * size + j];
+        }
+    }
+
     len = 0;
-    for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+    for (a = 0; a < size; a++) len += TransformedM[a + b * size] * TransformedM[a + b * size];
     len = sqrt(len);
-    for (a = 0; a < size; a++) M[a + b * size] /= len;
+    for (a = 0; a < size; a++) TransformedM[a + b * size] /= len;
   }
   fclose(f);
   while (1) {
@@ -259,9 +296,16 @@ int main(int argc, char **argv) {
     }
     if (b == 0) continue;
     printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
-    vec2angle(size, &M[a+bi[1]*size], anglesA);
-    vec2angle(size, &M[a+bi[0]*size], anglesB);
-    vec2angle(size, &M[a+bi[2]*size], anglesX);
+
+    // compute correct vec vector
+    for (a = 0; a < size; a++) vec[a] = 
+      TransformedM[a + bi[1] * size] - 
+      TransformedM[a + bi[0] * size] + 
+      TransformedM[a + bi[2] * size];
+    /*
+    vec2angle(size, &TransformedM[a+bi[1]*size], anglesA);
+    vec2angle(size, &TransformedM[a+bi[0]*size], anglesB);
+    vec2angle(size, &TransformedM[a+bi[2]*size], anglesX);
 
     for (a = 0; a < size - 1; a++) 
         anglesY[a] = -1.0 * (anglesA[a] - anglesB[a] + anglesX[a]);
@@ -270,11 +314,6 @@ int main(int argc, char **argv) {
     angleprecompute(size, anglesY, coss, sins, sinaccum);
     angle2vec(size, coss, sins, sinaccum, vec);
 
-    // compute correct vec vector
-    for (a = 0; a < size; a++) vec[a] = 
-      M[a + bi[1] * size] - 
-      M[a + bi[0] * size] + 
-      M[a + bi[2] * size];
 
     vec2angle(size, vec, anglesZ);
 
@@ -284,6 +323,7 @@ int main(int argc, char **argv) {
     }
     delta /= (size - 1);
     printf("mean angle deviation between Y and Z: %.4f\n", delta);
+    */
 
     len = 0;
     for (a = 0; a < size; a++) len += vec[a] * vec[a];
@@ -299,7 +339,7 @@ int main(int argc, char **argv) {
       for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
       if (a == 1) continue;
       dist = 0;
-      for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+      for (a = 0; a < size; a++) dist += vec[a] * TransformedM[a + c * size];
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {

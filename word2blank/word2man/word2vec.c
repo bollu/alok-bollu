@@ -747,6 +747,15 @@ void *TrainModelThread(void *id) {
                                 }
                             } else {
 
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
+                                // ders  = (l * x * y.T + l * y *x.T) (found using sage)
                                 // sage: dot = (x.T * l.T * l * y)[0]
                                 // sage: l[2][3]
                                 // l23

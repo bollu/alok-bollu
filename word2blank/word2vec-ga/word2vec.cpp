@@ -563,10 +563,11 @@ void *TrainModelThread(void *id) {
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: "
+                    "%cAlpha: %f  Progress: %.2f%%  progress (in epochs): %.2f%% Words/thread/sec: "
                     "%.2fk  Total loss: %6.4f",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
+                    (word_count_actual - (iter - local_iter) * train_words) / (real)(train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
                                          (real)CLOCKS_PER_SEC * 1000),
                     total_loss);

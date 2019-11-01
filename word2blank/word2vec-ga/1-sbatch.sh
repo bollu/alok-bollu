@@ -13,7 +13,7 @@ mkdir -p slurm/
 
 make word2vec distance
 head -c 1000000 text8 > text0
-time ./word2vec -train text0 -output models/text0 -cbow 0 -size 8 \
+time ./word2vec -train text8 -output models/text8-5073607f0f -cbow 0 -size 8 \
     -window 4 -negative 0 -hs 1 -sample 1e-4 -threads 40 -binary 1 -iter 30 \
     -alpha 0.03
 # ./1-save-models.sh

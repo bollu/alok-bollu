@@ -110,7 +110,7 @@ real getNormalizationFactorR(Vec w) {
 void cosine() {
     real vals[words];
 
-    
+
     {
         printf(
                 "\n                                              Word       "
@@ -119,21 +119,11 @@ void cosine() {
                 "----"
                 "----------------\n");
         // for (a = 0; a < size; a++) vec[a] = 0;
+
         vec.fillzero();
         vec.accumscaleadd(1.0, M[bi[0]]);
 
-        // for (b = 0; b < cn; b++) {
-        //     if (bi[b] == -1) continue;
-        //     vec.accumscaleadd(1.0, M[bi[b]]);
-        //     // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
-        // }
-        for (int i = 0; i < min(size, 10); i++) {
-            printf("%3.2f  ", vec.ix(i));
-        }
-        printf("\n");
         len = 0;
-
-
         // for (a = 0; a < size; a++) len += vec[a] * vec[a];
         // len = sqrt(len);
         // for (a = 0; a < size; a++) vec[a] /= len;
@@ -144,17 +134,23 @@ void cosine() {
             a = 0;
             for (b = 0; b < cn; b++)
                 if (bi[b] == c) a = 1;
-            if (a == 1) continue;
+            // if (a == 1) continue;
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
-            // const float curnorm = getNormalizationFactorR(c);
-            dist = mulQuadForm(size, vec.v, quadform, M[c].v, Ay, nullptr);
-            float l1 = getNormalizationFactorL(vec);
-            float l2 = getNormalizationFactorR(M[c]);
+            dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
+            float l1 = getNormalizationFactorL(M[c]);
+            float l2 = getNormalizationFactorR(vec);
 
             dist /= sqrt(fabs(l1));
             dist /= sqrt(fabs(l2));
+
+
+            l1 = getNormalizationFactorR(M[c]);
+            l2 = getNormalizationFactorL(vec);
+
+            dist /= sqrt(fabs(l1));
+            dist /= sqrt(fabs(l2));
+
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {
@@ -170,6 +166,7 @@ void cosine() {
             }
         }
         for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
         plotHistogram("distances", vals, words, 10);
     }
 
@@ -197,7 +194,7 @@ void cosine() {
             a = 0;
             for (b = 0; b < cn; b++)
                 if (bi[b] == c) a = 1;
-            if (a == 1) continue;
+            // if (a == 1) continue;
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
             dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);

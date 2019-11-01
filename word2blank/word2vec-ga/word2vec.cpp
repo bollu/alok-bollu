@@ -552,7 +552,7 @@ void *TrainModelThread(void *id) {
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
     while (1) {
         last_save += 1;
-        if (last_save >= 1 && ((long long) id == 0)) {
+        if (last_save >= 1000 && ((long long) id == 0)) {
             last_save = 0;
             SaveModel(/*last_save=*/false);
         }
@@ -748,31 +748,10 @@ void *TrainModelThread(void *id) {
                             syn0v->v[i] += err * gsyn0[i];
                             assert(fabs(syn0v->v[i]) <= 1e5);
                         }
-
-                        /*
-                        // Propagate hidden -> output
-                        for (c = 0; c < layer1_size; c++)
-                            f += syn0[c + l1] * syn1[c + l2];
-                        if (f <= -MAX_EXP)
-                            continue;
-                        else if (f >= MAX_EXP)
-                            continue;
-                        else
-                        // 'g' is the gradient multiplied by the learning
-                        // rate
-                        g = (1 - vocab[word].code[d] - f) * alpha;
-                        // Propagate errors output -> hidden
-                        for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1[c + l2];
-                        // Learn weights hidden -> output
-                        for (c = 0; c < layer1_size; c++)
-                            syn1[c + l2] += g * syn0[c + l1];
-                        */
                     }
                 }
-                /*
                 // NEGATIVE SAMPLING
-                if (negative >= 0) {
+                if (negative >= 0 && !hs) {
                     for (d = 0; d < negative + 1; d++) {
                         if (d == 0) {
                             target = word;
@@ -818,7 +797,6 @@ void *TrainModelThread(void *id) {
                     } // end for loop for negative sampling
                 } // end condition around negative samples
                 // Learn weights input -> hidden
-                */ 
 
                 next_random =
                     next_random *

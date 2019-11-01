@@ -28,8 +28,9 @@ FILE *f;
 char st1[max_size];
 char *bestw[N];
 char file_name[max_size], st[100][max_size];
-float dist, len, bestd[N];
+float len, bestd[N];
 Vec vec;
+Vec veccontext;
 long long words, size, a, b, c, d, cn, bi[100];
 Vec *M;
 char *vocab;
@@ -111,6 +112,82 @@ void cosine() {
     real vals[words];
 
 
+    printf("===============================================\n");
+    printf("===============================================\n");
+    printf("===============================================\n");
+    printf("===============================================\n");
+    printf("===============================================\n");
+    // if we have 2 words
+    if (cn == 1) {
+        printf(
+                "\n                                              Word       "
+                "Cosine "
+                "distance\n----------------------------------------------------"
+                "----"
+                "----------------\n");
+        // for (a = 0; a < size; a++) vec[a] = 0;
+
+        vec.fillzero();
+        vec.accumscaleadd(1.0, M[bi[0]]);
+
+
+        len = 0;
+        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        // len = sqrt(len);
+        // for (a = 0; a < size; a++) vec[a] /= len;
+        // vec.normalize();
+        for (a = 0; a < N; a++) bestd[a] = -1;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            a = 0;
+            for (b = 0; b < cn; b++)
+                if (bi[b] == c) a = 1;
+            // if (a == 1) continue;
+            // dist = 0;
+            // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            // float vonctx = mulQuadForm(size, vec.v, quadform, veccontext.v, Ay, nullptr);
+            float x = mulQuadForm(size, vec.v, quadform, M[c].v, Ay, nullptr);
+            float l1 = getNormalizationFactorL(vec);
+            float l2 = getNormalizationFactorR(M[c]);
+            x /= sqrt(fabs(l1));
+            x /= sqrt(fabs(l2));
+
+            float y = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
+            l1 = getNormalizationFactorL(M[c]);
+            l2 = getNormalizationFactorR(vec);
+
+            // y /= sqrt(fabs(l1));
+            // y /= sqrt(fabs(l2));
+
+
+            float z = mulQuadForm(size, M[c].v, quadform, M[c].v, Ay, nullptr);
+            float w = mulQuadForm(size, vec.v, quadform, vec.v, Ay, nullptr);
+            // z /= sqrt(fabs(getNormalizationFactorL(M[c])));
+            // z /= sqrt(fabs(getNormalizationFactorR(M[c])));
+
+
+            // float dist = x * y;
+            float dist = log(x) + log(y) - log(sqrt(z)) - log(sqrt(w));
+
+            vals[c] = dist;
+
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
+        }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+        plotHistogram("distances", vals, words, 10);
+    }
+
     {
         printf(
                 "\n                                              Word       "
@@ -137,20 +214,12 @@ void cosine() {
             // if (a == 1) continue;
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
-            float l1 = getNormalizationFactorL(M[c]);
-            float l2 = getNormalizationFactorR(vec);
+            float dist = mulQuadForm(size, vec.v, quadform, M[c].v, Ay, nullptr);
+            float l1 = getNormalizationFactorL(vec);
+            float l2 = getNormalizationFactorR(M[c]);
 
             dist /= sqrt(fabs(l1));
             dist /= sqrt(fabs(l2));
-
-
-            l1 = getNormalizationFactorR(M[c]);
-            l2 = getNormalizationFactorL(vec);
-
-            dist /= sqrt(fabs(l1));
-            dist /= sqrt(fabs(l2));
-
             vals[c] = dist;
 
             for (a = 0; a < N; a++) {
@@ -197,7 +266,7 @@ void cosine() {
             // if (a == 1) continue;
             // dist = 0;
             // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
+            float dist = mulQuadForm(size, M[c].v, quadform, vec.v, Ay, nullptr);
             float l1 = getNormalizationFactorL(M[c]);
             float l2 = getNormalizationFactorR(vec);
 
@@ -250,6 +319,7 @@ int main(int argc, char **argv) {
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
     M = (Vec *)malloc((long long)words * sizeof(Vec));
     vec.alloc(size);
+    veccontext.alloc(size);
     // (long long)size * sizeof(float));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",

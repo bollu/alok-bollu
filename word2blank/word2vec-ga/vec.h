@@ -82,10 +82,6 @@ inline real dotContainmentReference(int len, const real *vthis, const real
 			if (!subset) continue;
 
 			dot += vthis[i] * vother[j];
-			// make the gradients of larger dimensions expoentnially
-			// much larger, thereby forcing them to only be used
-			// if they truly exist. Otherwise, they will be squashed towards
-			// 0
 			if (gbufthis) gbufthis[i] += vother[j];
 			if (gbufother) gbufother[j] += vthis[i];
 		}

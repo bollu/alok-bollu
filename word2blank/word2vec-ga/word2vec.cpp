@@ -574,12 +574,10 @@ void *TrainModelThread(void *id) {
                 fflush(stdout);
                 total_loss = 0;
             }
-            /*
             alpha = starting_alpha *
                     (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
-            */
         }
         if (sentence_length == 0) {
             while (1) {

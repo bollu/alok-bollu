@@ -61,7 +61,7 @@ bool *dev_mask_syn1neg;
 real *dev_dots;
 
 
-const int NSAMPLES_PER_KERNEL_LAUNCH = 1e4;
+const int NSAMPLES_PER_KERNEL_LAUNCH = 1e2;
 int *dev_labels;
 char *dev_codes;
 unsigned long long *dev_focuses, *dev_ctxes;
@@ -807,6 +807,30 @@ __global__ void backpropHS(const int size, const int vocab,
         atomicAdd(&syn0[y*size + x], gsyn0[y * size + x]);
 
 
+        // atomicAdd(&syn1neg[ctxes[z] * size + y], gsyn1neg[ctxes[z] * size + y]);
+        // atomicAdd(&syn0[focuses[z]*size + x], gsyn0[focuses[z] * size + x]);
+
+}
+
+
+// 2D kernel: layer1_size x nsamples
+__global__ void backpropGradIndirect(const int size, const int nseen, 
+                 real *vec,
+                 const real *grad,
+                 const unsigned long long *seen) {
+
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
+        // const int z = blockIdx.z * blockDim.z + threadIdx.z;
+
+
+        if (x >= size || y >= nseen) { return; }
+
+
+        // const bool enabled = vecenabled(x, y);
+        // if (!enabled) return;
+
+        atomicAdd(&vec[seen[y]*size + x], grad[seen[y] * size + x]);
 
 
         // atomicAdd(&syn1neg[ctxes[z] * size + y], gsyn1neg[ctxes[z] * size + y]);
@@ -815,7 +839,9 @@ __global__ void backpropHS(const int size, const int vocab,
 }
 
 void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
-                *ctxes, char *codes) {
+                *ctxes, char *codes, 
+                const unsigned long long num_uniq_focuses, const unsigned long long *uniq_focuses, 
+                const unsigned long long num_uniq_ctxes, const unsigned long long *uniq_ctxes) {
 
         zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)),
                 dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
@@ -842,6 +868,16 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
         cudaMemcpy(dev_codes, 
                         codes, 
                         nsamples * sizeof(char), 
+                        cudaMemcpyHostToDevice); 
+
+        cudaMemcpy(dev_uniq_focuses, 
+                        uniq_focuses, 
+                        num_uniq_focuses * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
+
+        cudaMemcpy(dev_uniq_ctxes, 
+                        uniq_ctxes, 
+                        num_uniq_ctxes * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
 
         const int dimsize = 1;
@@ -896,30 +932,43 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
                 getchar();
         }
 
-        dim3 threadDims2(TX*TY, TZ);
-        dim3 blockDims2(calcBlockSize(layer1_size, TX*TY), calcBlockSize(vocab_size, TZ));
+        {
+                assert(num_uniq_focuses < NSAMPLES_PER_KERNEL_LAUNCH);
+                dim3 threadDims2(TX*TY, TZ);
+                dim3 blockDims2(calcBlockSize(layer1_size, TX*TY), calcBlockSize(num_uniq_focuses, TZ));
 
-        if (0) {
-                std::cout << "blockDims2: (" << blockDims2.x << ", " << blockDims2.y << ", " << blockDims2.z << ")\n";
-                std::cout << "threadDims2: (" << threadDims2.x << ", " << threadDims2.y << ", " << threadDims2.z << ")\n";
+                if (0) {
+                        std::cout << "blockDims2: (" << blockDims2.x << ", " << blockDims2.y << ", " << blockDims2.z << ")\n";
+                        std::cout << "threadDims2: (" << threadDims2.x << ", " << threadDims2.y << ", " << threadDims2.z << ")\n";
+                }
+
+                // printf("launching backprophs kernel...\n");
+                backpropGradIndirect<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_focuses,
+                                dev_syn0, dev_gsyn0, dev_uniq_focuses);
+                // printf("ran backprophs kernel...\n");
+
+                if (0) {
+                        real dbg_syn0[vocab_size * layer1_size];
+                        printf("(AFTER)dbg_syn0: ");
+                        cudaMemcpy(dbg_syn0, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost); 
+                        for(int i = 0; i < nsamples; ++i) {
+                                for(int j = 0; j < layer1_size; ++j) {
+                                        printf("%4.2f ", dbg_syn0[focuses[i] * layer1_size + j]);
+                                }
+                                printf("\n");
+                        }
+                        getchar();
+                }
         }
 
-        // printf("launching backprophs kernel...\n");
-        backpropHS<<<blockDims2, threadDims2>>>(layer1_size, vocab_size,
-                        dev_syn0, dev_gsyn0, dev_syn1neg, dev_gsyn1neg, dev_focuses, dev_ctxes);
-        // printf("ran backprophs kernel...\n");
 
-        if (0) {
-                real dbg_syn0[vocab_size * layer1_size];
-                printf("(AFTER)dbg_syn0: ");
-                cudaMemcpy(dbg_syn0, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost); 
-                for(int i = 0; i < nsamples; ++i) {
-                        for(int j = 0; j < layer1_size; ++j) {
-                                printf("%4.2f ", dbg_syn0[focuses[i] * layer1_size + j]);
-                        }
-                        printf("\n");
-                }
-                getchar();
+        {
+                assert(num_uniq_ctxes < NSAMPLES_PER_KERNEL_LAUNCH);
+                dim3 threadDims2(TX*TY, TZ);
+                dim3 blockDims2(calcBlockSize(layer1_size, TX*TY), calcBlockSize(num_uniq_ctxes, TZ));
+
+                backpropGradIndirect<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_ctxes,
+                                dev_syn1neg, dev_gsyn1neg, dev_uniq_ctxes);
         }
 
 }
@@ -952,17 +1001,18 @@ void *TrainModelThread(void *id) {
     int ix = 0;
     int labels[NSAMPLES_PER_KERNEL_LAUNCH];
     char codes[NSAMPLES_PER_KERNEL_LAUNCH];
+
     unsigned long long ctxes[NSAMPLES_PER_KERNEL_LAUNCH],
             focuses[NSAMPLES_PER_KERNEL_LAUNCH],
             uniq_focuses[NSAMPLES_PER_KERNEL_LAUNCH],
             uniq_ctxes[NSAMPLES_PER_KERNEL_LAUNCH];
     int n_uniq_focuses = 0;
     int n_uniq_ctxes = 0;
-    bool focuses_mask[vocab_size],
-        ctxes_mask[vocab_size];
+    bool focus_seen[vocab_size],
+        ctx_seen[vocab_size];
 
-    for(int i = 0; i < vocab_size; ++i) focuses_mask[i] = false;
-    for(int i = 0; i < vocab_size; ++i) ctxes_mask[i] = false;
+    for(int i = 0; i < vocab_size; ++i) focus_seen[i] = false;
+    for(int i = 0; i < vocab_size; ++i) ctx_seen[i] = false;
 
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
@@ -1138,17 +1188,45 @@ void *TrainModelThread(void *id) {
                     for (d = 0; d < vocab[word].codelen; d++) {
                         f = 0;
                         l2 = vocab[word].point[d] * layer1_size;
+                        const unsigned long long target = vocab[word].point[d];
 
                         focuses[ix] = last_word;
-                        ctxes[ix] = vocab[word].point[d];
+                        ctxes[ix] = target;
                         codes[ix] = vocab[word].code[d];
+
+                        if (!focus_seen[last_word]) {
+                            uniq_focuses[n_uniq_focuses] = last_word;
+                            n_uniq_focuses++;
+                            focus_seen[last_word] = true;
+                        }
+
+                        if (!ctx_seen[target]) {
+                            uniq_ctxes[n_uniq_ctxes] = target;
+                            n_uniq_ctxes++;
+                            ctx_seen[target] = true;
+                        }
 
                         if (ix == NSAMPLES_PER_KERNEL_LAUNCH - 1) {
                                 runHSKernel(NSAMPLES_PER_KERNEL_LAUNCH,
                                         focuses,
                                         ctxes,
-                                        codes);
+                                        codes,
+                                        n_uniq_focuses,
+                                        uniq_focuses,
+                                        n_uniq_ctxes,
+                                        uniq_ctxes);
                                 ix = 0;
+
+                                for(int i = 0; i < n_uniq_ctxes; ++i) {
+                                    ctx_seen[uniq_ctxes[i]] = false;
+                                }
+
+                                for(int i = 0; i < n_uniq_focuses; ++i) {
+                                    focus_seen[uniq_focuses[i]] = false;
+                                }
+                                n_uniq_ctxes = 0;
+                                n_uniq_focuses = 0;
+
                         } else { ix++; }
 
                         /*
@@ -1197,16 +1275,16 @@ void *TrainModelThread(void *id) {
                         focuses[ix] = last_word;
                         ctxes[ix] = target;
 
-                        if (!focuses_mask[last_word]) {
+                        if (!focus_seen[last_word]) {
                             uniq_focuses[n_uniq_focuses] = last_word;
                             n_uniq_focuses++;
-                            focuses_mask[last_word] = true;
+                            focus_seen[last_word] = true;
                         }
 
-                        if (!ctxes_mask[target]) {
+                        if (!ctx_seen[target]) {
                             uniq_ctxes[n_uniq_ctxes] = target;
                             n_uniq_ctxes++;
-                            ctxes_mask[target] = true;
+                            ctx_seen[target] = true;
                         }
 
 
@@ -1225,11 +1303,11 @@ void *TrainModelThread(void *id) {
                                 n_uniq_ctxes = 0;
                                 n_uniq_focuses = 0;
                                 for(int i = 0; i < vocab_size; ++i) {
-                                    ctxes_mask[i] = false;
+                                    ctx_seen[i] = false;
                                 }
 
                                 for(int i = 0; i < vocab_size; ++i) {
-                                    focuses_mask[i] = false;
+                                    focus_seen[i] = false;
                                 }
                         } else {
                            ix++;

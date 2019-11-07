@@ -669,7 +669,7 @@ void runkernels(int nsamples, int *labels,
 
 //x, y = value
 //z = data point
-const int TX = 512, TY = 2;
+const int TX = 32, TY = 32;
 
 __global__ void dotsHS(const int size, const int nsamples,
                 const real *syn0,  // LAYER1_SIZE * VOCAB_SIZE
@@ -1254,13 +1254,11 @@ void TrainModelThread(void *id) {
 
     assert(ix < NSAMPLES_PER_KERNEL_LAUNCH);
 
-    printf("TODO: consume final input\n");
-
     // consume leftover data.
-    // runkernels(ix, labels, focuses, ctxes, 
-    //         n_uniq_focuses, n_uniq_ctxes,
-    //         uniq_focuses,
-    //         uniq_ctxes);
+     runkernels(ix, labels, focuses, ctxes, 
+             n_uniq_focuses, n_uniq_ctxes,
+             uniq_focuses,
+             uniq_ctxes);
     fclose(fi);
     // free(neu1);
     neu1e.freemem();

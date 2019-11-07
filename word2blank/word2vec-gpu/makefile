@@ -2,7 +2,7 @@ CC = nvcc
 #Using -Ofast instead of -O3 might result in faster code, but is supported only by newer GCC versions
 DEBUG=-Xcompiler -fsanitize=address -Xcompiler -fsanitize=undefined -g -O0 -Xcompiler -fuse-ld=gold
 RELEASE=-O3 
-CFLAGS = -lm -Xcompiler -pthread  -Xcompiler -march=native -Xcompiler -Wall -Xcompiler -funroll-loops -Xcompiler -Wno-unused-result  -O0 -g
+CFLAGS = -lm -Xcompiler -pthread  -Xcompiler -march=native -Xcompiler -Wall -Xcompiler -funroll-loops -Xcompiler -Wno-unused-result  -O3
 
 all: word2vec word2phrase distance word-analogy compute-accuracy test cli
 

@@ -59,9 +59,10 @@ real *dev_gsyn0, *dev_gsyn1neg;
 bool *dev_mask_syn0;
 bool *dev_mask_syn1neg;
 real *dev_dots;
+real *dev_dots_scratch;
 
 
-const int NSAMPLES_PER_KERNEL_LAUNCH = 10;
+const int NSAMPLES_PER_KERNEL_LAUNCH = 1e4;
 int *dev_labels;
 char *dev_codes;
 unsigned long long *dev_focuses, *dev_ctxes;
@@ -530,6 +531,10 @@ void InitNet() {
     cudaMalloc((void **)&dev_mask_syn1neg, 
                     (long long) vocab_size * sizeof(bool));
 
+
+    cudaMalloc((void **)&dev_dots_scratch, 
+                    (long long) NSAMPLES_PER_KERNEL_LAUNCH * layer1_size * sizeof(real));
+
     CreateBinaryTree();
 }
 
@@ -667,14 +672,12 @@ void runkernels(int nsamples, int *labels,
 const int TX = 1024, TY = 1;
 
 __global__ void dotsHS(const int size, const int nsamples,
-                const real *syn0, const real *quadform, const real *syn1neg, 
-                real *dotsHS, // dots: [z]
-                const unsigned long long *focuses,
+                const real *syn0,  // LAYER1_SIZE * VOCAB_SIZE
+                const real *syn1neg,  // LAYER1_SIZE * VOCAB_SIZE
+                real *dotsHS, // dots: [y] NSAMPLES_PER_KERNEL_LAUNCH
+                real *dotsScratch, // dotScratch: NSAMPLES_PER_KERNEL_LAUNCH * LAYER1_SIZE
+                const unsigned long long *focuses, // NSAMPLER_PER_KERNEL_LAUNCH
                 const unsigned long long *ctxes) {
-
-
-        // HACK!
-        __shared__ real cache[2048];
 
 
         const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -685,23 +688,22 @@ __global__ void dotsHS(const int size, const int nsamples,
 
 
         // dot product of (aT Q b)_xy for sample z
-        real curdot = 0;
-        curdot = syn0[focuses[y] * size + x] * syn1neg[ctxes[y] * size + x];
+        real dot = syn0[focuses[y] * size + x] * syn1neg[ctxes[y] * size + x];
 
-        const int curix = x;
-        cache[curix] = curdot;
-
-        int partition = TX / 2;
+        dotsScratch[y*size + x] = dot;
+        __syncthreads();
+        unsigned long long curix = x;
+        int partition = size / 2;
         while (partition > 0) {
                 if (curix < partition) {
                         __syncthreads();
-                        cache[curix] += cache[curix + partition];
+                        dotsScratch[y*size+curix] += dotsScratch[y*size+partition+curix];
                 }
                 partition = partition / 2;
         }
         __syncthreads();
         if (curix == 0) {
-                atomicAdd(&dotsHS[y], cache[0]);
+                atomicAdd(&dotsHS[y], dotsScratch[y * size + 0]);
         }
 
 
@@ -804,8 +806,8 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
         dim3 blockDims3(calcBlockSize(layer1_size, TX), calcBlockSize(nsamples, TY));
 
         dotsHS<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
-                        dev_syn0, dev_quadform, dev_syn1neg, 
-                        dev_dots, dev_focuses, dev_ctxes);
+                        dev_syn0, dev_syn1neg, 
+                        dev_dots, dev_dots_scratch, dev_focuses, dev_ctxes);
 
         if (0) {
                 real dots[nsamples];

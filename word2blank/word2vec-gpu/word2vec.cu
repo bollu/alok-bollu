@@ -686,6 +686,8 @@ __global__ void dotsHS(const int size, const int nsamples,
         if (x >= size || y >= nsamples) return;
 
 
+        dotsHS[y] = 0;
+        __syncthreads();
 
         // dot product of (aT Q b)_xy for sample z
         real dot = syn0[focuses[y] * size + x] * syn1neg[ctxes[y] * size + x];
@@ -800,7 +802,6 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
                 const unsigned long long num_uniq_focuses, const unsigned long long *uniq_focuses, 
                 const unsigned long long num_uniq_ctxes, const unsigned long long *uniq_ctxes) {
 
-        zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)), dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
 
 
         // printf("running HS kernel...\n");
@@ -808,26 +809,26 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
         // zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn1neg);
 
 
-        cudaMemcpy(dev_focuses, 
+        cudaMemcpyAsync(dev_focuses, 
                         focuses, 
                         nsamples * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
-        cudaMemcpy(dev_ctxes, 
+        cudaMemcpyAsync(dev_ctxes, 
                         ctxes, 
                         nsamples * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
 
-        cudaMemcpy(dev_codes, 
+        cudaMemcpyAsync(dev_codes, 
                         codes, 
                         nsamples * sizeof(char), 
                         cudaMemcpyHostToDevice); 
 
-        cudaMemcpy(dev_uniq_focuses, 
+        cudaMemcpyAsync(dev_uniq_focuses, 
                         uniq_focuses, 
                         num_uniq_focuses * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
 
-        cudaMemcpy(dev_uniq_ctxes, 
+        cudaMemcpyAsync(dev_uniq_ctxes, 
                         uniq_ctxes, 
                         num_uniq_ctxes * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
@@ -835,6 +836,7 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
         dim3 threadDims3(TX, TY);
         dim3 blockDims3(calcBlockSize(layer1_size, TX), calcBlockSize(nsamples, TY));
 
+        zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)), dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
         dotsHS<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
                         dev_syn0, dev_syn1neg, 
                         dev_dots, dev_dots_scratch, dev_focuses, dev_ctxes);

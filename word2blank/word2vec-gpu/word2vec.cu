@@ -669,7 +669,7 @@ void runkernels(int nsamples, int *labels,
 
 //x, y = value
 //z = data point
-const int TX = 1024, TY = 1;
+const int TX = 512, TY = 2;
 
 __global__ void dotsHS(const int size, const int nsamples,
                 const real *syn0,  // LAYER1_SIZE * VOCAB_SIZE

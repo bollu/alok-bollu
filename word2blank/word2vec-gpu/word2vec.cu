@@ -61,7 +61,7 @@ bool *dev_mask_syn1neg;
 real *dev_dots;
 
 
-const int NSAMPLES_PER_KERNEL_LAUNCH = 1e2;
+const int NSAMPLES_PER_KERNEL_LAUNCH = 1e4;
 int *dev_labels;
 char *dev_codes;
 unsigned long long *dev_focuses, *dev_ctxes;

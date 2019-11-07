@@ -548,7 +548,7 @@ inline real sigmoid(real x) {
 }
 
 
-void runkernels(int nsamples, int *labels, 
+void runNegSampleingKernel(int nsamples, int *labels, 
                 unsigned long long *focuses, 
                 unsigned long long *ctxes,
                 int n_uniq_focuses,
@@ -1251,7 +1251,7 @@ void TrainModelThread(void *id) {
 
 
                         if (ix == NSAMPLES_PER_KERNEL_LAUNCH - 1) {
-                                runkernels(NSAMPLES_PER_KERNEL_LAUNCH,
+                                runNegSampleingKernel(NSAMPLES_PER_KERNEL_LAUNCH,
                                         labels,
                                         focuses,
                                         ctxes,
@@ -1293,10 +1293,9 @@ void TrainModelThread(void *id) {
     assert(ix < NSAMPLES_PER_KERNEL_LAUNCH);
 
     // consume leftover data.
-     runkernels(ix, labels, focuses, ctxes, 
-             n_uniq_focuses, n_uniq_ctxes,
-             uniq_focuses,
-             uniq_ctxes);
+     runHSKernel(ix, focuses, ctxes, codes,
+             n_uniq_focuses, uniq_focuses,
+             n_uniq_ctxes, uniq_ctxes);
     fclose(fi);
     // free(neu1);
     neu1e.freemem();

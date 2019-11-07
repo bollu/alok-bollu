@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -p long
-#SBATCH --time=72:00:00
+#SBATCH --time=00:10:00
 #SBATCH --nodes=1
-#SBATCH --job-name=w2v
+#SBATCH --job-name=w2v-512
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 
@@ -21,14 +21,13 @@ mkdir -p slurm/
 rm word2vec
 make word2vec
 head -c 1000000 text8 > text0
-# cuda-memcheck ./word2vec -train text0 -output models/xxxx -cbow 0 -size 8 \
-#     -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 15 \
+./word2vec -train text0 -output models/text0 -cbow 0 -size 512 \
+    -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 60 \
+    -alpha 0.005
 
-#     -alpha 0.01
-
-./word2vec -train ../word2vec/text0 -output models/text0 -cbow 0 -size 512 \
-     -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 15 \
-     -alpha 0.01
+# nvprof ./word2vec -train ../word2vec/text8 -output models/xxxxxx -cbow 0 -size 512 \
+#      -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 1 \
+#      -alpha 0.01
 
 #  ./word2vec -train ../word2vec/text8 -output models/text8 -cbow 0 -size 512 \
 #      -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 30 \

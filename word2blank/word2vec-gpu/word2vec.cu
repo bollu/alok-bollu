@@ -720,13 +720,12 @@ __device__ real sigmoidGPU(real x) {
 }
 
 
+#define FULL_MASK 0xffffffff
 
-__global__ void gradHS(const int size, const int nsamples, 
+__global__ void gradSyn0(const int size, const int nsamples, 
                  const real *dotsHS, const char *codes,
-                 const real *syn0,
                  real *gsyn0,
                  const real *syn1neg,
-                 real *gsyn1neg,
                  const real alpha,
                  const unsigned long long *focuses,
                  const unsigned long long *ctxes) {
@@ -737,20 +736,50 @@ __global__ void gradHS(const int size, const int nsamples,
         if (x >= size  || y >= nsamples) { return; }
 
 
+
         // error
         const real err = 1 - codes[y] - sigmoidGPU(dotsHS[y]);
         const real g = err * alpha;
 
-
-        atomicAdd(&gsyn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+        // all threads that write into the same array index
         atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
+        // atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
 
 }
+
+
+__global__ void gradSyn1Neg(const int size, const int nsamples, 
+                 const real *dotsHS, const char *codes,
+                 const real *syn0,
+                 real *syn1neg,
+                 const real alpha,
+                 const unsigned long long *focuses,
+                 const unsigned long long *ctxes) {
+
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x >= size  || y >= nsamples) { return; }
+
+
+
+        // error
+        const real err = 1 - codes[y] - sigmoidGPU(dotsHS[y]);
+        const real g = err * alpha;
+
+        // all threads that write into the same array index
+        // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
+        atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+
+}
+
+
+
 
 // 2D kernel: layer1_size x nsamples
 __global__ void backpropGradIndirect(const int size, const int nseen, 
                  real *vec,
-                 const real *grad,
+                 real *grad,
                  const unsigned long long *seen) {
 
         const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -762,6 +791,7 @@ __global__ void backpropGradIndirect(const int size, const int nseen,
 
 
         atomicAdd(&vec[seen[y]*size + x], grad[seen[y] * size + x]);
+        grad[seen[y] * size + x] = 0;
 
 }
 
@@ -774,8 +804,8 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
 
 
         // printf("running HS kernel...\n");
-        zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn0);
-        zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn1neg);
+        // zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn0);
+        // zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn1neg);
 
 
         cudaMemcpy(dev_focuses, 
@@ -820,10 +850,17 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
 
 
         // printf("launching graDHS kernel...\n");
-        gradHS<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+        gradSyn0<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
                         dev_dots, dev_codes,
-                        dev_syn0, dev_gsyn0,
-                        dev_syn1neg, dev_gsyn1neg,
+                        dev_gsyn0,
+                        dev_syn1neg, 
+                        alpha,
+                        dev_focuses, dev_ctxes);
+
+        gradSyn1Neg<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+                        dev_dots, dev_codes,
+                        dev_syn0,
+                        dev_syn1neg, 
                         alpha,
                         dev_focuses, dev_ctxes);
 
@@ -886,14 +923,14 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
         }
 
 
-        {
-                assert(num_uniq_ctxes <= NSAMPLES_PER_KERNEL_LAUNCH);
-                dim3 threadDims2(TX, TY);
-                dim3 blockDims2(calcBlockSize(layer1_size, TX), calcBlockSize(num_uniq_ctxes, TY));
+        // {
+        //         assert(num_uniq_ctxes <= NSAMPLES_PER_KERNEL_LAUNCH);
+        //         dim3 threadDims2(TX, TY);
+        //         dim3 blockDims2(calcBlockSize(layer1_size, TX), calcBlockSize(num_uniq_ctxes, TY));
 
-                backpropGradIndirect<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_ctxes,
-                                dev_syn1neg, dev_gsyn1neg, dev_uniq_ctxes);
-        }
+        //         backpropGradIndirect<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_ctxes,
+        //                         dev_syn1neg, dev_gsyn1neg, dev_uniq_ctxes);
+        // }
 
 }
 

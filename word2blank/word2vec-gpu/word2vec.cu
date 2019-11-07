@@ -669,13 +669,13 @@ void runkernels(int nsamples, int *labels,
 
 //x, y = value
 //z = data point
-const int TX = 32, TY = 32;
+const int TX = 64, TY = 8;
 
 __global__ void dotsHS(const int size, const int nsamples,
-                const real *syn0,  // LAYER1_SIZE * VOCAB_SIZE
-                const real *syn1neg,  // LAYER1_SIZE * VOCAB_SIZE
-                real *dotsHS, // dots: [y] NSAMPLES_PER_KERNEL_LAUNCH
-                real *dotsScratch, // dotScratch: NSAMPLES_PER_KERNEL_LAUNCH * LAYER1_SIZE
+                const real * __restrict__ syn0,  // LAYER1_SIZE * VOCAB_SIZE
+                const real * __restrict__ syn1neg,  // LAYER1_SIZE * VOCAB_SIZE
+                __restrict__ real *dotsHS, // dots: [y] NSAMPLES_PER_KERNEL_LAUNCH
+                __restrict__ real *dotsScratch, // dotScratch: NSAMPLES_PER_KERNEL_LAUNCH * LAYER1_SIZE
                 const unsigned long long *focuses, // NSAMPLER_PER_KERNEL_LAUNCH
                 const unsigned long long *ctxes) {
 
@@ -686,14 +686,10 @@ __global__ void dotsHS(const int size, const int nsamples,
         if (x >= size || y >= nsamples) return;
 
 
-        dotsHS[y] = 0;
-        __syncthreads();
-
         // dot product of (aT Q b)_xy for sample z
         real dot = syn0[focuses[y] * size + x] * syn1neg[ctxes[y] * size + x];
 
         dotsScratch[y*size + x] = dot;
-        __syncthreads();
         unsigned long long curix = x;
         int partition = size / 2;
         while (partition > 0) {
@@ -725,12 +721,13 @@ __device__ real sigmoidGPU(real x) {
 #define FULL_MASK 0xffffffff
 
 __global__ void gradSyn0(const int size, const int nsamples, 
-                 const real *dotsHS, const char *codes,
+                 const real *__restrict__ dotsHS, 
+                 const char *__restrict__ codes,
                  real *gsyn0,
-                 const real *syn1neg,
+                 const real * __restrict__ syn1neg,
                  const real alpha,
-                 const unsigned long long *focuses,
-                 const unsigned long long *ctxes) {
+                 const unsigned long long *__restrict__ focuses,
+                 const unsigned long long *__restrict__ ctxes) {
 
         const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
         const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -751,12 +748,13 @@ __global__ void gradSyn0(const int size, const int nsamples,
 
 
 __global__ void gradSyn1Neg(const int size, const int nsamples, 
-                 const real *dotsHS, const char *codes,
-                 const real *syn0,
-                 real *syn1neg,
+                 const real * __restrict__ dotsHS,
+                 const char * __restrict__ codes,
+                 const real * __restrict__ syn0,
+                 __restrict__ real *syn1neg,
                  const real alpha,
-                 const unsigned long long *focuses,
-                 const unsigned long long *ctxes) {
+                 const unsigned long long *__restrict__ focuses,
+                 const unsigned long long *__restrict__ ctxes) {
 
         const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
         const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -780,8 +778,8 @@ __global__ void gradSyn1Neg(const int size, const int nsamples,
 
 // 2D kernel: layer1_size x nsamples
 __global__ void backpropGradIndirect(const int size, const int nseen, 
-                 real *vec,
-                 real *grad,
+                 __restrict__ real *vec,
+                 __restrict__ real *grad,
                  const unsigned long long *seen) {
 
         const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -792,13 +790,16 @@ __global__ void backpropGradIndirect(const int size, const int nseen,
         if (x >= size || y >= nseen) { return; }
 
 
-        atomicAdd(&vec[seen[y]*size + x], grad[seen[y] * size + x]);
+        // atomicAdd(&vec[seen[y]*size + x], grad[seen[y] * size + x]);
+        vec[seen[y]*size + x]  += grad[seen[y] * size + x];
         grad[seen[y] * size + x] = 0;
 
 }
 
-void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
-                *ctxes, char *codes, 
+void runHSKernel(int nsamples,
+                unsigned long long *focuses, 
+                unsigned long long *ctxes,
+                char *codes, 
                 const unsigned long long num_uniq_focuses, const unsigned long long *uniq_focuses, 
                 const unsigned long long num_uniq_ctxes, const unsigned long long *uniq_ctxes) {
 
@@ -996,12 +997,10 @@ void TrainModelThread(void *id) {
                 fflush(stdout);
                 total_loss = 0;
             }
-            /*
             alpha = starting_alpha *
                     (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
-            */
         }
         if (sentence_length == 0) {
             while (1) {

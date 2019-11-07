@@ -184,13 +184,19 @@ int main(int argc, char **argv) {
         }
         vocab[b * max_w + a] = 0;
         for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+
+        printf("%20s: ", &vocab[b * max_w]);
+        for(a = 0; a < min(size, 10); a++) printf("%f ", M[a + b * size]);
+        printf("\n");
+
         len = 0;
         for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
         len = sqrt(len);
         for (a = 0; a < size; a++) M[a + b * size] /= len;
 
-        printf("%20s: ", &vocab[b * max_w]);
-        for(a = 0; a < min(size, 30); a++) printf("%10.3e ", M[a + b * size]);
+        printf("->%18s: ", &vocab[b * max_w]);
+        for(a = 0; a < min(size, 10); a++) printf("%f ", M[a + b * size]);
+        printf("\t(NORM)");
         printf("\n");
     }
     fclose(f);

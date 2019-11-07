@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 #include <assert.h>
+#include <iostream>
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -85,7 +86,7 @@ unsigned long long calcBlockSize(unsigned long long total, unsigned long long th
 __global__ void zeroRealKernel(const int size, real *r) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= size) return;
-    r[x] = 0.0;
+    r[x] = 0;
 }
 
 
@@ -682,9 +683,9 @@ __global__ void dotsHS(const int size, const int nsamples,
         __shared__ real cache[CACHE_SIZE];
 
 
-        const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
-        const int z = blockIdx.z * blockDim.z + threadIdx.z;
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
+        const unsigned long long z = blockIdx.z * blockDim.z + threadIdx.z;
 
 
         if (x >= size || y >= size || z >= nsamples) { return; }
@@ -694,7 +695,8 @@ __global__ void dotsHS(const int size, const int nsamples,
         real xydot = 0;
         const bool enabled = vecenabled(x, y);
         if (enabled) {
-                xydot = syn0[focuses[z] * size + x] * syn1neg[ctxes[z] * size + y];
+                xydot = syn0[focuses[z] * size + x] * 
+                        syn1neg[ctxes[z] * size + y];
         }
 
         const int curix = threadIdx.y *TX + threadIdx.x;
@@ -730,18 +732,18 @@ __device__ real sigmoidGPU(real x) {
 
 __global__ void gradHS(const int size, const int nsamples, 
                  const real *dotsHS, const char *codes,
-                 real *syn0,
+                 const real *syn0,
                  real *gsyn0,
-                 real *syn1neg,
+                 const real *syn1neg,
                  real *gsyn1neg,
                  const real alpha,
                  const unsigned long long *focuses,
                  const unsigned long long *ctxes,
                  const int dimsize) {
 
-        const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
-        const int z = blockIdx.z * blockDim.z + threadIdx.z;
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
+        const unsigned long long z = blockIdx.z * blockDim.z + threadIdx.z;
 
         if (x >= size || y >= size || z >= nsamples) { return; }
 
@@ -766,8 +768,10 @@ __global__ void gradHS(const int size, const int nsamples,
 
 
 
-        atomicAdd(&gsyn1neg[ctxes[z] * size + y], g*syn0[focuses[z] * size + x]);
-        atomicAdd(&gsyn0[focuses[z] * size + x], g*syn1neg[ctxes[z]*size + y]);
+        atomicAdd(&gsyn1neg[ctxes[z] * size + y], 
+                        g*syn0[focuses[z] * size + x]);
+        atomicAdd(&gsyn0[focuses[z] * size + x], 
+                        g*syn1neg[ctxes[z]*size + y]);
 
         // atomicAdd(&gsyn1neg[z * size + y], g*syn0[focuses[z] * size + x]);
         // atomicAdd(&gsyn0[z * size + x], g*syn1neg[ctxes[z]*size + y]);
@@ -780,26 +784,29 @@ __global__ void gradHS(const int size, const int nsamples,
 }
 
 // 2D kernel: layer1_size x nsamples
-__global__ void backpropHS(const int size, const int nsamples, 
+__global__ void backpropHS(const int size, const int vocab, 
                  real *syn0,
-                 real *gsyn0,
+                 const real *gsyn0,
                  real *syn1neg,
-                 real *gsyn1neg,
+                 const real *gsyn1neg,
                  const unsigned long long *focuses,
                  const unsigned long long *ctxes) {
 
-        const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
         // const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-        if (x >= size || y >= nsamples) { return; }
+
+        if (x >= size || y >= vocab) { return; }
 
 
         // const bool enabled = vecenabled(x, y);
         // if (!enabled) return;
 
-        atomicAdd(&syn1neg[ctxes[y] * size + x], gsyn1neg[y * size + x]);
-        atomicAdd(&syn0[focuses[y]*size + x], gsyn0[y * size + x]);
+        atomicAdd(&syn1neg[y*size + x], gsyn1neg[y * size + x]);
+        atomicAdd(&syn0[y*size + x], gsyn0[y * size + x]);
+
+
 
 
         // atomicAdd(&syn1neg[ctxes[z] * size + y], gsyn1neg[ctxes[z] * size + y]);
@@ -842,6 +849,16 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
                         dev_syn0, dev_quadform, dev_syn1neg, 
                         dev_dots, dev_focuses, dev_ctxes, dimsize);
 
+        if (0) {
+                real dots[nsamples];
+                cudaMemcpy(dots, dev_dots, nsamples * sizeof(real), cudaMemcpyDeviceToHost); 
+                printf("DOTS: ");
+                for(int i = 0; i < nsamples; ++i)
+                        printf("%4.2f ", dots[i]);
+                getchar();
+        }
+
+
         // printf("launching graDHS kernel...\n");
         gradHS<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
                         dev_dots, dev_codes,
@@ -850,14 +867,60 @@ void runHSKernel(int nsamples, unsigned long long *focuses, unsigned long long
                         alpha,
                         dev_focuses, dev_ctxes, dimsize);
 
+        if (0) {
+                real gsyn0[vocab_size * layer1_size];
+                cudaMemcpy(gsyn0, dev_gsyn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost); 
+                printf("gsyn0: ");
+                for(int i = 0; i < nsamples; ++i) {
+                        for(int j = 0; j < layer1_size; ++j) {
+                                printf("%4.2f ", gsyn0[focuses[i] * layer1_size + j]);
+                        }
+                        printf("\n");
+                }
+                getchar();
+        }
+
+
+
+
+        if (0) {
+                real dbg_syn0[vocab_size * layer1_size];
+                cudaMemcpy(dbg_syn0, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost); 
+                printf("(BEFORE)dbg_syn0: ");
+                for(int i = 0; i < nsamples; ++i) {
+                        for(int j = 0; j < layer1_size; ++j) {
+                                printf("%4.2f ", dbg_syn0[focuses[i] * layer1_size + j]);
+                        }
+                        printf("\n");
+                }
+                getchar();
+        }
 
         dim3 threadDims2(TX*TY, TZ);
-        dim3 blockDims2(calcBlockSize(layer1_size, TX*TY), calcBlockSize(nsamples, TZ));
+        dim3 blockDims2(calcBlockSize(layer1_size, TX*TY), calcBlockSize(vocab_size, TZ));
+
+        if (0) {
+                std::cout << "blockDims2: (" << blockDims2.x << ", " << blockDims2.y << ", " << blockDims2.z << ")\n";
+                std::cout << "threadDims2: (" << threadDims2.x << ", " << threadDims2.y << ", " << threadDims2.z << ")\n";
+        }
 
         // printf("launching backprophs kernel...\n");
-        backpropHS<<<blockDims2, threadDims2>>>(layer1_size, nsamples,
+        backpropHS<<<blockDims2, threadDims2>>>(layer1_size, vocab_size,
                         dev_syn0, dev_gsyn0, dev_syn1neg, dev_gsyn1neg, dev_focuses, dev_ctxes);
         // printf("ran backprophs kernel...\n");
+
+        if (0) {
+                real dbg_syn0[vocab_size * layer1_size];
+                printf("(AFTER)dbg_syn0: ");
+                cudaMemcpy(dbg_syn0, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost); 
+                for(int i = 0; i < nsamples; ++i) {
+                        for(int j = 0; j < layer1_size; ++j) {
+                                printf("%4.2f ", dbg_syn0[focuses[i] * layer1_size + j]);
+                        }
+                        printf("\n");
+                }
+                getchar();
+        }
 
 }
 
@@ -1199,7 +1262,7 @@ void *TrainModelThread(void *id) {
     fclose(fi);
     // free(neu1);
     neu1e.freemem();
-    pthread_exit(NULL);
+    // pthread_exit(NULL);
 }
 
 void TrainModel() {
@@ -1218,24 +1281,28 @@ void TrainModel() {
     if (negative > 0) InitUnigramTable();
     start = clock();
     if (iter > 0) {
-            for (a = 0; a < num_threads; a++)
-                    pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
-            for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
+            TrainModelThread((void *)0);
+            // for (a = 0; a < num_threads; a++)
+            //         pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
+            // for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
     }
     fo = fopen(output_file, "wb");
     if (classes == 0) {
+        real syn0_out[vocab_size * layer1_size];
+        cudaMemcpy(syn0_out, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost);
+        // zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_syn0);
         // Save the word vectors
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+        printf("%lld %lld\n", vocab_size, layer1_size);
         for (a = 0; a < vocab_size; a++) {
             fprintf(fo, "%s ", vocab[a].word);
+            printf("\n%s ", vocab[a].word);
 
-            cudaMemcpy(syn0[a].v, dev_syn0 + layer1_size * a,  layer1_size *
-                            sizeof(real), cudaMemcpyDeviceToHost);
 
             if (binary) {
                 for (b = 0; b < layer1_size; b++) {
-                    real r = syn0[a].v[b];
-                    fwrite(&r, sizeof(real), 1, fo);
+                    fwrite(syn0_out + a *layer1_size + b, sizeof(real), 1, fo);
+                    printf("%f ", *(syn0_out + a *layer1_size + b));
                 }
             } else {
                 for (b = 0; b < layer1_size; b++) {

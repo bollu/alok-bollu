@@ -548,133 +548,14 @@ inline real sigmoid(real x) {
 }
 
 
-void runNegSampleingKernel(int nsamples, int *labels, 
-                unsigned long long *focuses, 
-                unsigned long long *ctxes,
-                int n_uniq_focuses,
-                int n_uniq_ctxes,
-                unsigned long long *uniq_focuses,
-                unsigned long long *uniq_ctxes) {
-
-        /*
-        dim3 threadDims(TX, TY, TZ);
-        dim3 blockDims(calcBlockSize(layer1_size, TX),
-                calcBlockSize(layer1_size, TY),
-                calcBlockSize(nsamples, TZ));
-    
-
-        zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)), 
-                dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
-
-        zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn0);
-        zeroRealKernel<<<dim3(calcBlockSize(vocab_size * layer1_size, 1024)), dim3(1024)>>>(vocab_size * layer1_size, dev_gsyn1neg);
-
-        // cudaMemset(dev_dots, 1132462080, nsamples * sizeof(real));
-        // TODO: do this on the GPU after a syncthreads
-        // cudaMemset(dev_mask_syn0, false, vocab_size * sizeof(bool));
-        // cudaMemset(dev_mask_syn1neg, true, vocab_size * sizeof(bool));
-        // cudaMemset(dev_gsyn0, 1132462080, vocab_size * layer1_size * sizeof(real));
-        // cudaMemset(dev_gsyn1neg, 1132462080, vocab_size * layer1_size * sizeof(real));
-        // cudaMemset(dev_total_loss, 0, sizeof(real));
-
-        cudaMemcpy(dev_focuses, 
-                        focuses, 
-                        nsamples * sizeof(unsigned long long), 
-                        cudaMemcpyHostToDevice); 
-        cudaMemcpy(dev_ctxes, 
-                        ctxes, 
-                        nsamples * sizeof(unsigned long long), 
-                        cudaMemcpyHostToDevice); 
-
-        cudaMemcpy(dev_uniq_focuses, 
-                        uniq_focuses, 
-                        n_uniq_focuses * sizeof(unsigned long long), 
-                        cudaMemcpyHostToDevice); 
-
-        cudaMemcpy(dev_uniq_ctxes, 
-                        uniq_ctxes, 
-                        n_uniq_ctxes * sizeof(unsigned long long), 
-                        cudaMemcpyHostToDevice); 
-        cudaMemcpy(dev_labels, 
-                        labels, 
-                        nsamples * sizeof(int), 
-                        cudaMemcpyHostToDevice); 
-
-        assert(n_uniq_ctxes < nsamples);
-        assert(n_uniq_focuses < nsamples);
-
-        // printf("fs: %d | ctxes: %d\n", n_uniq_focuses, n_uniq_ctxes);
-        const int dimsize = 1;
-        dotsHS<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                        dev_syn0, dev_quadform, dev_syn1neg, 
-                        dev_dots, dev_focuses, dev_ctxes, dimsize);
-        grad<<<blockDims, threadDims>>>(layer1_size, nsamples,
-                        dev_labels, 
-                        dev_dots,
-                        dev_syn0, 
-                        dev_gsyn0,
-                        dev_quadform, 
-                        dev_syn1neg,
-                        dev_gsyn1neg,
-                        alpha,
-                        dev_focuses,
-                        dev_ctxes,
-                        dimsize);
-        // backprop<<<blockDims,threadDims>>>(layer1_size, nsamples,
-        //                 dev_labels,
-        //                 dev_dots,
-        //                 dev_syn0,
-        //                 dev_gsyn0,
-        //                 dev_quadform,
-        //                 dev_syn1neg,
-        //                 dev_gsyn1neg,
-        //                 dev_mask_syn0,
-        //                 dev_mask_syn1neg,
-        //                 alpha,
-        //                 dev_focuses,
-        //                 dev_ctxes,
-        //                 dimsize);
-
-        
-        const int BACKPROPTX = 32;
-        const int BACKPROPTY = 4;
-
-        dim3 backpropThreadDims(BACKPROPTX, BACKPROPTY);
-        dim3 backpropBlockDims(calcBlockSize(layer1_size, BACKPROPTX),
-                calcBlockSize(nsamples, BACKPROPTY));
-
-        backprop2<<<backpropBlockDims,backpropThreadDims>>>(layer1_size, nsamples,
-                        dev_labels,
-                        dev_dots,
-                        dev_syn0,
-                        dev_gsyn0,
-                        dev_quadform,
-                        dev_syn1neg,
-                        dev_gsyn1neg,
-                        dev_mask_syn0,
-                        dev_mask_syn1neg,
-                        alpha,
-                        dev_focuses,
-                        dev_ctxes,
-                        n_uniq_focuses,
-                        dev_uniq_focuses,
-                        n_uniq_ctxes,
-                        dev_uniq_ctxes,
-                        dimsize);
-        // real total_loss;
-        // cudaMemcpy(&total_loss, dev_total_loss, sizeof(real), cudaMemcpyDeviceToHost);
-        // printf("\ntotal loss: %4.2f\n", total_loss);
-        */
-}
-
 //x, y = value
 //z = data point
 const int TX = 64, TY = 8;
 
-__global__ void dotsHS(const int size, const int nsamples,
+__global__ void dotsKernel(const int size, const int nsamples,
                 const real * __restrict__ syn0,  // LAYER1_SIZE * VOCAB_SIZE
                 const real * __restrict__ syn1neg,  // LAYER1_SIZE * VOCAB_SIZE
-                __restrict__ real *dotsHS, // dots: [y] NSAMPLES_PER_KERNEL_LAUNCH
+                __restrict__ real *dotsKernel, // dots: [y] NSAMPLES_PER_KERNEL_LAUNCH
                 __restrict__ real *dotsScratch, // dotScratch: NSAMPLES_PER_KERNEL_LAUNCH * LAYER1_SIZE
                 const unsigned long long *focuses, // NSAMPLER_PER_KERNEL_LAUNCH
                 const unsigned long long *ctxes) {
@@ -701,7 +582,7 @@ __global__ void dotsHS(const int size, const int nsamples,
         }
         __syncthreads();
         if (curix == 0) {
-                atomicAdd(&dotsHS[y], dotsScratch[y * size + 0]);
+                atomicAdd(&dotsKernel[y], dotsScratch[y * size + 0]);
         }
 
 
@@ -720,8 +601,8 @@ __device__ real sigmoidGPU(real x) {
 
 #define FULL_MASK 0xffffffff
 
-__global__ void gradSyn0(const int size, const int nsamples, 
-                 const real *__restrict__ dotsHS, 
+__global__ void HSGradSyn0(const int size, const int nsamples, 
+                 const real *__restrict__ dotsKernel, 
                  const char *__restrict__ codes,
                  real *gsyn0,
                  const real * __restrict__ syn1neg,
@@ -734,10 +615,11 @@ __global__ void gradSyn0(const int size, const int nsamples,
 
         if (x >= size  || y >= nsamples) { return; }
 
+        if (dotsKernel[y] > 5 || dotsKernel[y] < -5) {return; }
 
 
         // error
-        const real err = 1 - codes[y] - sigmoidGPU(dotsHS[y]);
+        const real err = 1 - codes[y] - sigmoidGPU(dotsKernel[y]);
         const real g = err * alpha;
 
         // all threads that write into the same array index
@@ -747,8 +629,8 @@ __global__ void gradSyn0(const int size, const int nsamples,
 }
 
 
-__global__ void gradSyn1Neg(const int size, const int nsamples, 
-                 const real * __restrict__ dotsHS,
+__global__ void HSGradSyn1Neg(const int size, const int nsamples, 
+                 const real * __restrict__ dotsKernel,
                  const char * __restrict__ codes,
                  const real * __restrict__ syn0,
                  __restrict__ real *syn1neg,
@@ -762,9 +644,10 @@ __global__ void gradSyn1Neg(const int size, const int nsamples,
         if (x >= size  || y >= nsamples) { return; }
 
 
+        if (dotsKernel[y] > 5 || dotsKernel[y] < -5) { return; }
 
         // error
-        const real err = 1 - codes[y] - sigmoidGPU(dotsHS[y]);
+        const real err = 1 - codes[y] - sigmoidGPU(dotsKernel[y]);
         const real g = err * alpha;
 
         // all threads that write into the same array index
@@ -838,7 +721,7 @@ void runHSKernel(int nsamples,
         dim3 blockDims3(calcBlockSize(layer1_size, TX), calcBlockSize(nsamples, TY));
 
         zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)), dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
-        dotsHS<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+        dotsKernel<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
                         dev_syn0, dev_syn1neg, 
                         dev_dots, dev_dots_scratch, dev_focuses, dev_ctxes);
 
@@ -853,14 +736,14 @@ void runHSKernel(int nsamples,
 
 
         // printf("launching graDHS kernel...\n");
-        gradSyn0<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+        HSGradSyn0<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
                         dev_dots, dev_codes,
                         dev_gsyn0,
                         dev_syn1neg, 
                         alpha,
                         dev_focuses, dev_ctxes);
 
-        gradSyn1Neg<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+        HSGradSyn1Neg<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
                         dev_dots, dev_codes,
                         dev_syn0,
                         dev_syn1neg, 
@@ -935,6 +818,125 @@ void runHSKernel(int nsamples,
         //                         dev_syn1neg, dev_gsyn1neg, dev_uniq_ctxes);
         // }
 
+}
+
+__global__ void NegSamplingGradSyn0(const int size, const int nsamples, 
+                 const real *__restrict__ dotsKernel, 
+                 const int *__restrict__ labels,
+                 real *gsyn0,
+                 const real * __restrict__ syn1neg,
+                 const real alpha,
+                 const unsigned long long *__restrict__ focuses,
+                 const unsigned long long *__restrict__ ctxes) {
+
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x >= size  || y >= nsamples) { return; }
+
+
+
+        // error
+        const real err = labels[y] - sigmoidGPU(dotsKernel[y]*2-1);
+        const real g = err * alpha;
+
+        // all threads that write into the same array index
+        atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
+        // atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+
+}
+
+
+__global__ void NegSamplingGradSyn1Neg(const int size, const int nsamples, 
+                 const real * __restrict__ dotsKernel,
+                 const int * __restrict__ labels,
+                 const real * __restrict__ syn0,
+                 __restrict__ real *syn1neg,
+                 const real alpha,
+                 const unsigned long long *__restrict__ focuses,
+                 const unsigned long long *__restrict__ ctxes) {
+
+        const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+        const unsigned long long y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x >= size  || y >= nsamples) { return; }
+
+
+
+        // error
+        const real err = labels[y] - sigmoidGPU(dotsKernel[y]*2-1);
+        const real g = err * alpha;
+
+        // all threads that write into the same array index
+        // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
+        atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+
+}
+
+
+
+void runNegSamplingKernel(int nsamples, int *labels, 
+                unsigned long long *focuses, 
+                unsigned long long *ctxes,
+                int num_uniq_focuses,
+                int num_uniq_ctxes,
+                unsigned long long *uniq_focuses,
+                unsigned long long *uniq_ctxes) {
+
+        cudaMemcpyAsync(dev_focuses, 
+                        focuses, 
+                        nsamples * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
+        cudaMemcpyAsync(dev_ctxes, 
+                        ctxes, 
+                        nsamples * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
+
+        cudaMemcpyAsync(dev_labels, 
+                        labels, 
+                        nsamples * sizeof(int), 
+                        cudaMemcpyHostToDevice); 
+
+        cudaMemcpyAsync(dev_uniq_focuses, 
+                        uniq_focuses, 
+                        num_uniq_focuses * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
+
+        cudaMemcpyAsync(dev_uniq_ctxes, 
+                        uniq_ctxes, 
+                        num_uniq_ctxes * sizeof(unsigned long long), 
+                        cudaMemcpyHostToDevice); 
+
+        dim3 threadDims3(TX, TY);
+        dim3 blockDims3(calcBlockSize(layer1_size, TX), calcBlockSize(nsamples, TY));
+
+        zeroRealKernel<<<dim3(calcBlockSize(NSAMPLES_PER_KERNEL_LAUNCH, 1024)), dim3(1024)>>>(NSAMPLES_PER_KERNEL_LAUNCH, dev_dots);
+        dotsKernel<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+                        dev_syn0, dev_syn1neg, 
+                        dev_dots, dev_dots_scratch, dev_focuses, dev_ctxes);
+
+        NegSamplingGradSyn0<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+                        dev_dots, dev_labels,
+                        dev_gsyn0,
+                        dev_syn1neg, 
+                        alpha,
+                        dev_focuses, dev_ctxes);
+
+        NegSamplingGradSyn1Neg<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
+                        dev_dots, dev_labels,
+                        dev_syn0,
+                        dev_syn1neg, 
+                        alpha,
+                        dev_focuses, dev_ctxes);
+
+
+        {
+                assert(num_uniq_focuses < NSAMPLES_PER_KERNEL_LAUNCH);
+                dim3 threadDims2(TX, TY);
+                dim3 blockDims2(calcBlockSize(layer1_size, TX), calcBlockSize(num_uniq_focuses, TY));
+                backpropGradIndirect<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_focuses,
+                                dev_syn0, dev_gsyn0, dev_uniq_focuses);
+        }
 }
 
 void TrainModelThread(void *id) {
@@ -1251,7 +1253,7 @@ void TrainModelThread(void *id) {
 
 
                         if (ix == NSAMPLES_PER_KERNEL_LAUNCH - 1) {
-                                runNegSampleingKernel(NSAMPLES_PER_KERNEL_LAUNCH,
+                                runNegSamplingKernel(NSAMPLES_PER_KERNEL_LAUNCH,
                                         labels,
                                         focuses,
                                         ctxes,
@@ -1293,9 +1295,21 @@ void TrainModelThread(void *id) {
     assert(ix < NSAMPLES_PER_KERNEL_LAUNCH);
 
     // consume leftover data.
+    if (hs > 0) {
      runHSKernel(ix, focuses, ctxes, codes,
              n_uniq_focuses, uniq_focuses,
              n_uniq_ctxes, uniq_ctxes);
+    }
+    else if (negative > 0) {
+            runNegSamplingKernel(ix,
+                            labels,
+                            focuses,
+                            ctxes,
+                            n_uniq_focuses,
+                            n_uniq_ctxes,
+                            uniq_focuses,
+                            uniq_ctxes);
+    }
     fclose(fi);
     // free(neu1);
     neu1e.freemem();
@@ -1328,16 +1342,16 @@ void TrainModel() {
         real syn0_out[vocab_size * layer1_size];
         cudaMemcpy(syn0_out, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost);
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
-        printf("%lld %lld\n", vocab_size, layer1_size);
+        // printf("%lld %lld\n", vocab_size, layer1_size);
         for (a = 0; a < vocab_size; a++) {
             fprintf(fo, "%s ", vocab[a].word);
-            printf("\n%s ", vocab[a].word);
+            // printf("\n%s ", vocab[a].word);
 
 
             if (binary) {
                 for (b = 0; b < layer1_size; b++) {
                     fwrite(syn0_out + a *layer1_size + b, sizeof(real), 1, fo);
-                    printf("%f ", *(syn0_out + a *layer1_size + b));
+                    // printf("%f ", *(syn0_out + a *layer1_size + b));
                 }
             } else {
                 for (b = 0; b < layer1_size; b++) {

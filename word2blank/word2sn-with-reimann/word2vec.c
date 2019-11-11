@@ -409,12 +409,10 @@ void InitNet() {
         for (a = 0; a < vocab_size; a++) {
             for (b = 0; b < layer1_size; b++) {
                 next_random = next_random * (unsigned long long)25214903917 + 11;
-                // syn1neg[a * layer1_size + b] =
-                //     (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
-                for (a = 0; a < vocab_size; a++)
-                    for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
+                syn1neg[a * layer1_size + b] =
+                    (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
             }
-            // normalizeVec(syn1neg + a *layer1_size);
+            normalizeVec(syn1neg + a *layer1_size);
         }
 
         // for (a = 0; a < vocab_size; a++)
@@ -643,7 +641,7 @@ void *TrainModelThread(void *id) {
                     }
             }
         } else {  // train skip-gram
-            for (a = b; a < window * 2 + 1 - b; a++) {
+            for (a = b; a < window * 2 + 1 - b; a++)
                 if (a != window) {
                     c = sentence_position - window + a;
                     if (c < 0) continue;
@@ -653,7 +651,7 @@ void *TrainModelThread(void *id) {
                     l1 = last_word * layer1_size;
                     for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
                     // HIERARCHICAL SOFTMAX
-                    if (hs) {
+                    if (hs)
                         for (d = 0; d < vocab[word].codelen; d++) {
 
                             l2 = vocab[word].point[d] * layer1_size;
@@ -671,10 +669,6 @@ void *TrainModelThread(void *id) {
                                 f = expTable[(
                                     int)((dot + MAX_EXP) *
                                          (EXP_TABLE_SIZE / MAX_EXP / 2))];
-                            
-                            // 2^{-dist}
-                            int dist = powf(2, fabs(c - sentence_position));
-
                             // 'g' is the gradient multiplied by the learning
                             // rate
                             g = (1 - vocab[word].code[d] - f) * alpha;
@@ -686,14 +680,14 @@ void *TrainModelThread(void *id) {
                                         g * syn1neg[c + l2] * dot;
 
                             for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0[c + l1];
-                            // normalizeVec(syn1neg + l2);
+                                syn1neg[c + l2] += g * syn0[c + l1] -
+                                        g * syn0[c + l1] * dot;
+                            normalizeVec(syn1neg + l2);
 
                             for (c = 0; c < layer1_size; c++)
                                 syn0[c + l1] += neu1e[c];
                             normalizeVec(syn0 + l1);
                         }
-                    }
                     // NEGATIVE SAMPLING
                     // p
                     // Loss = (lbl - sigmoid(x . y))^2 = g^2
@@ -755,10 +749,9 @@ void *TrainModelThread(void *id) {
                                         g * syn1neg[c + l2] * dot;
 
                             for (c = 0; c < layer1_size; c++)
-                                 syn1neg[c + l2] += g * syn0[c + l1];
-                                // syn1neg[c + l2] += g * syn0[c + l1] -
-                                //         g * syn0[c + l1] * dot;
-                            // normalizeVec(syn1neg + l2);
+                                syn1neg[c + l2] += g * syn0[c + l1] -
+                                        g * syn0[c + l1] * dot;
+                            normalizeVec(syn1neg + l2);
 
                             for (c = 0; c < layer1_size; c++)
                                 syn0[c + l1] += neu1e[c];
@@ -769,7 +762,6 @@ void *TrainModelThread(void *id) {
                     // for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
                     // normalizeVec(syn0 + l1);
                 }
-            }
         }
         sentence_position++;
         if (sentence_position >= sentence_length) {

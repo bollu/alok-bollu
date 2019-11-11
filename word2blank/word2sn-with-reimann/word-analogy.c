@@ -195,7 +195,6 @@ int main(int argc, char **argv) {
     len = 0;
     for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
     len = sqrt(len);
-    printf("%4.2f\n", len);
     for (a = 0; a < size; a++) M[a + b * size] /= len;
   }
   fclose(f);
@@ -250,15 +249,13 @@ int main(int argc, char **argv) {
     len = 0;
     for (a = 0; a < size; a++) len += vec[a] * vec[a];
     len = sqrt(len);
-    printf("len of analogous word: %4.2f\n", len);
-
     for (a = 0; a < size; a++) vec[a] /= len;
     for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
-      // if (c == bi[0]) continue;
-      // if (c == bi[1]) continue;
-      // if (c == bi[2]) continue;
+      if (c == bi[0]) continue;
+      if (c == bi[1]) continue;
+      if (c == bi[2]) continue;
       // a = 0;
       // for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
       // if (a == 1) continue;

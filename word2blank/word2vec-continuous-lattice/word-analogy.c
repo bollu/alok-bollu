@@ -21,6 +21,48 @@ const long long max_size = 2000;         // max length of strings
 const long long N = 40;                  // number of closest words that will be shown
 const long long max_w = 50;              // max length of vocabulary entries
 
+// -1 -1 -> -1
+// -1 1 -> -1
+// 1 -1 -> -1
+// 1 1 -> 1
+float and(float r, float s) {
+    return r*s;
+}
+
+// -1 -1 -> -1
+// -1 1 -> 1
+// 1 -1 -> 1
+// 1 1 -> 1
+float or(float r, float s) {
+    if (r > 0 || s >  0) return 1;
+    if (r == 0) return s;
+    if (s == 0) return r;
+    return -1;
+}
+
+// 1 -> -1
+// -1 -> 1
+float not (float r) {
+    return  -r;
+}
+
+// -1 -1 -> -1
+// 1 -1 -> 1
+// -1 1 -> 1
+// 1 1 -> -1
+float xor(float r, float s) {
+    return or(and(r, not(s)), and(not(r), s));
+
+    // (a|b) & ~(a & b)
+    // return and(or(r, s), not(and(r, s)));
+}
+
+
+// [0.3 -0.1 0.01] -> [1 -1 1]
+float discrete(float r) {
+    if (r > 0) { return 1; } else { return -1;}
+}
+
 int main(int argc, char **argv) {
   FILE *f;
   char st1[max_size];
@@ -56,11 +98,18 @@ int main(int argc, char **argv) {
       if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
     }
     vocab[b * max_w + a] = 0;
-    for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+    printf("%s: ", vocab + b *max_w);
+    for (a = 0; a < size; a++) {
+        fread(&M[a + b * size], sizeof(float), 1, f);
+        // if (a < 10) printf("NODISCRETE: %4.2f ", M[a+b*size]);
+    }
+    printf("\n");
     len = 0;
     for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
     len = sqrt(len);
     for (a = 0; a < size; a++) M[a + b * size] /= len;
+
+    for(a = 0; a < size; a++) M[a + b*size] = discrete(M[a + b*size]);
   }
   fclose(f);
   while (1) {
@@ -108,36 +157,125 @@ int main(int argc, char **argv) {
       }
     }
     if (b == 0) continue;
-    printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
-    for (a = 0; a < size; a++) vec[a] = M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
-    len = 0;
-    for (a = 0; a < size; a++) len += vec[a] * vec[a];
-    len = sqrt(len);
-    for (a = 0; a < size; a++) vec[a] /= len;
-    for (a = 0; a < N; a++) bestd[a] = 0;
-    for (a = 0; a < N; a++) bestw[a][0] = 0;
-    for (c = 0; c < words; c++) {
-      if (c == bi[0]) continue;
-      if (c == bi[1]) continue;
-      if (c == bi[2]) continue;
-      a = 0;
-      for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
-      if (a == 1) continue;
-      dist = 0;
-      for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-      for (a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
-          for (d = N - 1; d > a; d--) {
-            bestd[d] = bestd[d - 1];
-            strcpy(bestw[d], bestw[d - 1]);
-          }
-          bestd[a] = dist;
-          strcpy(bestw[a], &vocab[c * max_w]);
-          break;
+    {
+        printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
+        for (a = 0; a < size; a++) vec[a] = M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
+        len = 0;
+        for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        len = sqrt(len);
+        for (a = 0; a < size; a++) vec[a] /= len;
+        for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            // if (c == bi[0]) continue;
+            // if (c == bi[1]) continue;
+            // if (c == bi[2]) continue;
+            // a = 0;
+            // for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
+            // if (a == 1) continue;
+            dist = 0;
+            for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
         }
-      }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
     }
-    for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+
+    {
+        printf("\nusing sets\n");
+        printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
+        // for (a = 0; a < size; a++) vec[a] = M[a + bi[1] * size] - M[a + bi[0] * size] + M[a + bi[2] * size];
+        for (a = 0; a < size; a++) {
+            vec[a] = xor(M[a + bi[2] * size], and(M[a + bi[1] * size], not(M[a + bi[0]*size])));
+        }
+
+        if (cn == 4) {
+            for (a = 0; a < size; a++)  vec[a] = and(vec[a], M[a+bi[3]*size]);
+        }
+
+        // for (a = 0; a < size; a++) vec[a] = or(and(M[a + bi[1] * size], not(M[a+bi[0]*size])), M[a + bi[2] * size]);
+        len = 0;
+        for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        len = sqrt(len);
+        for (a = 0; a < size; a++) vec[a] /= len;
+        for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            // if (c == bi[0]) continue;
+            // if (c == bi[1]) continue;
+            // if (c == bi[2]) continue;
+            // a = 0;
+            // for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
+            // if (a == 1) continue;
+            dist = 0;
+            for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
+        }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    }
+
+    {
+        if (cn  < 3) continue;
+        printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
+        // a : b :: c : ? | q
+        // (c U (b \cap a^C)) \cap q
+        for (a = 0; a < size; a++) {
+            // vec[a] = and(or(M[a + bi[2] * size], and(M[a + bi[1] * size], not(M[a + bi[0]*size]))), M[a+ bi[3] * size]);
+            vec[a] = or(M[a + bi[2] * size], and(M[a + bi[1] * size], not(M[a + bi[0]*size])));
+        }
+
+        if (cn == 4) {
+            for (a = 0; a < size; a++)  vec[a] = and(vec[a], M[a+bi[3]*size]);
+        }
+        len = 0;
+        for (a = 0; a < size; a++) len += vec[a] * vec[a];
+        len = sqrt(len);
+        for (a = 0; a < size; a++) vec[a] /= len;
+        for (a = 0; a < N; a++) bestd[a] = 0;
+        for (a = 0; a < N; a++) bestw[a][0] = 0;
+        for (c = 0; c < words; c++) {
+            // if (c == bi[0]) continue;
+            // if (c == bi[1]) continue;
+            // if (c == bi[2]) continue;
+            // a = 0;
+            // for (b = 0; b < cn; b++) if (bi[b] == c) a = 1;
+            // if (a == 1) continue;
+            dist = 0;
+            for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+            for (a = 0; a < N; a++) {
+                if (dist > bestd[a]) {
+                    for (d = N - 1; d > a; d--) {
+                        bestd[d] = bestd[d - 1];
+                        strcpy(bestw[d], bestw[d - 1]);
+                    }
+                    bestd[a] = dist;
+                    strcpy(bestw[a], &vocab[c * max_w]);
+                    break;
+                }
+            }
+        }
+        for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    }
   }
   return 0;
 }

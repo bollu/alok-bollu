@@ -17,6 +17,15 @@ distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c
 	$(CC) word-analogy.c -o word-analogy $(CFLAGS)
+
+word-intersection : word-intersection.c
+	$(CC) word-intersection.c -o word-intersection $(CFLAGS)
+
+word-complement : word-complement.c
+	$(CC) word-complement.c -o word-complement $(CFLAGS)
+
+word-union : word-union.c
+	$(CC) word-union.c -o word-union $(CFLAGS)
 compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh

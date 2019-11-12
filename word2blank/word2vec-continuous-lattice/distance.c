@@ -148,6 +148,12 @@ void cosine() {
     printf("\n");
 }
 
+
+float discrete(float r) {
+    if (fabs(r) < 1e-1) return 0;
+    if (r > 0) { return 1; } else { return -1;}
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf(
@@ -179,11 +185,17 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-        // len = 0;
-        // for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
-        // len = sqrt(len);
-        // for (a = 0; a < size; a++) M[a + b * size] /= len;
+        for (a = 0; a < size; a++) {
+            fread(&M[a + b * size], sizeof(float), 1, f);
+        }
+
+        len = 0;
+        for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+        len = sqrt(len);
+        for (a = 0; a < size; a++) M[a + b * size] /= len;
+        for(a = 0; a < size; a++) {
+            M[a+b*size] = discrete(M[a+b*size]);
+        }
     }
     fclose(f);
     while (1) {

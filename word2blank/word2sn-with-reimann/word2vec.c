@@ -582,9 +582,11 @@ void *TrainModelThread(void *id) {
                             continue;
                         else if (f >= MAX_EXP)
                             continue;
-                        else
-                            f = expTable[(int)((f + MAX_EXP) *
-                                               (EXP_TABLE_SIZE / MAX_EXP / 2))];
+                        // No sigmoid needed!
+                        // else
+                        //     f = expTable[(int)((f + MAX_EXP) *
+                        //                        (EXP_TABLE_SIZE / MAX_EXP / 2))];
+
                         // 'g' is the gradient multiplied by the learning rate
                         g = (1 - vocab[word].code[d] - f) * alpha;
                         // Propagate errors output -> hidden
@@ -618,11 +620,16 @@ void *TrainModelThread(void *id) {
                             g = (lbl - 1) * alpha;
                         else if (f < -MAX_EXP)
                             g = (lbl - 0) * alpha;
-                        else
+                        else {
                             g = (lbl - expTable[(int)((f + MAX_EXP) *
                                                         (EXP_TABLE_SIZE /
                                                          MAX_EXP / 2))]) *
                                 alpha;
+
+                            // no sigmoid needed!
+                            g = (lbl - f) * alpha;
+                        }
+
                         for (c = 0; c < layer1_size; c++)
                             neu1e[c] += g * syn1neg[c + l2];
                         for (c = 0; c < layer1_size; c++)
@@ -665,10 +672,12 @@ void *TrainModelThread(void *id) {
                                 continue;
                             else if (dot >= MAX_EXP)
                                 continue;
-                            else
-                                f = expTable[(
-                                    int)((dot + MAX_EXP) *
-                                         (EXP_TABLE_SIZE / MAX_EXP / 2))];
+                            else {
+                                // f = expTable[(
+                                //     int)((dot + MAX_EXP) *
+                                //          (EXP_TABLE_SIZE / MAX_EXP / 2))];
+                                f = dot;
+                            }
                             // 'g' is the gradient multiplied by the learning
                             // rate
                             g = (1 - vocab[word].code[d] - f) * alpha;
@@ -737,10 +746,12 @@ void *TrainModelThread(void *id) {
                                 g = (lbl - 0) * alpha;
                             else {
                                 // g = (lbl - sigmoid(dot)) * alpha;
-                                g = (lbl - expTable[(int)((dot + MAX_EXP) *
-                                            (EXP_TABLE_SIZE /
-                                             MAX_EXP / 2))]) *
-                                    alpha;
+                                // g = (lbl - expTable[(int)((dot + MAX_EXP) *
+                                //             (EXP_TABLE_SIZE /
+                                //              MAX_EXP / 2))]) *
+                                //     alpha;
+                                // no sigmoid necessary!
+                                g = (lbl - dot)  * alpha;
                             }
 
                             total_loss += g * g;

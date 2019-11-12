@@ -23,9 +23,9 @@ make word2vec
 # 1 trains properly
 # 2 trains properly
 head -c 1000000 text8 > text0
-./word2vec -train ../word2vec/text8 -output models/xxxx -cbow 0 -size 200 \
+cuda-memcheck ./word2vec -train ../word2vec/text0 -output models/xxxx -cbow 0 -size 20 \
     -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 15 \
-    -alpha 0.005
+    -alpha 0.01
 
 # nvprof ./word2vec -train ../word2vec/text8 -output models/xxxxxx -cbow 0 -size 512 \
 #      -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 1 \

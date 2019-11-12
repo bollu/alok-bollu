@@ -9,3 +9,5 @@ text8
 word2phrase
 word-analogy
 *.bin
+models
+slurm

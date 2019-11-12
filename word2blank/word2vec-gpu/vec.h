@@ -85,8 +85,6 @@ struct Vec {
    inline void alloc(int len) {
       this->len = len;
       this->ndims = log2(len);
-      // make sure that the length given is a power of two.
-      assert(pow2(this->ndims) == len && "dimension number is not powr of 2!");
 
       // int a = cudaMalloc((void **)&v, 128 * (long long)len * sizeof(real));
       int a = posix_memalign((void **)&v, 128, (long long)len * sizeof(real));
@@ -106,8 +104,6 @@ struct Vec {
    inline void alloczero(int len) {
       this->len = len;
       this->ndims = log2(len);
-      // make sure that the length given is a power of two.
-      assert(pow2(this->ndims) == len && "dimension number is not powr of 2!");
       this->v = (real *)calloc(len, sizeof(real));
    }
 

@@ -591,11 +591,18 @@ __global__ void dotsKernel(const int size, const int nsamples,
 
 __device__ real sigmoidGPU(real x) {
     // we are trying to calculate sigmoid(127)
-    if (x > 5) { return 1; }
-    if (x < -5) { return 0; }
+    // if (x > 5) { return 1; }
+    // if (x < -5) { return 0; }
 
-    real e = powf(2, x);
-    return e / (1 + e);
+   return tanh(x);
+
+    // real e = powf(2, x);
+    // return e / (1 + e);
+}
+
+__device__ real gradSigmoidGPU(real x) {
+           return 1 - tanh(x) * tanh(x);
+        // return sigmoidGPU(x) * (1 - sigmoidGPU(x));
 }
 
 
@@ -620,7 +627,7 @@ __global__ void HSGradSyn0(const int size, const int nsamples,
 
         // error
         const real err = 1 - codes[y] - sigmoidGPU(dotsKernel[y]);
-        const real g = err * alpha;
+        const real g = err * alpha  * gradSigmoidGPU(dotsKernel[y]);
 
         // all threads that write into the same array index
         atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
@@ -648,7 +655,7 @@ __global__ void HSGradSyn1Neg(const int size, const int nsamples,
 
         // error
         const real err = 1 - codes[y] - sigmoidGPU(dotsKernel[y]);
-        const real g = err * alpha;
+        const real g = err * alpha  * gradSigmoidGPU(dotsKernel[y]);
 
         // all threads that write into the same array index
         // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
@@ -837,8 +844,8 @@ __global__ void NegSamplingGradSyn0(const int size, const int nsamples,
 
 
         // error
-        const real err = labels[y] - sigmoidGPU(dotsKernel[y]*2-1);
-        const real g = err * alpha;
+        const real err = labels[y] - sigmoidGPU(dotsKernel[y]);
+        const real g = err * alpha * gradSigmoidGPU(dotsKernel[y]);
 
         // all threads that write into the same array index
         atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
@@ -864,8 +871,8 @@ __global__ void NegSamplingGradSyn1Neg(const int size, const int nsamples,
 
 
         // error
-        const real err = labels[y] - sigmoidGPU(dotsKernel[y]*2-1);
-        const real g = err * alpha;
+        const real err = labels[y] - sigmoidGPU(dotsKernel[y]);
+        const real g = err * alpha * gradSigmoidGPU(dotsKernel[y]);
 
         // all threads that write into the same array index
         // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
@@ -999,10 +1006,10 @@ void TrainModelThread(void *id) {
                 fflush(stdout);
                 total_loss = 0;
             }
-            alpha = starting_alpha *
-                    (1 - word_count_actual / (real)(iter * train_words + 1));
-            if (alpha < starting_alpha * 0.0001)
-                alpha = starting_alpha * 0.0001;
+            // alpha = starting_alpha *
+            //         (1 - word_count_actual / (real)(iter * train_words + 1));
+            // if (alpha < starting_alpha * 0.0001)
+            //     alpha = starting_alpha * 0.0001;
         }
         if (sentence_length == 0) {
             while (1) {
@@ -1037,6 +1044,11 @@ void TrainModelThread(void *id) {
             sentence_length = 0;
             fseek(fi, file_size / (long long)num_threads * (long long)id,
                   SEEK_SET);
+
+            alpha = starting_alpha *
+                    (1 - word_count_actual / (real)(iter * train_words + 1));
+            if (alpha < starting_alpha * 0.0001)
+                alpha = starting_alpha * 0.0001;
             continue;
         }
         word = sen[sentence_position];
@@ -1332,21 +1344,24 @@ void TrainModel() {
     if (negative > 0) InitUnigramTable();
     start = clock();
     if (iter > 0) {
-            TrainModelThread((void *)0);
+            for(int i = 0; i < num_threads; ++i) {
+                    TrainModelThread((void *)i);
+            }
             // for (a = 0; a < num_threads; a++)
             //         pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
             // for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
     }
+
     fo = fopen(output_file, "wb");
     if (classes == 0) {
-        real syn0_out[vocab_size * layer1_size];
+        real *syn0_out = (real*) malloc(sizeof(real) * layer1_size * vocab_size);
+        // [vocab_size * layer1_size];
         cudaMemcpy(syn0_out, dev_syn0, vocab_size * layer1_size * sizeof(real), cudaMemcpyDeviceToHost);
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
         // printf("%lld %lld\n", vocab_size, layer1_size);
         for (a = 0; a < vocab_size; a++) {
             fprintf(fo, "%s ", vocab[a].word);
             // printf("\n%s ", vocab[a].word);
-
 
             if (binary) {
                 for (b = 0; b < layer1_size; b++) {

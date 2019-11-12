@@ -11,3 +11,5 @@ word-analogy
 *.bin
 word-analogy-concept
 dump-vect
+models
+word-analogy-context

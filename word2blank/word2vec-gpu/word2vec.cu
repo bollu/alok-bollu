@@ -606,21 +606,24 @@ __global__ void lensqKernel(const int size, const int nsamples,
 
         if (x >= size || y >= nsamples) return;
 
+        const real dot = vecs[ixs[y] * size + x] * vecs[ixs[y]* size + x];
+        atomicAdd(&lensqs[y], dot);
 
-        dotsScratch[y*size + x] = vecs[ixs[y] * size + x] * vecs[ixs[y]* size + x];
-        int partition = size / 2;
-        while (partition > 0) {
-                if (x < partition) {
-                        __syncthreads();
-                        dotsScratch[y*size+x] += dotsScratch[y*size+partition+x];
-                }
-                partition = partition / 2;
-        }
-        __syncthreads();
-        if (x == 0) {
-                // atomicAdd(&lensqs[y], dotsScratch[y * size + 0]);
-                lensqs[y] = dotsScratch[y * size];
-        }
+
+        // dotsScratch[y*size + x] = dot;
+        // int partition = size / 2;
+        // while (partition > 0) {
+        //         if (x < partition) {
+        //                 __syncthreads();
+        //                 dotsScratch[y*size+x] += dotsScratch[y*size+partition+x];
+        //         }
+        //         partition = partition / 2;
+        // }
+        // __syncthreads();
+        // if (x == 0) {
+        //         // atomicAdd(&lensqs[y], dotsScratch[y * size + 0]);
+        //         lensqs[y] = dotsScratch[y * size];
+        // }
 }
 
 __global__ void normalizeVecKernel(const int size, const int nsamples,
@@ -1055,15 +1058,15 @@ void runNegSamplingKernel(int nsamples, int *labels,
           dim3 blockDims2(calcBlockSize(layer1_size, TX), 
                           calcBlockSize(num_uniq_focuses, TY));
 
-        dotsKernel<<<blockDims3, threadDims3>>>(layer1_size, num_uniq_focuses,
-                        dev_syn0, dev_syn0, 
-                        dev_dots, dev_dots_scratch, dev_uniq_focuses, dev_uniq_focuses);
+        // dotsKernel<<<blockDims3, threadDims3>>>(layer1_size, num_uniq_focuses,
+        //                 dev_syn0, dev_syn0, 
+        //                 dev_dots, dev_dots_scratch, dev_uniq_focuses, dev_uniq_focuses);
 
-          // lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
-          //                 num_uniq_focuses,
-          //                 dev_syn0, dev_dots, dev_dots_scratch, dev_uniq_focuses);
-          // normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_focuses,
-          //                 dev_syn0, dev_dots, dev_uniq_focuses);
+           lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
+                           num_uniq_focuses,
+                           dev_syn0, dev_dots, dev_dots_scratch, dev_uniq_focuses);
+          normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_focuses,
+                          dev_syn0, dev_dots, dev_uniq_focuses);
 
 
           if (1) {

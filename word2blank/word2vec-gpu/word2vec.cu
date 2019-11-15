@@ -776,7 +776,7 @@ __global__ void backpropGradIndirect(const int size, const int nseen,
 }
 
 
-const int TX = 512, TY = 1;
+const int TX = 128, TY = 8;
 
 void runHSKernel(int nsamples,
                 unsigned long long *focuses, 
@@ -815,7 +815,6 @@ void runHSKernel(int nsamples,
                         uniq_ctxes, 
                         num_uniq_ctxes * sizeof(unsigned long long), 
                         cudaMemcpyHostToDevice); 
-        return;
 
         dim3 threadDims3(TX, TY);
         dim3 blockDims3(calcBlockSize(layer1_size, TX), calcBlockSize(nsamples, TY));
@@ -1040,17 +1039,11 @@ void runNegSamplingKernel(int nsamples, int *labels,
                                 dev_syn0, dev_gsyn0, dev_uniq_focuses);
         }
 
+        /*
 
         // normalize syn0
         {
 
-          // lensq of syn0
-          zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses, 1024)),
-                  dim3(1024)>>>( num_uniq_focuses, dev_dots);
-
-
-          zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses * layer1_size, 1024)),
-                  dim3(1024)>>>( layer1_size * num_uniq_focuses, dev_dots_scratch);
 
           assert(num_uniq_focuses <= nsamples);
 
@@ -1058,10 +1051,9 @@ void runNegSamplingKernel(int nsamples, int *labels,
           dim3 blockDims2(calcBlockSize(layer1_size, TX), 
                           calcBlockSize(num_uniq_focuses, TY));
 
-        // dotsKernel<<<blockDims3, threadDims3>>>(layer1_size, num_uniq_focuses,
-        //                 dev_syn0, dev_syn0, 
-        //                 dev_dots, dev_dots_scratch, dev_uniq_focuses, dev_uniq_focuses);
-
+          // lensq of syn0
+          zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses, 1024)),
+                  dim3(1024)>>>( num_uniq_focuses, dev_dots);
            lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
                            num_uniq_focuses,
                            dev_syn0, dev_dots, dev_dots_scratch, dev_uniq_focuses);
@@ -1072,13 +1064,6 @@ void runNegSamplingKernel(int nsamples, int *labels,
           if (1) {
                   real dots[num_uniq_focuses];
                   cudaMemcpy(dots, dev_dots, num_uniq_focuses * sizeof(real), cudaMemcpyDeviceToHost); 
-                  // printf("LENSQ: ");
-                  // for(int i = 0; i < 10; ++i)
-                  //         printf("%4.2f ", dots[i]);
-                  // getchar();
-
-
-
                   for(int i = 0; i < num_uniq_focuses; ++i) {
                     real dbg_syn0[layer1_size];
                     printf("i: %d | nsamples: %lld | uniq_focuses[i]: %lld | vocab_size: %lld\n", 
@@ -1107,18 +1092,21 @@ void runNegSamplingKernel(int nsamples, int *labels,
           //                 dev_syn0, dev_dots);
         }
 
-        // normalize syn1neg
-        // {
+        {
+        
 
-        //         // lensq of syn0
-        //         zeroRealKernel<<<dim3(calcBlockSize(nsamples, 1024)), dim3(1024)>>>(nsamples, dev_dots);
-        //         lensqKernel<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
-        //                         dev_syn1neg, dev_dots, dev_dots_scratch);
+          zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses, 1024)),
+                  dim3(1024)>>>( num_uniq_focuses, dev_dots);
+           lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
+                           num_uniq_ctxes,
+                           dev_syn1neg, dev_dots, dev_dots_scratch, dev_uniq_ctxes);
+          normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_ctxes,
+                          dev_syn0, dev_dots, dev_uniq_ctxes);
 
-        //         // normalize syn0 using lensq
-        //         // normalizeVecKernel<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
-        //         //                 dev_syn1neg, dev_dots);
-        // }
+
+        
+        }
+        */
 }
 
 void TrainModelThread(void *id) {

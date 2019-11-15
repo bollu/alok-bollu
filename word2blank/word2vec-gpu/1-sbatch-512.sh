@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH -p long
-#SBATCH --time=05:00:00
+#SBATCH --time=5:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
-#SBATCH --job-name=w2v512
+#SBATCH --job-name=v512
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 

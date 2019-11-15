@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH -p long
-#SBATCH --time=05:00:00
+#SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=w2v512
+#SBATCH --job-name=v1024
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 
@@ -22,7 +22,7 @@ make word2vec
 # 1 trains properly
 # 2 trains properly
 head -c 1000000 text8 > text0
-./word2vec -train ../word2vec/text8 -output models/size=512-iter=15 -cbow 0 -size 512 \
+./word2vec -train ../word2vec/text8 -output models/size=1024-iter=15 -cbow 0 -size 1024 \
     -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 15 \
     -alpha 0.01
 

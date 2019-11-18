@@ -3,7 +3,7 @@
 #SBATCH --time=05:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=w2v512
+#SBATCH --job-name=vgpu200
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 
@@ -22,7 +22,7 @@ make word2vec
 # 1 trains properly
 # 2 trains properly
 head -c 1000000 text8 > text0
-./word2vec -train text0 -output models/xxxx -cbow 0 -size 50 \
+./word2vec -train ../word2vec/text8 -output models/xxxx -cbow 0 -size 200 \
     -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 30 \
     -alpha 0.025
 

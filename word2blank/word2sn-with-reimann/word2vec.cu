@@ -536,9 +536,6 @@ void InitNet() {
         }
     }
 
-    zeroRealKernel<<<dim3(calcBlockSize((long long)vocab_size * layer1_size, 512)), dim3(512)>>>((long long)vocab_size * layer1_size, 
-                    dev_syn1neg);
-
     GPU_ERRCHECK(cudaMalloc((void **)&dev_gsyn1neg, 
                     (long long) vocab_size * layer1_size * sizeof(real)));
 
@@ -1069,7 +1066,6 @@ void runNegSamplingKernel(int nsamples, int *labels,
                                 dev_syn0, dev_gsyn0, dev_uniq_focuses);
         }
 
-        /*
 
         // normalize syn0
         {

@@ -10,3 +10,5 @@ word2phrase
 word-analogy
 *.bin
 models
+word2vecgpu
+slurm

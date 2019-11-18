@@ -22,9 +22,9 @@ make word2vec
 # 1 trains properly
 # 2 trains properly
 head -c 1000000 text8 > text0
-./word2vec -train ../word2vec/text8 -output models/size=512-iter=15 -cbow 0 -size 512 \
-    -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 15 \
-    -alpha 0.01
+./word2vec -train text0 -output models/xxxx -cbow 0 -size 50 \
+    -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 30 \
+    -alpha 0.025
 
 # nvprof ./word2vec -train ../word2vec/text8 -output models/xxxxxx -cbow 0 -size 512 \
 #      -window 8 -negative 0 -hs 1 -sample 1e-4 -threads 1 -binary 1 -iter 1 \

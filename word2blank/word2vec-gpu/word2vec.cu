@@ -106,7 +106,8 @@ real *dev_dots;
 real *dev_dots_scratch;
 
 
-const int NSAMPLES_PER_KERNEL_LAUNCH = 1e4;
+const int NSAMPLES_PER_KERNEL_LAUNCH = 1e5;
+// const int NSAMPLES_PER_KERNEL_LAUNCH = 1e5;
 int *dev_labels;
 char *dev_codes;
 unsigned long long *dev_focuses, *dev_ctxes;
@@ -495,6 +496,10 @@ void InitNet() {
     //         for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     // }
     printf("allocating syn1neg...");
+
+    GPU_ERRCHECK(cudaMalloc((void **)&dev_syn1neg, 
+                    (long long) vocab_size * layer1_size * sizeof(real)));
+
     if (negative > 0) {
         a = posix_memalign((void **)&syn1neg, 128,
                            (long long)vocab_size * sizeof(Vec));
@@ -507,11 +512,13 @@ void InitNet() {
             new (Vec)(syn1neg[a]);
             syn1neg[a].alloc(layer1_size);
             for (b = 0; b < layer1_size; b++) syn1neg[a].v[b] = 0;
+
+        // copy vector to device
+        cudaMemcpy(dev_syn1neg + layer1_size * a, syn1neg[a].v, layer1_size *
+                        sizeof(real), cudaMemcpyHostToDevice);
+
         }
     }
-
-    GPU_ERRCHECK(cudaMalloc((void **)&dev_syn1neg, 
-                    (long long) vocab_size * layer1_size * sizeof(real)));
 
 
     GPU_ERRCHECK(cudaMalloc((void **)&dev_gsyn1neg, 
@@ -684,13 +691,12 @@ __device__ real sigmoidGPU(real x) {
     // if (x < -5) { return 0; }
 
    return tanh(x);
-
     // real e = powf(2, x);
     // return e / (1 + e);
 }
 
 __device__ real gradSigmoidGPU(real x) {
-           return 1 - tanh(x) * tanh(x);
+     return 1 - tanh(x) * tanh(x);
         // return sigmoidGPU(x) * (1 - sigmoidGPU(x));
 }
 
@@ -1208,10 +1214,10 @@ void TrainModelThread(void *id) {
             fseek(fi, file_size / (long long)num_threads * (long long)id,
                   SEEK_SET);
 
-            alpha = starting_alpha *
-                    (1 - word_count_actual / (real)(iter * train_words + 1));
-            if (alpha < starting_alpha * 0.0001)
-                alpha = starting_alpha * 0.0001;
+            // alpha = starting_alpha *
+            //         (1 - word_count_actual / (real)(iter * train_words + 1));
+            // if (alpha < starting_alpha * 0.0001)
+            //     alpha = starting_alpha * 0.0001;
             continue;
         }
         word = sen[sentence_position];
@@ -1509,6 +1515,10 @@ void TrainModel() {
     if (iter > 0) {
             for(int i = 0; i < num_threads; ++i) {
                     TrainModelThread((void *)i);
+                    // alpha = starting_alpha *
+                    //         (1 - word_count_actual / (real)(iter * train_words + 1));
+                    // if (alpha < starting_alpha * 0.0001)
+                    //         alpha = starting_alpha * 0.0001;
             }
             // for (a = 0; a < num_threads; a++)
             //         pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);

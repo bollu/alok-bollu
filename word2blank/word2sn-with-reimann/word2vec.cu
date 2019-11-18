@@ -961,15 +961,17 @@ __global__ void NegSamplingGradSyn0(const int size, const int nsamples,
 
 
         // error
-        // const real g = (labels[y] - dots[y]) * alpha * (1 - dots[y]);
-        const real g = (labels[y] - regularizeDotGPU(dots[y])) * 
-                        gradRegularizeGPU(dots[y]) * alpha;
+        const real g = (labels[y] - dots[y]) * alpha * (1 - dots[y]);
+        // const real g = (labels[y] - regularizeDotGPU(dots[y])) * gradRegularizeGPU(dots[y]) * alpha;
 
         // all threads that write into the same array index
         atomicAdd(&gsyn0[focuses[y] * size + x], 
                         g*syn1neg[ctxes[y]*size + x]);
 
 }
+
+const float STRENGTH_GRAD_NEGSAMPLING = 0;
+
 
 
 __global__ void NegSamplingGradSyn1Neg(const int size, const int nsamples, 
@@ -989,13 +991,12 @@ __global__ void NegSamplingGradSyn1Neg(const int size, const int nsamples,
 
 
         // error
-        // const real g = (labels[y] - dots[y]) * alpha * (1 - dots[y]);
-        const real g = (labels[y] - regularizeDotGPU(dots[y])) * 
-                        gradRegularizeGPU(dots[y]) * alpha;
+        const real g = (labels[y] - dots[y]) * alpha * (1 - dots[y]);
+        // const real g = (labels[y] - regularizeDotGPU(dots[y])) * gradRegularizeGPU(dots[y]) * alpha;
 
         // all threads that write into the same array index
         // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
-        atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+        atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x] * STRENGTH_GRAD_NEGSAMPLING);
 
 }
 
@@ -1226,10 +1227,10 @@ void TrainModelThread(void *id) {
             fseek(fi, file_size / (long long)num_threads * (long long)id,
                   SEEK_SET);
 
-            // alpha = starting_alpha *
-            //         (1 - word_count_actual / (real)(iter * train_words + 1));
-            // if (alpha < starting_alpha * 0.0001)
-            //     alpha = starting_alpha * 0.0001;
+             // alpha = starting_alpha *
+             //         (1 - word_count_actual / (real)(iter * train_words + 1));
+             // if (alpha < starting_alpha * 0.0001)
+             //     alpha = starting_alpha * 0.0001;
             continue;
         }
         word = sen[sentence_position];

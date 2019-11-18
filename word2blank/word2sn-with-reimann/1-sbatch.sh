@@ -2,7 +2,8 @@
 #SBATCH -p long
 #SBATCH --time=72:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name=w2sn
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=w2sn200
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 
@@ -22,7 +23,7 @@ rm word2vecgpu
 make word2vecgpu
 # ./word2vec -train text8 -cbow 0 -output models/text8-size=200-window=8-negative=25  -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
 ./word2vecgpu -train text8 -cbow 0 \
-    -output models/xxxx \
+    -output models/text8-size=200-iter=15-word2vec-regularized \
     -size 200 -window 8 \
     -negative 25 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 15 -alpha 0.025
 

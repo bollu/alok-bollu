@@ -930,7 +930,7 @@ void runHSKernel(int nsamples,
 }
 
 __device__ float regularizeDotGPU(float x) {
-        return tanh(x);
+        return x; // tanh(x);
     // compute sigmoig
     // if (x > 5) { return 1; }
     // if (x < -5) { return 0; }
@@ -941,7 +941,7 @@ __device__ float regularizeDotGPU(float x) {
 
 
 __device__ real gradRegularizeGPU(real x) {
-        return 1 - tanh(x) * tanh(x);
+        return 1;// - tanh(x) * tanh(x);
 }
 
 __global__ void NegSamplingGradSyn0(const int size, const int nsamples, 

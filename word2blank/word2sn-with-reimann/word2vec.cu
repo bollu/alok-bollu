@@ -106,7 +106,7 @@ real *dev_dots;
 real *dev_dots_scratch;
 
 
-const int NSAMPLES_PER_KERNEL_LAUNCH = 5e5;
+const int NSAMPLES_PER_KERNEL_LAUNCH = 1e5;
 // const int NSAMPLES_PER_KERNEL_LAUNCH = 1e5;
 int *dev_labels;
 char *dev_codes;
@@ -452,6 +452,17 @@ void ReadVocab() {
     fclose(fin);
 }
 
+void normalizeVec(real *v) {
+    real lensq = 0;
+    for(int i = 0; i < layer1_size; ++i)  {
+        lensq += v[i] * v[i];
+    }
+    const real len = sqrt(lensq);
+    for(int i = 0; i < layer1_size; ++i) {
+        v[i] /= len;
+    }
+}
+
 void InitNet() {
     long long a, b;
     unsigned long long next_random = 1;
@@ -479,6 +490,8 @@ void InitNet() {
             next_random = next_random * (unsigned long long)25214903917 + 11;
             syn0[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / (layer1_size);
         }
+        normalizeVec(syn0[a].v);
+
         // copy vector to host
         cudaMemcpy(dev_syn0 + layer1_size * a, syn0[a].v, layer1_size *
                         sizeof(real), cudaMemcpyHostToDevice);
@@ -496,6 +509,8 @@ void InitNet() {
     //         for (b = 0; b < layer1_size; b++) syn1[a * layer1_size + b] = 0;
     // }
     printf("allocating syn1neg...");
+    GPU_ERRCHECK(cudaMalloc((void **)&dev_syn1neg, 
+                    (long long) vocab_size * layer1_size * sizeof(real)));
     if (negative > 0) {
         a = posix_memalign((void **)&syn1neg, 128,
                            (long long)vocab_size * sizeof(Vec));
@@ -507,18 +522,28 @@ void InitNet() {
         for (a = 0; a < vocab_size; a++) {
             new (Vec)(syn1neg[a]);
             syn1neg[a].alloc(layer1_size);
-            for (b = 0; b < layer1_size; b++) syn1neg[a].v[b] = 0;
+            // for (b = 0; b < layer1_size; b++) syn1neg[a].v[b] = 0;
+
+            for (b = 0; b < layer1_size; b++) {
+                    next_random = next_random * (unsigned long long)25214903917 + 11;
+                    syn1neg[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / (layer1_size);
+            }
+            normalizeVec(syn1neg[a].v);
+
+            cudaMemcpy(dev_syn1neg + layer1_size * a, 
+                            syn1neg[a].v, layer1_size *
+                            sizeof(real), cudaMemcpyHostToDevice);
         }
     }
 
-    GPU_ERRCHECK(cudaMalloc((void **)&dev_syn1neg, 
-                    (long long) vocab_size * layer1_size * sizeof(real)));
-
+    zeroRealKernel<<<dim3(calcBlockSize((long long)vocab_size * layer1_size, 512)), dim3(512)>>>((long long)vocab_size * layer1_size, 
+                    dev_syn1neg);
 
     GPU_ERRCHECK(cudaMalloc((void **)&dev_gsyn1neg, 
                     (long long) vocab_size * layer1_size * sizeof(real)));
 
-    zeroRealKernel<<<dim3(calcBlockSize((long long)vocab_size * layer1_size, 512)), dim3(512)>>>((long long)vocab_size * layer1_size, dev_gsyn1neg);
+    zeroRealKernel<<<dim3(calcBlockSize((long long)vocab_size * layer1_size, 512)), dim3(512)>>>((long long)vocab_size * layer1_size, 
+                    dev_gsyn1neg);
 
     printf("%callocated syn1neg.\t\t\t\t\n", 13);
 
@@ -679,20 +704,6 @@ __global__ void dotsKernel(const int size, const int nsamples,
 
 }
 
-__device__ real sigmoidGPU(real x) {
-    // we are trying to calculate sigmoid(127)
-    // if (x > 5) { return 1; }
-    // if (x < -5) { return 0; }
-
-   return tanh(x);
-    // real e = powf(2, x);
-    // return e / (1 + e);
-}
-
-__device__ real gradSigmoidGPU(real x) {
-     return 1 - tanh(x) * tanh(x);
-        // return sigmoidGPU(x) * (1 - sigmoidGPU(x));
-}
 
 
 #define FULL_MASK 0xffffffff
@@ -713,13 +724,13 @@ __global__ void HSGradSyn0(const int size, const int nsamples,
 
         if (dots[y] > 5 || dots[y] < -5) {return; }
 
-
+        assert(false);
         // error
-        const real err = 1 - codes[y] - sigmoidGPU(dots[y]);
-        const real g = err * alpha  * gradSigmoidGPU(dots[y]);
+        // const real err = 1 - codes[y] - sigmoidGPU(dots[y]);
+        // const real g = err * alpha  * gradSigmoidGPU(dots[y]);
 
         // all threads that write into the same array index
-        atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
+        // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
         // atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
 
 }
@@ -742,13 +753,15 @@ __global__ void HSGradSyn1Neg(const int size, const int nsamples,
 
         if (dots[y] > 5 || dots[y] < -5) { return; }
 
+        assert(false);
+
         // error
-        const real err = 1 - codes[y] - sigmoidGPU(dots[y]);
-        const real g = err * alpha  * gradSigmoidGPU(dots[y]);
+        // const real err = 1 - codes[y] - sigmoidGPU(dots[y]);
+        // const real g = err * alpha  * gradSigmoidGPU(dots[y]);
 
         // all threads that write into the same array index
         // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
-        atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+        // atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
 
 }
 
@@ -919,6 +932,21 @@ void runHSKernel(int nsamples,
 
 }
 
+__device__ float regularizeDotGPU(float x) {
+        return tanh(x);
+    // compute sigmoig
+    // if (x > 5) { return 1; }
+    // if (x < -5) { return 0; }
+
+    // real exp = powf(2, x);
+    // return exp / (1 + exp);
+}
+
+
+__device__ real gradRegularizeGPU(real x) {
+        return 1 - tanh(x) * tanh(x);
+}
+
 __global__ void NegSamplingGradSyn0(const int size, const int nsamples, 
                  const real *__restrict__ dots, 
                  const int *__restrict__ labels,
@@ -936,12 +964,13 @@ __global__ void NegSamplingGradSyn0(const int size, const int nsamples,
 
 
         // error
-        const real err = labels[y] - sigmoidGPU(dots[y]);
-        const real g = err * alpha * gradSigmoidGPU(dots[y]);
+        // const real g = (labels[y] - dots[y]) * alpha * (1 - dots[y]);
+        const real g = (labels[y] - regularizeDotGPU(dots[y])) * 
+                        gradRegularizeGPU(dots[y]) * alpha;
 
         // all threads that write into the same array index
-        atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
-        // atomicAdd(&syn1neg[ctxes[y] * size + x], g*syn0[focuses[y] * size + x]);
+        atomicAdd(&gsyn0[focuses[y] * size + x], 
+                        g*syn1neg[ctxes[y]*size + x]);
 
 }
 
@@ -963,8 +992,9 @@ __global__ void NegSamplingGradSyn1Neg(const int size, const int nsamples,
 
 
         // error
-        const real err = labels[y] - sigmoidGPU(dots[y]);
-        const real g = err * alpha * gradSigmoidGPU(dots[y]);
+        // const real g = (labels[y] - dots[y]) * alpha * (1 - dots[y]);
+        const real g = (labels[y] - regularizeDotGPU(dots[y])) * 
+                        gradRegularizeGPU(dots[y]) * alpha;
 
         // all threads that write into the same array index
         // atomicAdd(&gsyn0[focuses[y] * size + x], g*syn1neg[ctxes[y]*size + x]);
@@ -1043,70 +1073,62 @@ void runNegSamplingKernel(int nsamples, int *labels,
 
         // normalize syn0
         {
-
-
-          assert(num_uniq_focuses <= nsamples);
-
-          dim3 threadDims2(TX, TY);
-          dim3 blockDims2(calcBlockSize(layer1_size, TX), 
-                          calcBlockSize(num_uniq_focuses, TY));
-
-          // lensq of syn0
-          zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses, 1024)),
-                  dim3(1024)>>>( num_uniq_focuses, dev_dots);
-           lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
-                           num_uniq_focuses,
-                           dev_syn0, dev_dots, dev_dots_scratch, dev_uniq_focuses);
-          normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_focuses,
-                          dev_syn0, dev_dots, dev_uniq_focuses);
-
-
-          if (1) {
-                  real dots[num_uniq_focuses];
-                  cudaMemcpy(dots, dev_dots, num_uniq_focuses * sizeof(real), cudaMemcpyDeviceToHost); 
-                  for(int i = 0; i < num_uniq_focuses; ++i) {
-                    real dbg_syn0[layer1_size];
-                    printf("i: %d | nsamples: %lld | uniq_focuses[i]: %lld | vocab_size: %lld\n", 
-                                    i, nsamples, uniq_focuses[i], vocab_size);
-                    fflush(stdout);
-                    cudaMemcpy(&dbg_syn0,
-                               dev_syn0 + uniq_focuses[i] * layer1_size,
-                               layer1_size * sizeof(real),
-                               cudaMemcpyDeviceToHost);
-
-                    float curlen = 0;
-                    printf("syn0[%d]: ", i);
-                    for(int j = 0; j < layer1_size; ++j) {
-                            curlen += dbg_syn0[j] * dbg_syn0[j];
-                            printf("%4.2f ", dbg_syn0[j]);
-                    }
-                    printf(" | curlensq: %4.4f", curlen);
-                    printf(" | dots[i]: %4.4f ", dots[i]);
-                    printf("\n");
-                  }
-
-          }
-
-          // normalize syn0 using lensq
-          // normalizeVecKernel<<<blockDims3, threadDims3>>>(layer1_size, nsamples,
-          //                 dev_syn0, dev_dots);
+                dim3 threadDims2(TX, TY);
+                dim3 blockDims2(calcBlockSize(layer1_size, TX), 
+                                calcBlockSize(num_uniq_focuses, TY));
+                zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses, 1024)),
+                        dim3(1024)>>>(num_uniq_focuses, dev_dots);
+                lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
+                                num_uniq_focuses,
+                                dev_syn0, dev_dots, dev_dots_scratch, 
+                                dev_uniq_focuses);
+                normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, 
+                                num_uniq_focuses,
+                                dev_syn0, dev_dots, dev_uniq_focuses);
         }
 
+        // normalize syn1neg
         {
-        
-
-          zeroRealKernel<<<dim3(calcBlockSize(num_uniq_focuses, 1024)),
-                  dim3(1024)>>>( num_uniq_focuses, dev_dots);
-           lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
-                           num_uniq_ctxes,
-                           dev_syn1neg, dev_dots, dev_dots_scratch, dev_uniq_ctxes);
-          normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, num_uniq_ctxes,
-                          dev_syn0, dev_dots, dev_uniq_ctxes);
-
-
-        
+                dim3 threadDims2(TX, TY);
+                dim3 blockDims2(calcBlockSize(layer1_size, TX), 
+                                calcBlockSize(num_uniq_ctxes, TY));
+                zeroRealKernel<<<dim3(calcBlockSize(num_uniq_ctxes, 1024)),
+                        dim3(1024)>>>(num_uniq_ctxes, dev_dots);
+                lensqKernel<<<blockDims2, threadDims2>>>(layer1_size, 
+                                num_uniq_ctxes,
+                                dev_syn1neg, dev_dots, dev_dots_scratch, 
+                                dev_uniq_ctxes);
+                normalizeVecKernel<<<blockDims2, threadDims2>>>(layer1_size, 
+                                num_uniq_ctxes,
+                                dev_syn1neg, dev_dots, dev_uniq_ctxes);
         }
-        */
+
+        if (0) {
+                real dots[num_uniq_focuses];
+                cudaMemcpy(dots, dev_dots, num_uniq_focuses * sizeof(real), cudaMemcpyDeviceToHost); 
+                for(int i = 0; i < num_uniq_focuses; ++i) {
+                        real dbg_syn0[layer1_size];
+                        printf("i: %d | nsamples: %lld | uniq_focuses[i]: %lld | vocab_size: %lld\n", 
+                                        i, nsamples, uniq_focuses[i], vocab_size);
+                        fflush(stdout);
+                        cudaMemcpy(&dbg_syn0,
+                                        dev_syn0 + uniq_focuses[i] * layer1_size,
+                                        layer1_size * sizeof(real),
+                                        cudaMemcpyDeviceToHost);
+
+                        float curlen = 0;
+                        printf("syn0[%d]: ", i);
+                        for(int j = 0; j < layer1_size; ++j) {
+                                curlen += dbg_syn0[j] * dbg_syn0[j];
+                                printf("%4.2f ", dbg_syn0[j]);
+                        }
+                        printf(" | curlensq: %4.4f", curlen);
+                        printf(" | dots[i]: %4.4f ", dots[i]);
+                        printf("\n");
+                }
+
+        }
+
 }
 
 void TrainModelThread(void *id) {

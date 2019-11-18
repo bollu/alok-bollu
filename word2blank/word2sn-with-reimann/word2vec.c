@@ -698,14 +698,15 @@ void *TrainModelThread(void *id) {
                             normalizeVec(syn0 + l1);
                         }
                     // NEGATIVE SAMPLING
-                    // p
-                    // Loss = (lbl - sigmoid(x . y))^2 = g^2
-                    // Rgrad_x Loss = - g * y (in R^n)
-                    // Sgrad_x = (I - xx^T) [-gy]
+                    // p (e for errr)
+                    // Loss = (lbl - (x . y))^2 = e^2
+                    // Rgrad_x Loss = - e * y (in R^n)
+                    // Sgrad_x = (I - xx^T) [-ey]
                     // x_{t+1} = ret(x_t - eps * Sgrad_x)
-                    //= ret(x_t - eps * [(I - xx^T) [- gy]])
-                    //= ret(x_t - eps * [- gy + gy(x.y)]
-                    //= ret(x_t + eps * [ gy - gy(x.y)]
+                    //= ret(x_t - eps * [(I - xx^T) [- ey]])
+                    //= ret(x_t - eps * [- ey + ey(x.y)]
+                    //= ret(x_t + eps * [ ey - ey(x.y)]
+                    //= ret(x_t + eps * [ ey (1 - x.y)]
                     //         
 
                     // Rgrad_y Loss = - (lbl - x . y) * x (in R^n)

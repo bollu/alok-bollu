@@ -508,14 +508,20 @@ void InitNet() {
             exit(1);
         }
 
+        printf("%d: Randomly initializing syn1neg...", __LINE__);
         for (a = 0; a < vocab_size; a++) {
             new (Vec)(syn1neg[a]);
             syn1neg[a].alloc(layer1_size);
-            for (b = 0; b < layer1_size; b++) syn1neg[a].v[b] = 0;
+            // for (b = 0; b < layer1_size; b++) syn1neg[a].v[b] = 0;
+            for (b = 0; b < layer1_size; b++) {
+                    next_random = next_random * (unsigned long long)25214903917 + 11;
+                    syn1neg[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / (layer1_size);
+            }
 
-        // copy vector to device
-        cudaMemcpy(dev_syn1neg + layer1_size * a, syn1neg[a].v, layer1_size *
-                        sizeof(real), cudaMemcpyHostToDevice);
+            // copy vector to device
+            cudaMemcpy(dev_syn1neg + layer1_size * a, 
+                            syn1neg[a].v, layer1_size * sizeof(real),
+                            cudaMemcpyHostToDevice);
 
         }
     }

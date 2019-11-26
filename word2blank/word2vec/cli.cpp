@@ -19,6 +19,20 @@
 #define max_w 50
 #define max(x, y) ((x) > (y) ? (x) : (y))
 
+
+// and(x, y) = xy
+// or(x, y) = x + y - xy
+// not(x, y) = 1 - x
+// x y = 0
+// y = 0/x
+
+
+// and(x, y) = min x y
+// or(x, y) = max x y
+// not(x, y) = 1 - x
+// and x (not x) = min x (1 - x) = 0.5
+
+
 using namespace std;
 using Vec = float*;
 
@@ -30,6 +44,12 @@ long long words, size;
 
 float mk01(float r) {
     return powf(2, r);
+}
+
+void normalizeVec(Vec v) {
+    float totalsize = 0;
+    for(int i = 0; i < size; ++i) totalsize += v[i];
+    for(int i = 0; i < size; ++i) v[i] /= totalsize;
 }
 
 
@@ -181,7 +201,10 @@ float entropy(Vec v) {
 }
 
 
+
 Vec interpret(AST ast) {
+
+    const float STRONG_THRESHOLD = 0.5 / size;
     std::cout << "interpreting: ";
     ast.print();
     std::cout << std::endl;
@@ -246,7 +269,119 @@ Vec interpret(AST ast) {
               }
 
               return out;
-          } else if (command == "not") {
+          } 
+          else if (command == "min") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = min(out[j], w[j]);
+                  }
+              }
+
+              return out;
+          }
+          else if (command == "max") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = max(out[j], w[j]);
+                  }
+              }
+
+              return out;
+          }
+          // https://en.wikipedia.org/wiki/Fuzzy_set#Fuzzy_set_operations
+          else if (command == "difference" || command == "diff") {
+              if (ast.size() != 3) {
+                  cout << "usage: difference <w1> <w2>\n";
+                  goto INTERPRET_ERROR;
+              }
+
+              Vec l = interpret(ast.at(1));
+              Vec r = interpret(ast.at(2));
+
+              Vec out = new float[size];
+              for(int i = 0; i < size; ++i) {
+                  out[i] = l[i] - min(l[i], r[i]);
+              }
+              normalizeVec(out);
+              return out;
+          }
+
+          else if (command == "analogy") {
+              if (ast.size() != 4) {
+                  cout << "usage: analogy <w1> <w2> <w3?\n";
+                  goto INTERPRET_ERROR;
+              }
+
+              // a : b :: x : ?
+              Vec a = interpret(ast.at(1));
+              Vec b = interpret(ast.at(2));
+              Vec x = interpret(ast.at(3));
+              normalizeVec(a);
+              normalizeVec(b);
+              normalizeVec(x);
+
+              Vec out = new float[size];
+              for(int i = 0; i < size; ++i) {
+                  // a : b :: x : ?
+                  // (A U X) / B
+                  float delta = b[i] + x[i] - min(b[i] + x[i], a[i]);
+                  out[i] = delta;
+              }
+              normalizeVec(out);
+              return out;
+          }
+
+         // https://en.wikipedia.org/wiki/%C5%81ukasiewicz_logic
+          else if (command == "strongmax") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  normalizeVec(out);
+                  normalizeVec(w);
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = max<float>(0.0, out[j] + w[j] - 1.0 / size);
+                  }
+              }
+
+              return out;
+          }
+         // https://en.wikipedia.org/wiki/%C5%81ukasiewicz_logic
+          else if (command == "strongmin") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  normalizeVec(out);
+                  normalizeVec(w);
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = min<float>(0, out[j] + w[j]);
+                  }
+              }
+
+              return out;
+          }
+          else if (command == "not") {
               Vec out = interpret(ast.at(1));
               if (!out) goto INTERPRET_ERROR;
 

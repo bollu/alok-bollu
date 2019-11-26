@@ -32,8 +32,8 @@ compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh
 
-word-intersection: word-intersection.c
-	$(CC) word-intersection.c -o word-intersection $(CFLAGS)
+word-fuzzy-distance: word-fuzzy-distance.c
+	$(CC) word-fuzzy-distance.c -o word-fuzzy-distance $(CFLAGS)
 
 dump-vect : dump-vect.c
 	$(CC) dump-vect.c -o dump-vect $(CFLAGS)

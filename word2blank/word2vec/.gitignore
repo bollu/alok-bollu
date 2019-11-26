@@ -14,3 +14,4 @@ dump-vect
 models
 word-analogy-context
 word-intersection
+word-fuzzy-distance

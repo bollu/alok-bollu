@@ -15,3 +15,6 @@ models
 word-analogy-context
 word-intersection
 word-fuzzy-distance
+cli.o
+cli
+linenoise.o

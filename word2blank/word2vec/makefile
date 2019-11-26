@@ -13,6 +13,10 @@ word2vec : word2vec.c
 	$(CC) word2vec.c -o word2vec $(CFLAGS)
 word2phrase : word2phrase.c
 	$(CC) word2phrase.c -o word2phrase $(CFLAGS)
+
+distance-context : distance-context.c
+	$(CC) distance-context.c -o distance-context $(CFLAGS)
+
 distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c
@@ -27,6 +31,10 @@ word-analogy-concept : word-analogy-concept.c
 compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh
+
+word-intersection: word-intersection.c
+	$(CC) word-intersection.c -o word-intersection $(CFLAGS)
+
 dump-vect : dump-vect.c
 	$(CC) dump-vect.c -o dump-vect $(CFLAGS)
 

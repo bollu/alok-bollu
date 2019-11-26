@@ -161,6 +161,26 @@ std::tuple<AST, char *> parse_(char *str) {
 
 AST parse(char *str) { return std::get<0>(parse_(str)); }
 
+float entropylog(float x) {
+    if (x < 1e-4) {
+        return 0;
+    }
+    return log(x);
+}
+
+float entropy(Vec v) {
+
+    float totalsize = 0;
+    for(int i = 0; i < size; ++i) totalsize += v[i];
+    for(int i = 0; i < size; ++i) v[i] /= totalsize;
+
+    float H = 0;
+    for(int i = 0; i < size; ++i) 
+        H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
+    return H;
+}
+
+
 Vec interpret(AST ast) {
     std::cout << "interpreting: ";
     ast.print();
@@ -173,15 +193,85 @@ Vec interpret(AST ast) {
                 cout << "unable to find word: |" << ast.s() << "|\n";
                 goto INTERPRET_ERROR;
             } else {
-                cout << ast.s() << ":";
-                Vec v = it->second;
-                for(int i = 0; i < std::min<int>(10, size); i++) {
-                    cout << setprecision(1) << v[i] << " ";
+                cout << ast.s() << " : ";
+                Vec out = new float[size];
+                for(int i = 0; i < size; ++i) out[i] = it->second[i];
+
+                for(int i = 0; i < std::min<int>(3, size); i++) {
+                    cout << setprecision(1) << out[i] << " ";
                 }
                 cout << "\n";
-                return v;
+                return out;
             }
             assert(false && "unreachable");
+        }
+
+        case ASTTy::List: {
+          if (ast.size() == 0) goto INTERPRET_ERROR;
+
+          if (ast.at(0).ty() != ASTTy::AtomString) {
+              cout << "head of AST must be command";
+              cout << "\n\t"; ast.print();
+              goto INTERPRET_ERROR;
+          }
+
+          const std::string command = ast.at(0).s();
+
+          if (command == "and") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] *= w[j];
+                  }
+              }
+
+              return out;
+          } 
+          else if (command == "or") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = out[j] +  w[j] - out[j] * w[j];
+                  }
+              }
+
+              return out;
+          } else if (command == "not") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int j = 0; j < size; ++j) {
+                  out[j] = 1 - out[j];
+              }
+
+              return out;
+
+
+          } else if (command == "entropy") {
+              float H = 0;
+              Vec out = interpret(ast.at(1));
+              H += entropy(out);
+
+              cout << "entropy: " << setprecision(5) <<  H << "\n";
+              return nullptr;
+
+          } else {
+              cout << "unknown command: " << command;
+              cout << "\n\t"; ast.print();
+              goto INTERPRET_ERROR;
+          }
+
+          assert(false && "unreachable");
         }
 
         case ASTTy::Null:
@@ -249,9 +339,9 @@ void dimension_usage() {
 }
 
 void printCloseWords(Vec vec) {
-    float vecSize = 0;
-    for (int a = 0; a < size; a++) vecSize += vec[a];
-    for (int a = 0; a < size; a++) vec[a] /= vecSize;
+    float vecsize = 0;
+    for (int a = 0; a < size; a++) vecsize += vec[a];
+    for (int a = 0; a < size; a++) vec[a] /= vecsize;
 
     float vals[words];
     float bestd[words];
@@ -260,11 +350,11 @@ void printCloseWords(Vec vec) {
     for (int a = 0; a < N; a++) bestd[a] = 0;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      float intersectSize = 0;
+      float intersectsize = 0;
       for (int a = 0; a < size; a++) {
-          intersectSize += vec[a] * M[c][a];
+          intersectsize += vec[a] * M[c][a];
       }
-      const float dist  = intersectSize / vecSize;
+      const float dist  = intersectsize / vecsize;
       vals[c] = dist;
 
       for (int a = 0; a < N; a++) {
@@ -281,6 +371,65 @@ void printCloseWords(Vec vec) {
     }
     for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
     plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+void printAscByEntropy() {
+    printf("Words sorted by entropy (lowest):\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = entropy(M[c]);
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
+    printf("\n");
+}
+
+
+void printDescByEntropy() {
+    printf("Words sorted by entropy (highest):\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = -100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = entropy(M[c]);
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
     printf("\n");
 }
 
@@ -336,15 +485,13 @@ int main(int argc, char **argv) {
         word2vec[std::string(vocab+b*max_w)] = M[b];
 
 
-        // printf("%s:", vocab + b * max_w);
-        // for (int i = 0; i < std::min<int>(size, 10); i++) {
-        //     printf("%3.4f ", M[b][i]);
-        // }
-        // printf("\n");
     }
 
 
     fclose(f);
+
+    printAscByEntropy();
+    printDescByEntropy();
 
 
     linenoiseHistorySetMaxLen(10000);

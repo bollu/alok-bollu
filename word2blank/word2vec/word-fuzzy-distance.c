@@ -171,8 +171,8 @@ int main(int argc, char **argv) {
     float vecSize = 0;
     for (a = 0; a < size; a++) vecSize += vec[a]; //  * vec[a];
     // len = sqrt(len);
-    float vals[words];
     for (a = 0; a < size; a++) vec[a] /= vecSize;
+    float vals[words];
     for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {

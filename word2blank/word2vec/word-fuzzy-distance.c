@@ -35,6 +35,37 @@ float mk01(float r) {
 // = 1 - [1 - rs] // simplify inside []
 // = 1 - 1 + rs // release []
 // = rs
+#define NUM_SPARKS 100
+
+
+void plotHistogram(const char *name, float *vals, int n, int nbuckets) {
+    // number of values in each bucket.
+    int buckets[nbuckets];
+    for(int i = 0; i < nbuckets; ++i) buckets[i] = 0;
+
+    float vmax = vals[0];
+    float vmin = vals[0];
+    for(int i = 0; i < n; ++i) vmax = vals[i] > vmax ? vals[i] : vmax;
+    for(int i = 0; i < n; ++i) vmin = vals[i] < vmin ? vals[i] : vmin;
+
+    float multiple = (vmax - vmin) / nbuckets;
+
+    for(int i = 0; i < n; ++i) {
+        int b = floor((vals[i] - vmin) / multiple);
+        b = b >= nbuckets ? (nbuckets -1): (b < 0 ? 0 : b);
+        buckets[b]++;
+    }
+    
+    int total = 0;
+    for(int i = 0; i < nbuckets; ++i) total += buckets[i];
+
+    printf("%s: |", name);
+    for(int i = 0; i < nbuckets; ++i) {
+        printf(" %f ", ((buckets[i] / (float)total)) * 100.0);
+    }
+    printf("|");
+
+}
 
 
 int main(int argc, char **argv) {
@@ -133,23 +164,14 @@ int main(int argc, char **argv) {
     printf("\n                                              Word              Distance\n------------------------------------------------------------------------\n");
     for (a = 0; a < size; a++) vec[a] = M[a + bi[0] * size];
 
-    /*
     for (int i = 1; i < cn; ++i) {
-        for (a = 0; a < size; a++) vec[a] = and(vec[a], M[a + bi[i] * size]);
+        for (a = 0; a < size; a++) vec[a] = vec[a] * M[a + bi[i] * size];
     }
-    
-    float delta = 0;
-    for(int i = 0; i < size; ++i) {
-        float d = vec[i] - M[i + bi[0] * size];
-        delta += d*d;
-    }
-
-    printf("delta: %4.2f\n", delta);
-    */
 
     float vecSize = 0;
     for (a = 0; a < size; a++) vecSize += vec[a]; //  * vec[a];
     // len = sqrt(len);
+    float vals[words];
     for (a = 0; a < size; a++) vec[a] /= vecSize;
     for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
@@ -163,6 +185,7 @@ int main(int argc, char **argv) {
       float intersectSize = 0;
       for (a = 0; a < size; a++) intersectSize += vec[a] * M[a + c * size];
       const float dist  = intersectSize / vecSize;
+      vals[c] = dist;
 
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
@@ -177,6 +200,8 @@ int main(int argc, char **argv) {
       }
     }
     for (a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
   }
   return 0;
 }

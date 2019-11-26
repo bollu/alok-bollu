@@ -9,18 +9,24 @@
 #include "linenoise.h"
 #include <algorithm>
 #include <assert.h>
+#include <map>
+#include <iomanip>
+#include<algorithm>
+
 
 #define max_size 2000
 #define N 40
 #define max_w 50
 #define max(x, y) ((x) > (y) ? (x) : (y))
 
+using namespace std;
 using Vec = float*;
+
+std::map<std::string, Vec> word2vec;
 
 Vec *M;
 char *vocab;
 long long words, size;
-char *bestw[N];
 
 float mk01(float r) {
     return powf(2, r);
@@ -155,12 +161,29 @@ std::tuple<AST, char *> parse_(char *str) {
 
 AST parse(char *str) { return std::get<0>(parse_(str)); }
 
-std::pair<Vec, bool> interpret(AST ast) {
+Vec interpret(AST ast) {
     std::cout << "interpreting: ";
     ast.print();
     std::cout << std::endl;
 
     switch (ast.ty()) {
+        case ASTTy::AtomString: {
+            auto it = word2vec.find(ast.s());
+            if (it == word2vec.end()) {
+                cout << "unable to find word: |" << ast.s() << "|\n";
+                goto INTERPRET_ERROR;
+            } else {
+                cout << ast.s() << ":";
+                Vec v = it->second;
+                for(int i = 0; i < std::min<int>(10, size); i++) {
+                    cout << setprecision(1) << v[i] << " ";
+                }
+                cout << "\n";
+                return v;
+            }
+            assert(false && "unreachable");
+        }
+
         case ASTTy::Null:
         default:
             goto INTERPRET_ERROR;
@@ -168,16 +191,32 @@ std::pair<Vec, bool> interpret(AST ast) {
     }
 
 INTERPRET_ERROR:
-    return std::make_pair(nullptr, false);
+    return nullptr;
 }
 
 // completions for linenoise
 void completion(const char *buf, linenoiseCompletions *lc) {
-    for (int i = 0; i < words; ++i) {
-        // TODO: change it so it works when typing stuff. That is,
-        // tokenize the string and the decide what completion to add...
-        if (strstr(&vocab[i * max_w], buf) == &vocab[i * max_w]) {
-            linenoiseAddCompletion(lc, &vocab[i * max_w]);
+    int ix = strlen(buf) - 1;
+    for(; ix >= 0; ix--) {
+        if (buf[ix] == ' ' || buf[ix] == '(' || buf[ix] == ')') {
+            break;
+        }
+    }
+
+    ix++;
+    if (ix == strlen(buf)) { return; }
+
+    for (int i = words - 1; i >= 0; i--)  {
+        char *w = vocab + i * max_w;
+        if (strstr(w, buf + ix) == w) {
+            // take buf till ix
+            std::string completion(buf, ix);
+            completion += std::string(w);
+
+            char *ccompletion = new char[completion.size()+2];
+            strcpy(ccompletion, completion.c_str());
+
+            linenoiseAddCompletion(lc, ccompletion);
         }
     }
 }
@@ -209,6 +248,42 @@ void dimension_usage() {
     printf("\n");
 }
 
+void printCloseWords(Vec vec) {
+    float vecSize = 0;
+    for (int a = 0; a < size; a++) vecSize += vec[a];
+    for (int a = 0; a < size; a++) vec[a] /= vecSize;
+
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 0;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      float intersectSize = 0;
+      for (int a = 0; a < size; a++) {
+          intersectSize += vec[a] * M[c][a];
+      }
+      const float dist  = intersectSize / vecSize;
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
 int main(int argc, char **argv) {
     char file_name[512];
     FILE *f;
@@ -227,8 +302,6 @@ int main(int argc, char **argv) {
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
-    for (int a = 0; a < N; a++)
-        bestw[a] = (char *)malloc(max_size * sizeof(char));
 
     M = (Vec *)malloc((long long)words * sizeof(Vec));
 
@@ -246,17 +319,22 @@ int main(int argc, char **argv) {
         }
         vocab[b * max_w + a] = 0;
         M[b] = new float[size];
+        printf("%s\n", vocab + b * max_w);
 
-        float size = 0;
+        float setsize = 0;
         for(int i = 0; i < size; ++i) {
+            float fl;
             fread(&M[b][i], sizeof(float), 1, f);
-            // M[b][i] = mk01(M[b][i]);
-            // size += M[b][i];
+            M[b][i] = mk01(M[b][i]);
+            setsize += M[b][i];
+        }
+        
+        for(int i = 0; i < size; ++i) {
+            M[b][i] /= setsize;
         }
 
-        // for(int i = 0; i < size; ++i) {
-        //     M[b][i] /= size;
-        // }
+        word2vec[std::string(vocab+b*max_w)] = M[b];
+
 
         // printf("%s:", vocab + b * max_w);
         // for (int i = 0; i < std::min<int>(size, 10); i++) {
@@ -281,10 +359,9 @@ int main(int argc, char **argv) {
 
         if (ast.ty() == ASTTy::Null) continue;
 
-        Vec v; bool success;
-        std::tie(v, success) = interpret(ast);
-        if (!success) continue;
+        const Vec v = interpret(ast);
+        if (!v) continue;
 
-        // printvec(v, "vector: ", nullptr);
+        printCloseWords(v);
     }
 }

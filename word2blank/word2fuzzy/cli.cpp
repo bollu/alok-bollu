@@ -568,31 +568,6 @@ void printDescByEntropy() {
     printf("\n");
 }
 
-void printDistributionOfProbs() {
-    static const int NPROBS = 100;
-    int probs[NPROBS];
-    for(int i = 0; i < NPROBS; ++i) probs[i] = 0;
-
-    // focus on the probability range from 0 to 0.2
-    // 0 -> 0
-    // 0.2 -> NPROBS
-    for(int i = 0; i < words; ++i) {
-        for(int j = 0; j < size; ++j) {
-            const float f = M[i][j];
-            probs[int(floor(f * (NPROBS+1) / 0.2))]++;
-        }
-    }
-
-    int total = 0;
-    for(int i = 0; i < NPROBS; ++i) total += probs[i];
-
-    cout << "probability distribution across all vectors:\n";
-    for(int i = 0; i < NPROBS; ++i) {
-        cout << setprecision(2) << float(i) * 0.2 / (NPROBS) << " : " << probs[i]  << "\n";
-    }
-    cout << "----\n";
-}
-
 int main(int argc, char **argv) {
     char file_name[512];
     FILE *f;
@@ -652,7 +627,6 @@ int main(int argc, char **argv) {
 
     printAscByEntropy();
     printDescByEntropy();
-    printDistributionOfProbs();
 
 
     linenoiseHistorySetMaxLen(10000);

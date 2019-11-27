@@ -102,3 +102,5 @@ Word: cyberpunk  Position in vocabulary: 8427
 - woman child => pregnant
 - apollo: gives NASA. (and apllo greek) gives gods.
 - (and ballistic training) == ballistic
+
+- (and computer vision) -> SIGGRAPH.

@@ -32,6 +32,9 @@
 // not(x, y) = 1 - x
 // and x (not x) = min x (1 - x) = 0.5
 
+static const bool NONORMALIZE = true;
+
+
 
 using namespace std;
 using Vec = float*;
@@ -42,11 +45,15 @@ Vec *M;
 char *vocab;
 long long words, size;
 
-float mk01(float r) {
-    return powf(2, r);
+float sigmoid(float r) {
+    return powf(2, r) / (1 + powf(2, r));
 }
 
+
+
 void normalizeVec(Vec v) {
+    if (NONORMALIZE) return;
+
     float totalsize = 0;
     for(int i = 0; i < size; ++i) totalsize += v[i];
     for(int i = 0; i < size; ++i) v[i] /= totalsize;
@@ -190,14 +197,335 @@ float entropylog(float x) {
 
 float entropy(Vec v) {
 
-    float totalsize = 0;
-    for(int i = 0; i < size; ++i) totalsize += v[i];
-    for(int i = 0; i < size; ++i) v[i] /= totalsize;
+    // float totalsize = 0;
+    // for(int i = 0; i < size; ++i) totalsize += v[i];
+    // for(int i = 0; i < size; ++i) v[i] /= totalsize;
 
     float H = 0;
     for(int i = 0; i < size; ++i) 
         H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
     return H;
+}
+
+// crossentropy(P, q) = H(p) + KL(p, q)
+// https://juaa-journal.springeropen.com/track/pdf/10.1186/s40467-015-0029-5
+float crossentropy(Vec v, Vec w) {
+    float H = 0;
+    for(int i = 0; i < size; ++i) 
+        H += v[i] * entropylog(v[i] / w[i]) + (1 - v[i]) * entropylog((1 - v[i])/(1-w[i]));
+    return H;
+}
+
+float kl(Vec v, Vec w) {
+    return crossentropy(v, w) - entropy(v);
+}
+
+// completions for linenoise
+void completion(const char *buf, linenoiseCompletions *lc) {
+    int ix = strlen(buf) - 1;
+    for(; ix >= 0; ix--) {
+        if (buf[ix] == ' ' || buf[ix] == '(' || buf[ix] == ')') {
+            break;
+        }
+    }
+
+    ix++;
+    if (ix == strlen(buf)) { return; }
+
+    for (int i = words - 1; i >= 0; i--)  {
+        char *w = vocab + i * max_w;
+        if (strstr(w, buf + ix) == w) {
+            // take buf till ix
+            std::string completion(buf, ix);
+            completion += std::string(w);
+
+            char *ccompletion = new char[completion.size()+2];
+            strcpy(ccompletion, completion.c_str());
+
+            linenoiseAddCompletion(lc, ccompletion);
+        }
+    }
+}
+
+// plot dimension usage
+void dimension_usage() {
+    double *f = (double *)malloc(size * sizeof(double));
+    double *fnorm = (double *)malloc(size * sizeof(double));
+
+    for (int i = 0; i < size; i++) {
+        f[i] = 0;
+        fnorm[i] = 0;
+    }
+    for (int w = 0; w < words; w++) {
+        for (int i = 0; i < size; i++) {
+            const float cur =  M[w][i];
+            f[i] += fabs(cur);
+        }
+    }
+
+    double total = 0;
+    for (int i = 0; i < size; ++i) total += f[i];
+
+    // normalize
+    for (int i = 0; i < size; ++i) fnorm[i] = (f[i] * 100.0) / total;
+
+    printf("dimension weights as percentage [0..n]:\n");
+    for (int i = 0; i < size; ++i) printf("%d: %5.8f\n", i, fnorm[i]);
+    printf("\n");
+}
+
+void printClosestWordsSetOverlap(Vec vec, Vec *M) {
+    printf("DISTANCE ASYMMETRIC\n");
+    float vecsize = 0;
+    for (int a = 0; a < size; a++) vecsize += vec[a];
+    // for (int a = 0; a < size; a++) vec[a] /= vecsize;
+
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 0;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      float intersectsize = 0;
+      for (int a = 0; a < size; a++) {
+          intersectsize += vec[a] * M[c][a];
+      }
+      const float dist  = intersectsize / vecsize;
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+
+void printClosestWordsSetOverlapSymmetric(Vec vec, Vec *M) {
+    printf("DISTANCE SYMMETRIC\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 0;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      float intersectsize = 0;
+      float unionsize = 0;
+      for (int a = 0; a < size; a++) {
+          intersectsize += vec[a] * M[c][a];
+          unionsize += vec[a] + M[c][a] - vec[a] *M[c][a];
+      }
+      assert(intersectsize >= 0);
+      assert(unionsize >= 0);
+      const float dist  = intersectsize / unionsize;
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+
+void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
+    printf("CROSS ENTROPY: EXTRA BITS FOR word on FOCUS\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      // const float dist = crossentropy(vec, M[c]);
+      const float dist = crossentropy(M[c], vec);
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
+    printf("CROSS ENTROPY: EXTRA BITS FOR FOCUS on word\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = crossentropy(vec, M[c]);
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
+    printf("CROSS ENTROPY: BOTH\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = crossentropy(vec, M[c]) + crossentropy(M[c], vec);
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+
+void printClosestWordsKL(Vec vec) {
+    printf("KL divergence\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      // const float dist = crossentropy(vec, M[c]);
+      const float dist = kl(M[c], vec);
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+void printAscByEntropy() {
+    printf("Words sorted by entropy (lowest):\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = 0;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = entropy(M[c]);
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
+    printf("\n");
+}
+
+
+void printDescByEntropy() {
+    printf("Words sorted by entropy (highest):\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = -100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = entropy(M[c]);
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
+    printf("\n");
 }
 
 
@@ -400,6 +728,36 @@ Vec interpret(AST ast) {
               cout << "entropy: " << setprecision(5) <<  H << "\n";
               return nullptr;
 
+          }  else if (command == "reldist") {
+              if (ast.size() != 3) goto INTERPRET_ERROR;
+
+            Vec *Mrel = new Vec[words];
+            Vec rel = interpret(ast.at(1));
+            Vec v = interpret(ast.at(2));
+
+            if (!rel) goto INTERPRET_ERROR;
+            if (!v) goto INTERPRET_ERROR;
+
+            for(int i = 0; i < words; ++i){
+                Mrel[i] = new float[size];
+                for(int j = 0; j < size; ++j) {
+                    Mrel[i][j] = M[i][j] * rel[j];
+                }
+            }
+
+            for(int i = 0; i < size; ++i){
+                v[i] *= rel[i];
+            }
+
+
+            printClosestWordsSetOverlap(v, Mrel);
+            printClosestWordsSetOverlapSymmetric(v, Mrel);
+            printClosestWordsCrossEntropy(v, Mrel);
+            printClosestWordsCrossEntropy2(v, Mrel);
+            printClosestWordsCrossEntropySym(v, Mrel);
+
+            return nullptr;
+
           } else {
               cout << "unknown command: " << command;
               cout << "\n\t"; ast.print();
@@ -417,155 +775,6 @@ Vec interpret(AST ast) {
 
 INTERPRET_ERROR:
     return nullptr;
-}
-
-// completions for linenoise
-void completion(const char *buf, linenoiseCompletions *lc) {
-    int ix = strlen(buf) - 1;
-    for(; ix >= 0; ix--) {
-        if (buf[ix] == ' ' || buf[ix] == '(' || buf[ix] == ')') {
-            break;
-        }
-    }
-
-    ix++;
-    if (ix == strlen(buf)) { return; }
-
-    for (int i = words - 1; i >= 0; i--)  {
-        char *w = vocab + i * max_w;
-        if (strstr(w, buf + ix) == w) {
-            // take buf till ix
-            std::string completion(buf, ix);
-            completion += std::string(w);
-
-            char *ccompletion = new char[completion.size()+2];
-            strcpy(ccompletion, completion.c_str());
-
-            linenoiseAddCompletion(lc, ccompletion);
-        }
-    }
-}
-
-// plot dimension usage
-void dimension_usage() {
-    double *f = (double *)malloc(size * sizeof(double));
-    double *fnorm = (double *)malloc(size * sizeof(double));
-
-    for (int i = 0; i < size; i++) {
-        f[i] = 0;
-        fnorm[i] = 0;
-    }
-    for (int w = 0; w < words; w++) {
-        for (int i = 0; i < size; i++) {
-            const float cur =  M[w][i];
-            f[i] += fabs(cur);
-        }
-    }
-
-    double total = 0;
-    for (int i = 0; i < size; ++i) total += f[i];
-
-    // normalize
-    for (int i = 0; i < size; ++i) fnorm[i] = (f[i] * 100.0) / total;
-
-    printf("dimension weights as percentage [0..n]:\n");
-    for (int i = 0; i < size; ++i) printf("%d: %5.8f\n", i, fnorm[i]);
-    printf("\n");
-}
-
-void printCloseWords(Vec vec) {
-    float vecsize = 0;
-    for (int a = 0; a < size; a++) vecsize += vec[a];
-    for (int a = 0; a < size; a++) vec[a] /= vecsize;
-
-    float vals[words];
-    float bestd[words];
-    char bestw[N][max_size];
-
-    for (int a = 0; a < N; a++) bestd[a] = 0;
-    for (int a = 0; a < N; a++) bestw[a][0] = 0;
-    for (int c = 0; c < words; c++) {
-      float intersectsize = 0;
-      for (int a = 0; a < size; a++) {
-          intersectsize += vec[a] * M[c][a];
-      }
-      const float dist  = intersectsize / vecsize;
-      vals[c] = dist;
-
-      for (int a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
-          for (int d = N - 1; d > a; d--) {
-            bestd[d] = bestd[d - 1];
-            strcpy(bestw[d], bestw[d - 1]);
-          }
-          bestd[a] = dist;
-          strcpy(bestw[a], &vocab[c * max_w]);
-          break;
-        }
-      }
-    }
-    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
-    plotHistogram("distances", vals, words, 10);
-    printf("\n");
-}
-
-void printAscByEntropy() {
-    printf("Words sorted by entropy (lowest):\n");
-    float vals[words];
-    float bestd[words];
-    char bestw[N][max_size];
-
-    float minentropy = -1;
-    for (int a = 0; a < N; a++) bestd[a] = 100;
-    for (int a = 0; a < N; a++) bestw[a][0] = 0;
-    for (int c = 0; c < words; c++) {
-      const float dist = entropy(M[c]);
-
-      for (int a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
-          for (int d = N - 1; d > a; d--) {
-            bestd[d] = bestd[d - 1];
-            strcpy(bestw[d], bestw[d - 1]);
-          }
-          bestd[a] = dist;
-          strcpy(bestw[a], &vocab[c * max_w]);
-          break;
-        }
-      }
-    }
-    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
-    plotHistogram("entropies", vals, words, 10);
-    printf("\n");
-}
-
-
-void printDescByEntropy() {
-    printf("Words sorted by entropy (highest):\n");
-    float vals[words];
-    float bestd[words];
-    char bestw[N][max_size];
-
-    float minentropy = -1;
-    for (int a = 0; a < N; a++) bestd[a] = -100;
-    for (int a = 0; a < N; a++) bestw[a][0] = 0;
-    for (int c = 0; c < words; c++) {
-      const float dist = entropy(M[c]);
-
-      for (int a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
-          for (int d = N - 1; d > a; d--) {
-            bestd[d] = bestd[d - 1];
-            strcpy(bestw[d], bestw[d - 1]);
-          }
-          bestd[a] = dist;
-          strcpy(bestw[a], &vocab[c * max_w]);
-          break;
-        }
-      }
-    }
-    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
-    plotHistogram("entropies", vals, words, 10);
-    printf("\n");
 }
 
 int main(int argc, char **argv) {
@@ -594,6 +803,7 @@ int main(int argc, char **argv) {
                (long long)words * size * sizeof(float) / 1048576, words, size);
         return -1;
     }
+
     for (int b = 0; b < words; b++) {
         int a = 0;
         while (1) {
@@ -603,30 +813,27 @@ int main(int argc, char **argv) {
         }
         vocab[b * max_w + a] = 0;
         M[b] = new float[size];
-        printf("%s\n", vocab + b * max_w);
 
-        float setsize = 0;
+        float total = 0;
         for(int i = 0; i < size; ++i) {
-            float fl;
             fread(&M[b][i], sizeof(float), 1, f);
-            M[b][i] = mk01(M[b][i]);
-            setsize += M[b][i];
-        }
-        
-        for(int i = 0; i < size; ++i) {
-            M[b][i] /= setsize;
+            M[b][i] = powf(2, M[b][i]);
+            total += M[b][i];
         }
 
+        for(int i = 0; i < size; ++i) { M[b][i] /= total; }
         word2vec[std::string(vocab+b*max_w)] = M[b];
 
 
     }
 
-
     fclose(f);
 
     printAscByEntropy();
     printDescByEntropy();
+    if (NONORMALIZE) {
+        cout << "NOTE: unnormalized vectors\n";
+    }
 
 
     linenoiseHistorySetMaxLen(10000);
@@ -644,6 +851,10 @@ int main(int argc, char **argv) {
         const Vec v = interpret(ast);
         if (!v) continue;
 
-        printCloseWords(v);
+        printClosestWordsSetOverlap(v, M);
+        printClosestWordsSetOverlapSymmetric(v, M);
+        printClosestWordsCrossEntropy(v, M);
+        printClosestWordsCrossEntropy2(v, M);
+        printClosestWordsCrossEntropySym(v, M);
     }
 }

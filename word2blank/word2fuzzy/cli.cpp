@@ -417,18 +417,32 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: BOTH\n");
     float vals[words];
     float bestd[words];
+    float dist1[words], dist2[words], maxdist1 = -10, maxdist2 = -10;
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 100;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      const float dist = crossentropy(vec, M[c]) + crossentropy(M[c], vec);
-      vals[c] = dist;
+        dist1[c] = crossentropy(vec, M[c]);
+        if (dist1[c] > maxdist1) maxdist1 = dist1[c];
+        dist2[c] =  crossentropy(M[c], vec);
+        if (dist2[c] > maxdist2) maxdist2 = dist2[c];
+      // vals[c] = dist;
+    }
 
+    // make sure its's not negative...
+    // if (maxdist1 < 0) maxdist1 = 1;
+    // if (maxdist2 < 0) maxdist2 = 1;
+    
+    maxdist1 = maxdist2 = 1;
+
+    for (int c = 0; c < words; c++) {
+      const float dist = (dist1[c] / maxdist1) + (dist2[c] / maxdist2);
+      vals[c] = dist;
       for (int a = 0; a < N; a++) {
         if (dist < bestd[a]) {
           for (int d = N - 1; d > a; d--) {
-            bestd[d] = bestd[d - 1];
+            bestd[d] = bestd[d-1];
             strcpy(bestw[d], bestw[d - 1]);
           }
           bestd[a] = dist;
@@ -753,7 +767,7 @@ Vec interpret(AST ast) {
 
             for(int i = 0; i < size; ++i){
                 v[i] *= rel[i];
-            }
+            } 
 
 
             printClosestWordsSetOverlap(v, Mrel);
@@ -769,15 +783,22 @@ Vec interpret(AST ast) {
             // those dimensions and 0 everywhere else
             Vec indicator = new float[size];
             for(int i = 0; i < size; ++i) indicator[i] = 0;
-            for(int i = 0; i < ast.size(); ++i) {
+
+            for(int i = 1; i < ast.size(); ++i) {
                 if (ast.at(i).ty() != ASTTy::AtomString) {
                     goto INTERPRET_ERROR;
                 }
                 const int ix = ast.at(i).i();
                 if (ix < 0 || ix >= size) { goto INTERPRET_ERROR; };
 
-                indicator[i] = 1.0;
+                indicator[ix] = 0.9 / max<float>(1, (ast.size() - 1));
             }
+
+                printf("indicator: ");
+                for(int i = 0; i < size; ++i) {
+                    printf("[%d]%4.2f ", i, indicator[i]);
+                }
+
 
             return indicator;
        } else if (command == "mul" || command == "*") {
@@ -794,7 +815,69 @@ Vec interpret(AST ast) {
            }
 
            return v;
-       }else {
+       } else if (command == "pow" || command == "^") {
+           // (* vector float)
+           if(ast.size() != 3) goto INTERPRET_ERROR;
+           Vec v = interpret(ast.at(1));
+           if (!v) goto INTERPRET_ERROR;
+           if (ast.at(2).ty() != ASTTy::AtomString) goto INTERPRET_ERROR; 
+
+           float f = ast.at(2).f();
+
+           for(int i = 0; i < size; ++i) {
+               v[i] = powf(v[i], f);
+           }
+
+           return v;
+       } else if (command == "discrete") {
+                if (ast.size() < 2) goto INTERPRET_ERROR;
+                Vec v = interpret(ast.at(1));
+                if (!v) goto INTERPRET_ERROR;
+
+                float fmax = 0;
+                for(int i = 0; i < size; ++i) {
+                    fmax  = max(v[i], fmax);
+                }
+
+                // can give threshold factor, which values < fraction *fmax
+                // are removed. 
+                // By default, is 0.5
+                float threshold = 0.5;
+                if (ast.size() == 3) {
+                    if (ast.at(2).ty() != ASTTy::AtomString) goto INTERPRET_ERROR;
+                    threshold = ast.at(2).f();
+                }
+
+                int nlive = 0;
+                for(int i = 0; i < size; ++i) {
+                    v[i] = v[i] > fmax * threshold ? 1 : 0;
+                    nlive += v[i];
+                }
+
+                printf("live: " );
+                for(int i = 0; i < size; ++i) {
+                    if (v[i] == 1) printf("%d ", i);
+                }
+                printf("\n");
+
+                printf("dead: " );
+                for(int i = 0; i < size; ++i) {
+                    if (v[i] == 0) printf("%d ", i);
+                }
+                printf("\n");
+
+                for(int i = 0; i < size; ++i) {
+                    v[i] /= nlive;
+                }
+
+                printf("discrete: ");
+                for(int i = 0; i < size; ++i) {
+                    printf("[%d]%4.2f ", i, v[i]);
+                }
+                printf("\n");
+
+                return v;
+       } else  {
               cout << "unknown command: " << command;
               cout << "\n\t"; ast.print();
               goto INTERPRET_ERROR;

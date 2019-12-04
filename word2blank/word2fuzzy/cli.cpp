@@ -125,7 +125,9 @@ struct AST {
     }
 
     ASTTy ty() { return ty_; };
-    std::string s() { return s_; };
+    std::string s() { assert(ty_ == ASTTy::AtomString); return s_; };
+    float f() { assert(ty_ == ASTTy::AtomString); return atof(s_.c_str()); }
+    int i() { assert(ty_ == ASTTy::AtomString); return atoi(s_.c_str()); }
 
     AST at(int i) {
         assert(ty_ == ASTTy::List);
@@ -211,8 +213,10 @@ float entropy(Vec v) {
 // https://juaa-journal.springeropen.com/track/pdf/10.1186/s40467-015-0029-5
 float crossentropy(Vec v, Vec w) {
     float H = 0;
-    for(int i = 0; i < size; ++i) 
+    for(int i = 0; i < size; ++i)  {
+        if (w[i] < 1e-7) w[i] = 1e-7;
         H += v[i] * entropylog(v[i] / w[i]) + (1 - v[i]) * entropylog((1 - v[i])/(1-w[i]));
+    }
     return H;
 }
 
@@ -476,7 +480,7 @@ void printAscByEntropy() {
     char bestw[N][max_size];
 
     float minentropy = -1;
-    for (int a = 0; a < N; a++) bestd[a] = 0;
+    for (int a = 0; a < N; a++) bestd[a] = 10;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
       const float dist = entropy(M[c]);
@@ -629,7 +633,7 @@ Vec interpret(AST ast) {
               return out;
           }
           // https://en.wikipedia.org/wiki/Fuzzy_set#Fuzzy_set_operations
-          else if (command == "difference" || command == "diff") {
+          else if (command == "difference" || command == "diff" || command == "-") {
               if (ast.size() != 3) {
                   cout << "usage: difference <w1> <w2>\n";
                   goto INTERPRET_ERROR;
@@ -637,6 +641,8 @@ Vec interpret(AST ast) {
 
               Vec l = interpret(ast.at(1));
               Vec r = interpret(ast.at(2));
+
+              if (!l || !r) goto INTERPRET_ERROR;
 
               Vec out = new float[size];
               for(int i = 0; i < size; ++i) {
@@ -758,15 +764,45 @@ Vec interpret(AST ast) {
 
             return nullptr;
 
-          } else {
+          } else if (command == "indicator") {
+            // probe certain dimensions, by creating vectors with "1" along
+            // those dimensions and 0 everywhere else
+            Vec indicator = new float[size];
+            for(int i = 0; i < size; ++i) indicator[i] = 0;
+            for(int i = 0; i < ast.size(); ++i) {
+                if (ast.at(i).ty() != ASTTy::AtomString) {
+                    goto INTERPRET_ERROR;
+                }
+                const int ix = ast.at(i).i();
+                if (ix < 0 || ix >= size) { goto INTERPRET_ERROR; };
+
+                indicator[i] = 1.0;
+            }
+
+            return indicator;
+       } else if (command == "mul" || command == "*") {
+           // (* vector float)
+           if(ast.size() != 3) goto INTERPRET_ERROR;
+           Vec v = interpret(ast.at(1));
+           if (!v) goto INTERPRET_ERROR;
+           if (ast.at(2).ty() != ASTTy::AtomString) goto INTERPRET_ERROR; 
+
+           float f = ast.at(2).f();
+
+           for(int i = 0; i < size; ++i) {
+               v[i] *= f;
+           }
+
+           return v;
+       }else {
               cout << "unknown command: " << command;
               cout << "\n\t"; ast.print();
               goto INTERPRET_ERROR;
           }
 
           assert(false && "unreachable");
-        }
-
+        } 
+ 
         case ASTTy::Null:
         default:
             goto INTERPRET_ERROR;

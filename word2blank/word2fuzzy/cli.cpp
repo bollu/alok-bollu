@@ -487,7 +487,7 @@ void printClosestWordsKL(Vec vec) {
     printf("\n");
 }
 
-void printAscByEntropy() {
+void printAscByEntropy(Vec *M) {
     printf("Words sorted by entropy (lowest):\n");
     float vals[words];
     float bestd[words];
@@ -517,7 +517,7 @@ void printAscByEntropy() {
 }
 
 
-void printDescByEntropy() {
+void printDescByEntropy(Vec *M) {
     printf("Words sorted by entropy (highest):\n");
     float vals[words];
     float bestd[words];
@@ -600,8 +600,27 @@ Vec interpret(AST ast) {
               }
 
               return out;
-          } 
-          else if (command == "or") {
+          } else if (command == "/" || command == "div") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = max<float>(min<float>(out[j] / (1e-3 + w[j]), 1 - 1e-3), 1e-3);
+                  }
+              }
+
+              printf("div: ");
+              for(int j = 0; j < size; ++j) {
+                  printf("%4.2f ", out[j]);
+              }
+              printf("\n");
+              return out;
+
+          } else if (command == "or" || command == "+") {
               Vec out = interpret(ast.at(1));
               if (!out) goto INTERPRET_ERROR;
 
@@ -770,6 +789,9 @@ Vec interpret(AST ast) {
             } 
 
 
+            printAscByEntropy(M);
+            printDescByEntropy(M);
+
             printClosestWordsSetOverlap(v, Mrel);
             printClosestWordsSetOverlapSymmetric(v, Mrel);
             printClosestWordsCrossEntropy(v, Mrel);
@@ -791,7 +813,7 @@ Vec interpret(AST ast) {
                 const int ix = ast.at(i).i();
                 if (ix < 0 || ix >= size) { goto INTERPRET_ERROR; };
 
-                indicator[ix] = 0.9 / max<float>(1, (ast.size() - 1));
+                indicator[ix] = (1) / max<float>(1, (ast.size() - 1));
             }
 
                 printf("indicator: ");
@@ -877,6 +899,17 @@ Vec interpret(AST ast) {
                 printf("\n");
 
                 return v;
+       } else if (command == "writeprobfile") {
+           cout << "writing out coefficients of every vector...";
+           FILE *f = fopen("prob.txt", "w");
+           for(int i = 0; i < words; ++i) {
+               for(int j = 0; j < size; ++j) {
+                   fprintf(f, "%f ", M[i][j]);
+               }
+           }
+           fclose(f);
+           cout << "done.\n";
+           goto INTERPRET_ERROR;
        } else  {
               cout << "unknown command: " << command;
               cout << "\n\t"; ast.print();
@@ -948,8 +981,8 @@ int main(int argc, char **argv) {
 
     fclose(f);
 
-    printAscByEntropy();
-    printDescByEntropy();
+    // printAscByEntropy(M);
+    printDescByEntropy(M);
     if (NONORMALIZE) {
         cout << "NOTE: unnormalized vectors\n";
     }

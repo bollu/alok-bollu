@@ -11,6 +11,9 @@ all: word2vec word2phrase distance word-analogy compute-accuracy
 text0:
 	head -c 1000000 text8 > text0
 
+discrete : discrete.c
+	$(CC) discrete.c -o word2vec $(CFLAGS)
+
 word2vec : word2vec.c
 	$(CC) word2vec.c -o word2vec $(CFLAGS)
 word2phrase : word2phrase.c

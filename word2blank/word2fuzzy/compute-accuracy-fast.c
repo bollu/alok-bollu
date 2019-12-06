@@ -22,6 +22,7 @@
 #include <ctype.h>
 
 #define min(i, j) ((i) < (j) ? (i) : (j))
+#define max(i, j) ((i) > (j) ? (i) : (j))
 
 const long long max_size = 2000;         // max length of strings
 const long long N = 5;                   // number of closest words
@@ -30,13 +31,23 @@ const long long max_w = 50;              // max length of vocabulary entries
 void analogy(float *a, float *b, float *x, float *y, int size) {
     for(int i = 0; i < size; ++i) {
         float delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
+        y[i] = max(delta, 0.0);
         y[i] = min(delta, 1.0);
         assert(y[i] >= 0);
+    }
+
+    float total = 0;
+    for(int i = 0; i < size; ++i) {
+        total +=  y[i];
+    }
+
+    for(int i = 0; i < size; ++i) {
+        y[i] /= total;
     }
 }
 
 float entropylog(float x) {
-    if (x < 1e-4) {
+    if (x < 1e-6) {
         return 0;
     }
     return log(x);

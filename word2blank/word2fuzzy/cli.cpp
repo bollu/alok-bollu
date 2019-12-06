@@ -569,6 +569,37 @@ void printDescByEntropy(Vec *M, float cutoff) {
     printf("\n");
 }
 
+void printWordsAtEntropy(Vec *M, float center) {
+    printf("Words at entropy (%f)\n", center);
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = 1000;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float H = entropy(M[c]);
+      const float dist = (center -  H) * (center - H);
+      string w = string(vocab +c*max_w);
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
+    printf("\n");
+}
+
 
 
 Vec interpret(AST ast) {
@@ -1054,6 +1085,7 @@ int main(int argc, char **argv) {
 
     // printAscByEntropy(M);
     printDescByEntropy(M, 100);
+    printWordsAtEntropy(M, 6.26);
     if (NONORMALIZE) {
         cout << "NOTE: unnormalized vectors\n";
     }

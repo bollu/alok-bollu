@@ -8,6 +8,9 @@ CFLAGS = -lm -pthread  -march=native -Wall \
 
 all: word2vec word2phrase distance word-analogy compute-accuracy
 
+bin2text:
+	$(CC) bin2text.c -o bin2text
+
 text0:
 	head -c 1000000 text8 > text0
 
@@ -23,6 +26,12 @@ distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c
 	$(CC) word-analogy.c -o word-analogy $(CFLAGS)
+
+difference: difference.c
+	$(CC) difference.c -o difference $(CFLAGS)
+
+add: add.c
+	$(CC) add.c -o add $(CFLAGS)
 
 
 word-analogy-context : word-analogy-context.c

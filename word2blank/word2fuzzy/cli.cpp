@@ -14,7 +14,8 @@
 #include<algorithm>
 
 
-static const int MINFREQ = 1;
+static const int MINFREQ = 5;
+static const int FUNCTION_WORD_FREQ_CUTOFF = 20;
 #define max_size 2000
 #define N 40
 #define max_w 50
@@ -373,7 +374,6 @@ void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
     for (int a = 0; a < N; a++) bestd[a] = 100;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      // const float dist = crossentropy(vec, M[c]);
       const float dist = crossentropy(M[c], vec);
       vals[c] = dist;
       string w = string(vocab +c*max_w);
@@ -539,7 +539,7 @@ void printAscByEntropy(Vec *M) {
 }
 
 
-void printDescByEntropy(Vec *M, float cutoff) {
+void printDescByEntropy(Vec *M, int minfreq) {
     printf("Words sorted by entropy (highest):\n");
     float vals[words];
     float bestd[words];
@@ -553,7 +553,7 @@ void printDescByEntropy(Vec *M, float cutoff) {
       string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist > bestd[a] && word2freq[w] > MINFREQ && dist < cutoff) {
+        if (dist > bestd[a] && word2freq[w] > minfreq) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -846,7 +846,7 @@ Vec interpret(AST ast) {
 
 
             printAscByEntropy(M);
-            printDescByEntropy(M, 4);
+            printDescByEntropy(M, MINFREQ);
 
             printClosestWordsSetOverlap(v, Mrel);
             printClosestWordsSetOverlapSymmetric(v, Mrel);
@@ -1084,7 +1084,7 @@ int main(int argc, char **argv) {
 
 
     // printAscByEntropy(M);
-    printDescByEntropy(M, 100);
+    printDescByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
     printWordsAtEntropy(M, 6.26);
     if (NONORMALIZE) {
         cout << "NOTE: unnormalized vectors\n";

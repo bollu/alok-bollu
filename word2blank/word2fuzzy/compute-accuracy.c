@@ -1,4 +1,3 @@
-//  FUZZY COMPUTE ACCURACY: TAKES TOP N
 //  Copyright 2013 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,9 +19,56 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#define min(i, j) ((i) < (j) ? (i) : (j))
+
 const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
+
+void analogy(float *a, float *b, float *x, float *y, int size) {
+    for(int i = 0; i < size; ++i) {
+        float delta = b[i] + x[i] - min(b[i] + x[i], a[i]);
+        y[i] = delta;
+    }
+}
+
+float entropylog(float x) {
+    if (x < 1e-4) {
+        return 0;
+    }
+    return log(x);
+}
+
+float entropy(float *v, int size) {
+
+    float totalsize = 0;
+    for(int i = 0; i < size; ++i) totalsize += v[i];
+    for(int i = 0; i < size; ++i) v[i] /= totalsize;
+
+    float H = 0;
+    for(int i = 0; i < size; ++i) 
+        H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
+    return H;
+}
+
+float crossentropy(float *v, float *w, int size) {
+    float H = 0;
+    for(int i = 0; i < size; ++i)  {
+        if (w[i] < 1e-7) w[i] = 1e-7;
+        H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
+            (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
+    }
+    return H;
+}
+
+float kl(float *v, float *w, int size) {
+    float H = 0;
+    for(int i = 0; i < size; ++i)  {
+        if (w[i] < 1e-7) w[i] = 1e-7;
+        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+    }
+    return H;
+}
 
 int main(int argc, char **argv)
 {
@@ -64,11 +110,12 @@ int main(int argc, char **argv)
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
     for (a = 0; a < size; a++) {
         fread(&M[a + b * size], sizeof(float), 1, f);
-        M[a+b*size] = pow(2, M[a+b*size]);
+        // convert these to our version.
+        M[a + b * size] = powf(2.0, M[a + b * size]);
     }
-    // normalize
     len = 0;
-    for (a = 0; a < size; a++) len += M[a + b * size];
+    for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+    len = sqrt(len);
     for (a = 0; a < size; a++) M[a + b * size] /= len;
   }
   fclose(f);
@@ -113,14 +160,18 @@ int main(int argc, char **argv)
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
-    for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
+
+
+    // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
+    analogy(&M[a + b1 * size], &M[a + b2 * size], &M[a + b3 * size], vec, size);
+
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = 0;
-      for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+      dist = kl(vec, M, size);
+      // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {
@@ -133,13 +184,16 @@ int main(int argc, char **argv)
         }
       }
     }
-    for(int i = 0; i < N; ++i) {
+
+    for (int i = 0; i < 5; ++i) {
         if (!strcmp(st4, bestw[i])) {
           CCN++;
           CACN++;
           if (QID <= 5) SEAC++; else SYAC++;
+          break;
         }
     }
+
     if (QID <= 5) SECN++; else SYCN++;
     TCN++;
     TACN++;

@@ -78,12 +78,15 @@ int main(int argc, char **argv)
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
         printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (float)TCN * 100, CCN, TCN);
+        fflush(stdout);
         printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (float)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
+        fflush(stdout);
       }
       QID++;
       scanf("%s", st1);
       if (feof(stdin)) break;
       printf("%s:\n", st1);
+      fflush(stdout);
       TCN = 0;
       CCN = 0;
       continue;
@@ -142,5 +145,6 @@ int main(int argc, char **argv)
     TACN++;
   }
   printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
+  fflush(stdout);
   return 0;
 }

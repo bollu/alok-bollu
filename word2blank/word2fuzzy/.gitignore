@@ -18,3 +18,5 @@ word-fuzzy-distance
 cli.o
 cli
 linenoise.o
+entropy.txt
+prob.txt

@@ -14,6 +14,7 @@
 #include<algorithm>
 
 
+static const int MINFREQ = 1;
 #define max_size 2000
 #define N 40
 #define max_w 50
@@ -40,6 +41,9 @@ using namespace std;
 using Vec = float*;
 
 std::map<std::string, Vec> word2vec;
+
+// requires the file freq-text8.txt
+map<string, int> word2freq;
 
 Vec *M;
 char *vocab;
@@ -215,13 +219,19 @@ float crossentropy(Vec v, Vec w) {
     float H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
-        H += v[i] * entropylog(v[i] / w[i]) + (1 - v[i]) * entropylog((1 - v[i])/(1-w[i]));
+        H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
+            (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
     }
     return H;
 }
 
 float kl(Vec v, Vec w) {
-    return crossentropy(v, w) - entropy(v);
+    float H = 0;
+    for(int i = 0; i < size; ++i)  {
+        if (w[i] < 1e-7) w[i] = 1e-7;
+        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+    }
+    return H;
 }
 
 // completions for linenoise
@@ -366,9 +376,10 @@ void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
       // const float dist = crossentropy(vec, M[c]);
       const float dist = crossentropy(M[c], vec);
       vals[c] = dist;
+      string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -395,9 +406,10 @@ void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
     for (int c = 0; c < words; c++) {
       const float dist = crossentropy(vec, M[c]);
       vals[c] = dist;
+      string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -437,10 +449,12 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
     maxdist1 = maxdist2 = 1;
 
     for (int c = 0; c < words; c++) {
-      const float dist = (dist1[c] / maxdist1) + (dist2[c] / maxdist2);
+      // const float dist = (dist1[c] / maxdist1) + (dist2[c] / maxdist2);
+      const float dist = dist1[c] + dist2[c];
       vals[c] = dist;
+      string w = string(vocab +c*max_w);
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d-1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -451,13 +465,19 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
         }
       }
     }
-    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    for (int a = 0; a < N; a++) {
+        printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+
+        if (a < N - 1 && fabs(bestd[a+1] - bestd[a]) > 1e-3) {
+            printf("-------------------------------------------------------\n");
+        }
+    }
     plotHistogram("distances", vals, words, 10);
     printf("\n");
 }
 
 
-void printClosestWordsKL(Vec vec) {
+void printClosestWordsKL(Vec vec, Vec *M) {
     printf("KL divergence\n");
     float vals[words];
     float bestd[words];
@@ -467,11 +487,12 @@ void printClosestWordsKL(Vec vec) {
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
       // const float dist = crossentropy(vec, M[c]);
+      string w = string(vocab +c*max_w);
       const float dist = kl(M[c], vec);
       vals[c] = dist;
 
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -498,9 +519,10 @@ void printAscByEntropy(Vec *M) {
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
       const float dist = entropy(M[c]);
+      string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -517,7 +539,7 @@ void printAscByEntropy(Vec *M) {
 }
 
 
-void printDescByEntropy(Vec *M) {
+void printDescByEntropy(Vec *M, float cutoff) {
     printf("Words sorted by entropy (highest):\n");
     float vals[words];
     float bestd[words];
@@ -528,9 +550,10 @@ void printDescByEntropy(Vec *M) {
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
       const float dist = entropy(M[c]);
+      string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
+        if (dist > bestd[a] && word2freq[w] > MINFREQ && dist < cutoff) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -629,7 +652,8 @@ Vec interpret(AST ast) {
                   if (!w) goto INTERPRET_ERROR;
 
                   for(int j = 0; j < size; ++j) {
-                      out[j] = out[j] +  w[j] - out[j] * w[j];
+                      /// out[j] = 1 - (1 - out[j]) * (1 - w[j]);
+                      out[j] = out[j] + w[j] - out[j] * w[j];
                   }
               }
 
@@ -679,7 +703,8 @@ Vec interpret(AST ast) {
 
               Vec out = new float[size];
               for(int i = 0; i < size; ++i) {
-                  out[i] = l[i] - min(l[i], r[i]);
+                  out[i] = l[i] - min(l[i], r[i]); // ORIGINAL
+                  // out[i] = max(0, l[i] + r[i] - 2 * l[i] * r[i]); 
               }
               normalizeVec(out);
               return out;
@@ -703,7 +728,7 @@ Vec interpret(AST ast) {
               for(int i = 0; i < size; ++i) {
                   // a : b :: x : ?
                   // (A U X) / B
-                  float delta = b[i] + x[i] - min(b[i] + x[i], a[i]);
+                  float delta = b[i] + x[i] - min(b[i] + x[i], a[i]); // ORIGINAL
                   out[i] = delta;
               }
               normalizeVec(out);
@@ -753,7 +778,7 @@ Vec interpret(AST ast) {
               if (!out) goto INTERPRET_ERROR;
 
               for(int j = 0; j < size; ++j) {
-                  out[j] = 1 - out[j];
+                  out[j] = min(1.0, max(1 - out[j], 0.0));
               }
 
               return out;
@@ -790,13 +815,14 @@ Vec interpret(AST ast) {
 
 
             printAscByEntropy(M);
-            printDescByEntropy(M);
+            printDescByEntropy(M, 4);
 
             printClosestWordsSetOverlap(v, Mrel);
             printClosestWordsSetOverlapSymmetric(v, Mrel);
             printClosestWordsCrossEntropy(v, Mrel);
             printClosestWordsCrossEntropy2(v, Mrel);
             printClosestWordsCrossEntropySym(v, Mrel);
+            printClosestWordsKL(v, Mrel);
 
             return nullptr;
 
@@ -900,7 +926,7 @@ Vec interpret(AST ast) {
 
                 return v;
        } else if (command == "writeprobfile") {
-           cout << "writing out coefficients of every vector...";
+           cout << "writing out coefficients of every vector..." << flush;
            FILE *f = fopen("prob.txt", "w");
            for(int i = 0; i < words; ++i) {
                for(int j = 0; j < size; ++j) {
@@ -909,7 +935,32 @@ Vec interpret(AST ast) {
            }
            fclose(f);
            cout << "done.\n";
-           goto INTERPRET_ERROR;
+          goto INTERPRET_ERROR;
+       } else if (command == "writeentropyfile") {
+           cout << "writing out entropy of every vector..." << flush;
+           FILE *f = fopen("entropy.txt", "w");
+           for(int i = 0; i < words; ++i) {
+                   fprintf(f, "%f ", entropy(M[i]));
+           }
+           fclose(f);
+           cout << "done.\n";
+          goto INTERPRET_ERROR;
+       } else if (command == "entails") {
+           // check if the first vector entails the other one
+           if (ast.size() != 3) goto INTERPRET_ERROR;
+           Vec l = interpret(ast.at(1));
+           Vec r = interpret(ast.at(2));
+           Vec orv = new float[size];
+           for(int i = 0; i < size; ++i) {
+               orv[i] = l[i] + r[i] - l[i] * r[i];
+           }
+
+           // find closest vector to orv. if it's lv, then lv => rv. If not,
+           // then it doesn't
+
+        
+           
+
        } else  {
               cout << "unknown command: " << command;
               cout << "\n\t"; ast.print();
@@ -981,8 +1032,28 @@ int main(int argc, char **argv) {
 
     fclose(f);
 
+    f = fopen("freq-text8.txt", "r");
+
+    while(!feof(f)) {
+        char line[1000];
+        fscanf(f, "%s", line);
+        char word[1000];
+        for(int j = 0; j < 1000; ++j) word[j] = 0;
+        int i = 0;
+        for(i = 0; line[i] != '|'; ++i) {
+            word[i] = line[i];
+        }
+        i++;
+        char freqstr[1000];
+        for(int j = 0; j < 1000; ++j)freqstr[j] = 0;
+        strcpy(freqstr, line  + i);
+        // printf("line: %s | word: %s -> freq: %s \n", line, word, freqstr);
+        word2freq[word] = atoi(freqstr);
+    }
+
+
     // printAscByEntropy(M);
-    printDescByEntropy(M);
+    printDescByEntropy(M, 100);
     if (NONORMALIZE) {
         cout << "NOTE: unnormalized vectors\n";
     }
@@ -1008,5 +1079,6 @@ int main(int argc, char **argv) {
         printClosestWordsCrossEntropy(v, M);
         printClosestWordsCrossEntropy2(v, M);
         printClosestWordsCrossEntropySym(v, M);
+        printClosestWordsKL(v, M);
     }
 }

@@ -104,3 +104,31 @@ Word: cyberpunk  Position in vocabulary: 8427
 - (and ballistic training) == ballistic
 
 - (and computer vision) -> SIGGRAPH.
+
+- man rough woman -> word2vec: smooth. Us: no smooth, just random stuff.
+
+- joke rule pun -> we give random answers that have high entropy. They still give "answers"". Our model is more "robust", in that
+    it fails gracefully instead of always trying to produce output.
+
+- (and secretary general)
+- pow good 1.5
+- pow bad 1.5
+- pow sweet
+- pow sour
+
+- reldist ((discrete politics) colors) (KL)
+
+                                       multiracial		0.005027
+                                            visegr		0.005027
+                                              njem		0.005027
+                                        afrikaners		0.005027
+                                            ffffff		0.005027
+                                      chromaticity		0.005027
+                                          plotdata		0.005027
+                                              oara		0.005027
+                                            region		0.005027
+                                          fashions		0.005027
+                                              wftu		0.005027
+                                          karabakh		0.005027
+                                            boomed		0.005027
+

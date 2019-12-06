@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 {
   FILE *f;
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  double dist, len, bestd[N], vec[max_size], vecl[max_size], vecloneminus[max_size];
+  double dist, bestd[N], vec[max_size], vecl[max_size], vecloneminus[max_size];
   long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
   double *M, *Ml, *Mloneminus;
   char *vocab;
@@ -122,29 +122,38 @@ int main(int argc, char **argv)
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
 
-    double total = 0;
     for (a = 0; a < size; a++) {
         float fl;
         fread(&fl, sizeof(float), 1, f);
         M[a + b * size] = fl;
         // convert these to our version.
         M[a + b * size] = pow(2.0, M[a + b * size]);
-        total += M[a + b * size];
     }
 
-    for(a = 0; a < size; ++a) {
-        M[a + b * size] /= total;
-    }
 
-    for(a = 0; a < size; ++a) {
-        Ml[a + b * size] = entropylog(M[a + b * size]);
-        Mloneminus[a + b * size] = entropylog(1.0 - M[a + b * size]);
-    }
+    // len = 0;
+    // for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+    // len = sqrt(len);
+    // for (a = 0; a < size; a++) M[a + b * size] /= len;
+  }
 
-    len = 0;
-    for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
-    len = sqrt(len);
-    for (a = 0; a < size; a++) M[a + b * size] /= len;
+  for(a = 0; a < size; ++a) {
+      double total = 0;
+      for(b = 0; b < words; ++b) {
+          total += M[b * size + a];
+      }
+      
+      for(b = 0; b < words; ++b) {
+          M[b * size + a] /= total;
+          M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+      }
+  }
+
+  for(b = 0; b < words; ++b) {
+      for(a = 0; a < size; ++a) {
+          Ml[b * size + a] = entropylog(M[b * size + a]);
+          Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
+      }
   }
   fclose(f);
   TCN = 0;

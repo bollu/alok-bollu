@@ -15,7 +15,7 @@
 
 
 static const int MINFREQ = 5;
-static const int FUNCTION_WORD_FREQ_CUTOFF = 20;
+static const int FUNCTION_WORD_FREQ_CUTOFF = 5;
 #define max_size 2000
 #define N 40
 #define max_w 50
@@ -483,7 +483,7 @@ void printClosestWordsKL(Vec vec, Vec *M) {
     float bestd[words];
     char bestw[N][max_size];
 
-    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestd[a] = 10000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
       // const float dist = crossentropy(vec, M[c]);
@@ -1061,17 +1061,25 @@ int main(int argc, char **argv) {
         vocab[b * max_w + a] = 0;
         M[b] = new float[size];
 
-        float total = 0;
         for(int i = 0; i < size; ++i) {
             fread(&M[b][i], sizeof(float), 1, f);
             M[b][i] = powf(2, M[b][i]);
-            total += M[b][i];
         }
-
-        for(int i = 0; i < size; ++i) { M[b][i] /= total; }
         word2vec[std::string(vocab+b*max_w)] = M[b];
 
 
+    }
+
+    for(int a = 0; a < size; ++a) {
+        float vmax = 0;
+        for(int b = 0; b < words; b++)  {
+            vmax = max(M[b][a], vmax);
+        }
+
+        for(int b = 0; b < words; b++)  {
+            M[b][a] /= vmax;
+            M[b][a] = min(1.0, max(M[b][a], 0.0));
+        }
     }
 
     fclose(f);

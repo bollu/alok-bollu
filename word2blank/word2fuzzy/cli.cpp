@@ -15,7 +15,7 @@
 
 
 static const int MINFREQ = 5;
-static const int FUNCTION_WORD_FREQ_CUTOFF = 5;
+static const int FUNCTION_WORD_FREQ_CUTOFF = 20;
 #define max_size 2000
 #define N 40
 #define max_w 50
@@ -39,7 +39,7 @@ static const bool NONORMALIZE = true;
 
 
 using namespace std;
-using Vec = float*;
+using Vec = double*;
 
 std::map<std::string, Vec> word2vec;
 
@@ -50,7 +50,7 @@ Vec *M;
 char *vocab;
 long long words, size;
 
-float sigmoid(float r) {
+double sigmoid(double r) {
     return powf(2, r) / (1 + powf(2, r));
 }
 
@@ -59,23 +59,23 @@ float sigmoid(float r) {
 void normalizeVec(Vec v) {
     if (NONORMALIZE) return;
 
-    float totalsize = 0;
+    double totalsize = 0;
     for(int i = 0; i < size; ++i) totalsize += v[i];
     for(int i = 0; i < size; ++i) v[i] /= totalsize;
 }
 
 
-void plotHistogram(const char *name, float *vals, int n, int nbuckets) {
+void plotHistogram(const char *name, double *vals, int n, int nbuckets) {
     // number of values in each bucket.
     int buckets[nbuckets];
     for(int i = 0; i < nbuckets; ++i) buckets[i] = 0;
 
-    float vmax = vals[0];
-    float vmin = vals[0];
+    double vmax = vals[0];
+    double vmin = vals[0];
     for(int i = 0; i < n; ++i) vmax = vals[i] > vmax ? vals[i] : vmax;
     for(int i = 0; i < n; ++i) vmin = vals[i] < vmin ? vals[i] : vmin;
 
-    float multiple = (vmax - vmin) / nbuckets;
+    double multiple = (vmax - vmin) / nbuckets;
 
     for(int i = 0; i < n; ++i) {
         int b = floor((vals[i] - vmin) / multiple);
@@ -88,7 +88,7 @@ void plotHistogram(const char *name, float *vals, int n, int nbuckets) {
 
     printf("%s: |", name);
     for(int i = 0; i < nbuckets; ++i) {
-        printf(" %f ", ((buckets[i] / (float)total)) * 100.0);
+        printf(" %f ", ((buckets[i] / (double)total)) * 100.0);
     }
     printf("|");
 
@@ -131,7 +131,7 @@ struct AST {
 
     ASTTy ty() { return ty_; };
     std::string s() { assert(ty_ == ASTTy::AtomString); return s_; };
-    float f() { assert(ty_ == ASTTy::AtomString); return atof(s_.c_str()); }
+    double f() { assert(ty_ == ASTTy::AtomString); return atof(s_.c_str()); }
     int i() { assert(ty_ == ASTTy::AtomString); return atoi(s_.c_str()); }
 
     AST at(int i) {
@@ -195,20 +195,20 @@ std::tuple<AST, char *> parse_(char *str) {
 
 AST parse(char *str) { return std::get<0>(parse_(str)); }
 
-float entropylog(float x) {
-    if (x < 1e-4) {
+double entropylog(double x) {
+    if (x < 1e-8) {
         return 0;
     }
     return log(x);
 }
 
-float entropy(Vec v) {
+double entropy(Vec v) {
 
-    // float totalsize = 0;
+    // double totalsize = 0;
     // for(int i = 0; i < size; ++i) totalsize += v[i];
     // for(int i = 0; i < size; ++i) v[i] /= totalsize;
 
-    float H = 0;
+    double H = 0;
     for(int i = 0; i < size; ++i) 
         H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
     return H;
@@ -216,8 +216,8 @@ float entropy(Vec v) {
 
 // crossentropy(P, q) = H(p) + KL(p, q)
 // https://juaa-journal.springeropen.com/track/pdf/10.1186/s40467-015-0029-5
-float crossentropy(Vec v, Vec w) {
-    float H = 0;
+double crossentropy(Vec v, Vec w) {
+    double H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
         H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
@@ -226,8 +226,8 @@ float crossentropy(Vec v, Vec w) {
     return H;
 }
 
-float kl(Vec v, Vec w) {
-    float H = 0;
+double kl(Vec v, Vec w) {
+    double H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
         H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
@@ -273,7 +273,7 @@ void dimension_usage() {
     }
     for (int w = 0; w < words; w++) {
         for (int i = 0; i < size; i++) {
-            const float cur =  M[w][i];
+            const double cur =  M[w][i];
             f[i] += fabs(cur);
         }
     }
@@ -291,22 +291,22 @@ void dimension_usage() {
 
 void printClosestWordsSetOverlap(Vec vec, Vec *M) {
     printf("DISTANCE ASYMMETRIC\n");
-    float vecsize = 0;
+    double vecsize = 0;
     for (int a = 0; a < size; a++) vecsize += vec[a];
     // for (int a = 0; a < size; a++) vec[a] /= vecsize;
 
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 0;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      float intersectsize = 0;
+      double intersectsize = 0;
       for (int a = 0; a < size; a++) {
           intersectsize += vec[a] * M[c][a];
       }
-      const float dist  = intersectsize / vecsize;
+      const double dist  = intersectsize / vecsize;
       vals[c] = dist;
 
       for (int a = 0; a < N; a++) {
@@ -329,22 +329,22 @@ void printClosestWordsSetOverlap(Vec vec, Vec *M) {
 
 void printClosestWordsSetOverlapSymmetric(Vec vec, Vec *M) {
     printf("DISTANCE SYMMETRIC\n");
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 0;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      float intersectsize = 0;
-      float unionsize = 0;
+      double intersectsize = 0;
+      double unionsize = 0;
       for (int a = 0; a < size; a++) {
           intersectsize += vec[a] * M[c][a];
           unionsize += vec[a] + M[c][a] - vec[a] *M[c][a];
       }
       assert(intersectsize >= 0);
       assert(unionsize >= 0);
-      const float dist  = intersectsize / unionsize;
+      const double dist  = intersectsize / unionsize;
       vals[c] = dist;
 
       for (int a = 0; a < N; a++) {
@@ -367,14 +367,14 @@ void printClosestWordsSetOverlapSymmetric(Vec vec, Vec *M) {
 
 void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: EXTRA BITS FOR word on FOCUS\n");
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
-    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestd[a] = 1000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      const float dist = crossentropy(M[c], vec);
+      const double dist = crossentropy(M[c], vec);
       vals[c] = dist;
       string w = string(vocab +c*max_w);
 
@@ -397,19 +397,19 @@ void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
 
 void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: EXTRA BITS FOR FOCUS on word\n");
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 100;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      const float dist = crossentropy(vec, M[c]);
+      const double dist = crossentropy(vec, M[c]);
       vals[c] = dist;
       string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
+        if (dist < bestd[a]) { // && word2freq[w] > MINFREQ) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -427,12 +427,12 @@ void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
 
 void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: BOTH\n");
-    float vals[words];
-    float bestd[words];
-    float dist1[words], dist2[words], maxdist1 = -10, maxdist2 = -10;
+    double vals[words];
+    double bestd[words];
+    double dist1[words], dist2[words], maxdist1 = -10, maxdist2 = -10;
     char bestw[N][max_size];
 
-    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestd[a] = 1000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
         dist1[c] = crossentropy(vec, M[c]);
@@ -449,8 +449,8 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
     maxdist1 = maxdist2 = 1;
 
     for (int c = 0; c < words; c++) {
-      // const float dist = (dist1[c] / maxdist1) + (dist2[c] / maxdist2);
-      const float dist = dist1[c] + dist2[c];
+      // const double dist = (dist1[c] / maxdist1) + (dist2[c] / maxdist2);
+      const double dist = dist1[c] + dist2[c];
       vals[c] = dist;
       string w = string(vocab +c*max_w);
       for (int a = 0; a < N; a++) {
@@ -479,16 +479,16 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
 
 void printClosestWordsKL(Vec vec, Vec *M) {
     printf("KL divergence\n");
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 10000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      // const float dist = crossentropy(vec, M[c]);
+      // const double dist = crossentropy(vec, M[c]);
       string w = string(vocab +c*max_w);
-      const float dist = kl(M[c], vec);
+      const double dist = kl(M[c], vec);
       vals[c] = dist;
 
       for (int a = 0; a < N; a++) {
@@ -508,21 +508,21 @@ void printClosestWordsKL(Vec vec, Vec *M) {
     printf("\n");
 }
 
-void printAscByEntropy(Vec *M) {
+void printAscByEntropy(Vec *M, int freq_cutoff) {
     printf("Words sorted by entropy (lowest):\n");
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
-    float minentropy = -1;
-    for (int a = 0; a < N; a++) bestd[a] = 10;
+    double minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = 1000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      const float dist = entropy(M[c]);
+      const double dist = entropy(M[c]);
       string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
-        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
+        if (dist < bestd[a] && word2freq[w] > freq_cutoff) {
           for (int d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -541,15 +541,15 @@ void printAscByEntropy(Vec *M) {
 
 void printDescByEntropy(Vec *M, int minfreq) {
     printf("Words sorted by entropy (highest):\n");
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
-    float minentropy = -1;
-    for (int a = 0; a < N; a++) bestd[a] = -100;
+    double minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = -1000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      const float dist = entropy(M[c]);
+      const double dist = entropy(M[c]);
       string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
@@ -569,18 +569,18 @@ void printDescByEntropy(Vec *M, int minfreq) {
     printf("\n");
 }
 
-void printWordsAtEntropy(Vec *M, float center) {
+void printWordsAtEntropy(Vec *M, double center) {
     printf("Words at entropy (%f)\n", center);
-    float vals[words];
-    float bestd[words];
+    double vals[words];
+    double bestd[words];
     char bestw[N][max_size];
 
-    float minentropy = -1;
+    double minentropy = -1;
     for (int a = 0; a < N; a++) bestd[a] = 1000;
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
-      const float H = entropy(M[c]);
-      const float dist = (center -  H) * (center - H);
+      const double H = entropy(M[c]);
+      const double dist = (center -  H) * (center - H);
       string w = string(vocab +c*max_w);
 
       for (int a = 0; a < N; a++) {
@@ -604,7 +604,7 @@ void printWordsAtEntropy(Vec *M, float center) {
 
 Vec interpret(AST ast) {
 
-    const float STRONG_THRESHOLD = 0.5 / size;
+    const double STRONG_THRESHOLD = 0.5 / size;
     std::cout << "interpreting: ";
     ast.print();
     std::cout << std::endl;
@@ -617,7 +617,7 @@ Vec interpret(AST ast) {
                 goto INTERPRET_ERROR;
             } else {
                 cout << ast.s() << " : ";
-                Vec out = new float[size];
+                Vec out = new double[size];
                 for(int i = 0; i < size; ++i) out[i] = it->second[i];
 
                 for(int i = 0; i < std::min<int>(3, size); i++) {
@@ -663,7 +663,7 @@ Vec interpret(AST ast) {
                   if (!w) goto INTERPRET_ERROR;
 
                   for(int j = 0; j < size; ++j) {
-                      out[j] = max<float>(min<float>(out[j] / (1e-3 + w[j]), 1 - 1e-3), 1e-3);
+                      out[j] = max<double>(min<double>(out[j] / (1e-3 + w[j]), 1 - 1e-3), 1e-3);
                   }
               }
 
@@ -732,7 +732,7 @@ Vec interpret(AST ast) {
 
               if (!l || !r) goto INTERPRET_ERROR;
 
-              Vec out = new float[size];
+              Vec out = new double[size];
               for(int i = 0; i < size; ++i) {
                   out[i] = l[i] - min(l[i], r[i]); // ORIGINAL
                   // out[i] = max(0, l[i] + r[i] - 2 * l[i] * r[i]); 
@@ -758,11 +758,13 @@ Vec interpret(AST ast) {
               normalizeVec(b);
               normalizeVec(x);
 
-              Vec out = new float[size];
+              Vec out = new double[size];
               for(int i = 0; i < size; ++i) {
                   // a : b :: x : ?
                   // (A U X) / B
-                  float delta = b[i] + x[i] - min(b[i] + x[i], a[i]); // ORIGINAL
+                  double delta = b[i] + x[i] - min(b[i] + x[i], a[i]); // ORIGINAL
+                  delta =  max(delta, 0.0);
+                  delta = min(delta, 1.0);
                   out[i] = delta;
               }
               normalizeVec(out);
@@ -782,7 +784,7 @@ Vec interpret(AST ast) {
                   normalizeVec(w);
 
                   for(int j = 0; j < size; ++j) {
-                      out[j] = max<float>(0.0, out[j] + w[j] - 1.0 / size);
+                      out[j] = max<double>(0.0, out[j] + w[j] - 1.0 / size);
                   }
               }
 
@@ -801,7 +803,7 @@ Vec interpret(AST ast) {
                   normalizeVec(w);
 
                   for(int j = 0; j < size; ++j) {
-                      out[j] = min<float>(0, out[j] + w[j]);
+                      out[j] = min<double>(0, out[j] + w[j]);
                   }
               }
 
@@ -819,7 +821,7 @@ Vec interpret(AST ast) {
 
 
           } else if (command == "entropy") {
-              float H = 0;
+              double H = 0;
               Vec out = interpret(ast.at(1));
               H += entropy(out);
 
@@ -847,7 +849,7 @@ Vec interpret(AST ast) {
             if (!v) goto INTERPRET_ERROR;
 
             for(int i = 0; i < words; ++i){
-                Mrel[i] = new float[size];
+                Mrel[i] = new double[size];
                 for(int j = 0; j < size; ++j) {
                     Mrel[i][j] = M[i][j] * rel[j];
                 }
@@ -858,7 +860,7 @@ Vec interpret(AST ast) {
             } 
 
 
-            printAscByEntropy(M);
+            printAscByEntropy(M, MINFREQ);
             printDescByEntropy(M, MINFREQ);
 
             printClosestWordsSetOverlap(v, Mrel);
@@ -873,7 +875,7 @@ Vec interpret(AST ast) {
           } else if (command == "indicator") {
             // probe certain dimensions, by creating vectors with "1" along
             // those dimensions and 0 everywhere else
-            Vec indicator = new float[size];
+            Vec indicator = new double[size];
             for(int i = 0; i < size; ++i) indicator[i] = 0;
 
             for(int i = 1; i < ast.size(); ++i) {
@@ -883,7 +885,7 @@ Vec interpret(AST ast) {
                 const int ix = ast.at(i).i();
                 if (ix < 0 || ix >= size) { goto INTERPRET_ERROR; };
 
-                indicator[ix] = (1) / max<float>(1, (ast.size() - 1));
+                indicator[ix] = (1) / max<double>(1, (ast.size() - 1));
             }
 
                 printf("indicator: ");
@@ -894,13 +896,13 @@ Vec interpret(AST ast) {
 
             return indicator;
        } else if (command == "mul" || command == "*") {
-           // (* vector float)
+           // (* vector double)
            if(ast.size() != 3) goto INTERPRET_ERROR;
            Vec v = interpret(ast.at(1));
            if (!v) goto INTERPRET_ERROR;
            if (ast.at(2).ty() != ASTTy::AtomString) goto INTERPRET_ERROR; 
 
-           float f = ast.at(2).f();
+           double f = ast.at(2).f();
 
            for(int i = 0; i < size; ++i) {
                v[i] *= f;
@@ -908,13 +910,13 @@ Vec interpret(AST ast) {
 
            return v;
        } else if (command == "pow" || command == "^") {
-           // (* vector float)
+           // (* vector double)
            if(ast.size() != 3) goto INTERPRET_ERROR;
            Vec v = interpret(ast.at(1));
            if (!v) goto INTERPRET_ERROR;
            if (ast.at(2).ty() != ASTTy::AtomString) goto INTERPRET_ERROR; 
 
-           float f = ast.at(2).f();
+           double f = ast.at(2).f();
 
            for(int i = 0; i < size; ++i) {
                v[i] = powf(v[i], f);
@@ -926,7 +928,7 @@ Vec interpret(AST ast) {
                 Vec v = interpret(ast.at(1));
                 if (!v) goto INTERPRET_ERROR;
 
-                float fmax = 0;
+                double fmax = 0;
                 for(int i = 0; i < size; ++i) {
                     fmax  = max(v[i], fmax);
                 }
@@ -934,7 +936,7 @@ Vec interpret(AST ast) {
                 // can give threshold factor, which values < fraction *fmax
                 // are removed. 
                 // By default, is 0.5
-                float threshold = 0.5;
+                double threshold = 0.5;
                 if (ast.size() == 3) {
                     if (ast.at(2).ty() != ASTTy::AtomString) goto INTERPRET_ERROR;
                     threshold = ast.at(2).f();
@@ -994,7 +996,7 @@ Vec interpret(AST ast) {
            if (ast.size() != 3) goto INTERPRET_ERROR;
            Vec l = interpret(ast.at(1));
            Vec r = interpret(ast.at(2));
-           Vec orv = new float[size];
+           Vec orv = new double[size];
            for(int i = 0; i < size; ++i) {
                orv[i] = l[i] + r[i] - l[i] * r[i];
            }
@@ -1047,7 +1049,7 @@ int main(int argc, char **argv) {
 
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
-               (long long)words * size * sizeof(float) / 1048576, words, size);
+               (long long)words * size * sizeof(double) / 1048576, words, size);
         return -1;
     }
 
@@ -1059,10 +1061,12 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        M[b] = new float[size];
+        M[b] = new double[size];
 
         for(int i = 0; i < size; ++i) {
-            fread(&M[b][i], sizeof(float), 1, f);
+            float fl;
+            fread(&fl, sizeof(float), 1, f);
+            M[b][i] = fl;
             M[b][i] = powf(2, M[b][i]);
         }
         word2vec[std::string(vocab+b*max_w)] = M[b];
@@ -1070,17 +1074,33 @@ int main(int argc, char **argv) {
 
     }
 
+    // normalize probabilities per feature
     for(int a = 0; a < size; ++a) {
-        float vmax = 0;
+        double total = 0;
         for(int b = 0; b < words; b++)  {
-            vmax = max(M[b][a], vmax);
+            total += M[b][a];
         }
 
         for(int b = 0; b < words; b++)  {
+            M[b][a] /= total;
+            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+        }
+    }
+
+
+    /*
+    for(int b = 0; b < words; ++b) {
+        double vmax = 0;
+        for(int a = 0; a < size; a++)  {
+            vmax = max(M[b][a], vmax);
+        }
+
+        for(int a = 0; a < size; a++)  {
             M[b][a] /= vmax;
             M[b][a] = min(1.0, max(M[b][a], 0.0));
         }
     }
+    */
 
     fclose(f);
 
@@ -1104,7 +1124,7 @@ int main(int argc, char **argv) {
     }
 
 
-    // printAscByEntropy(M);
+    printAscByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
     printDescByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
     printWordsAtEntropy(M, 6.26);
     if (NONORMALIZE) {
@@ -1127,8 +1147,8 @@ int main(int argc, char **argv) {
         const Vec v = interpret(ast);
         if (!v) continue;
 
-        printClosestWordsSetOverlap(v, M);
-        printClosestWordsSetOverlapSymmetric(v, M);
+        // printClosestWordsSetOverlap(v, M);
+        // printClosestWordsSetOverlapSymmetric(v, M);
         printClosestWordsCrossEntropy(v, M);
         printClosestWordsCrossEntropy2(v, M);
         printClosestWordsCrossEntropySym(v, M);

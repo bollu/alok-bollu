@@ -826,7 +826,17 @@ Vec interpret(AST ast) {
               cout << "entropy: " << setprecision(5) <<  H << "\n";
               return nullptr;
 
-          }  else if (command == "reldist") {
+          } else if (command == "crossentropy") {
+              if (ast.size() != 3) goto INTERPRET_ERROR;
+              Vec a = interpret(ast.at(1));
+              Vec b = interpret(ast.at(2));
+              if (!a || !b) goto INTERPRET_ERROR;
+
+              printf("\tcross-entropy: %7.5f\n", crossentropy(a, b));
+              fflush(stdout);
+              goto INTERPRET_ERROR;
+
+          } else if (command == "reldist") {
               if (ast.size() != 3) goto INTERPRET_ERROR;
 
             Vec *Mrel = new Vec[words];

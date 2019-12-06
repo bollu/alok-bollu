@@ -751,6 +751,9 @@ Vec interpret(AST ast) {
               Vec a = interpret(ast.at(1));
               Vec b = interpret(ast.at(2));
               Vec x = interpret(ast.at(3));
+
+              if (!a || !b || !x) goto INTERPRET_ERROR;
+
               normalizeVec(a);
               normalizeVec(b);
               normalizeVec(x);

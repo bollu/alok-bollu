@@ -151,6 +151,7 @@ int main(int argc, char **argv)
     scanf("%s", st3);
     for (a = 0; a<strlen(st3); a++) st3[a] = toupper(st3[a]);
     scanf("%s", st4);
+
     for (a = 0; a < strlen(st4); a++) st4[a] = toupper(st4[a]);
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st1)) break;
     b1 = b;
@@ -158,7 +159,11 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = 0;
+
+    fprintf(stderr, "%s : %s :: %s : %s?\n", st1, st2, st3, st4);
+    fflush(stderr);
+
+    for (a = 0; a < N; a++) bestd[a] = 100;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -168,18 +173,24 @@ int main(int argc, char **argv)
     if (b == words) continue;
 
 
+
     // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
-    analogy(&M[a + b1 * size], &M[a + b2 * size], &M[a + b3 * size], vec, size);
+    analogy(&M[b1 * size], &M[b2 * size], &M[b3 * size], vec, size);
 
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = kl(vec, M, size);
-      // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+      if (0) {
+          dist = 0;
+          for (a = 0; a < size; a++) { dist += vec[a] * M[a + c * size]; }
+      } else {
+          dist = crossentropy(vec, &M[c * size], size);
+      }
+
       for (a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
+        if (dist < bestd[a]) {
           for (d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
@@ -189,11 +200,18 @@ int main(int argc, char **argv)
           break;
         }
       }
+
+    }
+
+    for (int i = 0; i < N; i++) {
+        fprintf(stderr, "\t%20s:%f\n", bestw[i], bestd[i]);
+        fflush(stderr);
     }
 
 
     for (int i = 0; i < N; ++i) {
         if (!strcmp(st4, bestw[i])) {
+          fprintf(stderr, "found!\n"); fflush(stderr);
           CCN++;
           CACN++;
           if (QID <= 5) SEAC++; else SYAC++;

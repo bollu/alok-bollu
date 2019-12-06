@@ -118,9 +118,9 @@ int main(int argc, char **argv)
     }
 
     // DISCRETE
-    for(a = 0; a < size; ++a) {
-        M[a + b * size] = M[a + b * size] > 0.1 ? 1 : 0;
-    }
+    // for(a = 0; a < size; ++a) {
+    //     M[a + b * size] = M[a + b * size] > 0.1 ? 1 : 0;
+    // }
 
     len = 0;
     for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
@@ -182,6 +182,7 @@ int main(int argc, char **argv)
       // TODO: use word2vec distance similarlity here?? should we not use some
       // other?
       for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {

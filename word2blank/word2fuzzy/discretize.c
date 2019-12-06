@@ -1,3 +1,4 @@
+// discretize a given word vector
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,23 +56,22 @@ int main(int argc, char **argv)
       if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
     }
     vocab[b * max_w + a] = 0;
-    for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+    for (a = 0; a < size; a++) {
+        fread(&M[a + b * size], sizeof(float), 1, f);
+        // need to discretize
+        M[a + b * size];
+    }
   }
 
 
   fclose(f);
-  f = fopen(out_file_name, "w");
+  f = fopen(out_file_name, "wb");
   fprintf(f, "%lld %lld\n", words, size);
   for (b = 0; b < words; b++) {
-
-    for(int c = 0; c < max_w; ++c) {
-      if (vocab[max_w * b  + c] == 0) break;
-      fprintf(f, "%c", vocab[max_w * b + c]);
-    }
-    fprintf(f, " ");
-
-    for (a = 0; a < size; a++) fprintf(f, "%f ", M[a + b *size]);
-    fprintf(f, "\n");
+      fprintf(fo, "%s ", vocab[a].word);
+      for (int i = 0; i < layer1_size; i++) {
+          fwrite(&M[a * size + b], sizeof(real), 1, fo);
+      }
   }
   fclose(f);
   return 0;

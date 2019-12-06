@@ -18,3 +18,7 @@ word-fuzzy-distance
 cli.o
 cli
 linenoise.o
+add
+difference
+compute-accuracy-topn
+models.zip

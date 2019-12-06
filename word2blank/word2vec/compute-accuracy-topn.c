@@ -19,51 +19,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#define min(i, j) ((i) < (j) ? (i) : (j))
-
 const long long max_size = 2000;         // max length of strings
 const long long N = 5;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
-
-void analogy(float *a, float *b, float *x, float *y, int size) {
-    for(int i = 0; i < size; ++i) {
-        float delta = b[i] + x[i] - min(b[i] + x[i], a[i]);
-        y[i] = delta;
-    }
-}
-
-float entropylog(float x) {
-    if (x < 1e-4) {
-        return 0;
-    }
-    return log(x);
-}
-
-float entropy(float *v, int size) {
-    float H = 0;
-    for(int i = 0; i < size; ++i) 
-        H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
-    return H;
-}
-
-float crossentropy(float *v, float *w, int size) {
-    float H = 0;
-    for(int i = 0; i < size; ++i)  {
-        if (w[i] < 1e-7) w[i] = 1e-7;
-        H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
-            (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
-    }
-    return H;
-}
-
-float kl(float *v, float *w, int size) {
-    float H = 0;
-    for(int i = 0; i < size; ++i)  {
-        if (w[i] < 1e-7) w[i] = 1e-7;
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
-    }
-    return H;
-}
 
 int main(int argc, char **argv)
 {
@@ -103,19 +61,7 @@ int main(int argc, char **argv)
     }
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
-
-    float total = 0;
-    for (a = 0; a < size; a++) {
-        fread(&M[a + b * size], sizeof(float), 1, f);
-        // convert these to our version.
-        M[a + b * size] = powf(2.0, M[a + b * size]);
-        total += M[a + b * size];
-    }
-
-    for(a = 0; a < size; ++a) {
-        M[a + b * size] /= total;
-    }
-
+    for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
     len = 0;
     for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
     len = sqrt(len);
@@ -131,11 +77,8 @@ int main(int argc, char **argv)
     if ((!strcmp(st1, ":")) || (!strcmp(st1, "EXIT")) || feof(stdin)) {
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
-        fflush(stdout);
         printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (float)TCN * 100, CCN, TCN);
-        fflush(stdout);
         printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (float)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
-        fflush(stdout);
       }
       QID++;
       scanf("%s", st1);
@@ -166,18 +109,14 @@ int main(int argc, char **argv)
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
-
-
-    // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
-    analogy(&M[a + b1 * size], &M[a + b2 * size], &M[a + b3 * size], vec, size);
-
+    for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = kl(vec, M, size);
-      // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+      dist = 0;
+      for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {
@@ -190,30 +129,18 @@ int main(int argc, char **argv)
         }
       }
     }
-
-
     for (int i = 0; i < N; ++i) {
         if (!strcmp(st4, bestw[i])) {
-          CCN++;
-          CACN++;
-          if (QID <= 5) SEAC++; else SYAC++;
-          break;
+            CCN++;
+            CACN++;
+            if (QID <= 5) SEAC++; else SYAC++;
+            break; // exit the loop if we find a best word
         }
     }
-
-    /*
-    if (!strcmp(st4, bestw[0])) {
-      CCN++;
-      CACN++;
-      if (QID <= 5) SEAC++; else SYAC++;
-    }
-    */
-
     if (QID <= 5) SECN++; else SYCN++;
     TCN++;
     TACN++;
   }
   printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
-  fflush(stdout);
   return 0;
 }

@@ -43,6 +43,10 @@ compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh
 
+compute-accuracy-topn : compute-accuracy-topn.c
+	$(CC) compute-accuracy-topn.c -o compute-accuracy-topn $(CFLAGS)
+	chmod +x *.sh
+
 word-fuzzy-distance: word-fuzzy-distance.c
 	$(CC) word-fuzzy-distance.c -o word-fuzzy-distance $(CFLAGS)
 

@@ -1,3 +1,4 @@
+//  Discretize the word vector according to our scheme and compute topN
 //  Copyright 2013 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,6 +66,7 @@ float kl(float *v, float *w, int size) {
     return H;
 }
 
+
 int main(int argc, char **argv)
 {
   FILE *f;
@@ -103,7 +105,6 @@ int main(int argc, char **argv)
     }
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
-
     float total = 0;
     for (a = 0; a < size; a++) {
         fread(&M[a + b * size], sizeof(float), 1, f);
@@ -114,6 +115,11 @@ int main(int argc, char **argv)
 
     for(a = 0; a < size; ++a) {
         M[a + b * size] /= total;
+    }
+
+    // DISCRETE
+    for(a = 0; a < size; ++a) {
+        M[a + b * size] = M[a + b * size] > 0.1 ? 1 : 0;
     }
 
     len = 0;
@@ -131,11 +137,8 @@ int main(int argc, char **argv)
     if ((!strcmp(st1, ":")) || (!strcmp(st1, "EXIT")) || feof(stdin)) {
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
-        fflush(stdout);
         printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (float)TCN * 100, CCN, TCN);
-        fflush(stdout);
         printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (float)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
-        fflush(stdout);
       }
       QID++;
       scanf("%s", st1);
@@ -166,18 +169,16 @@ int main(int argc, char **argv)
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
-
-
-    // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
-    analogy(&M[a + b1 * size], &M[a + b2 * size], &M[a + b3 * size], vec, size);
-
+    for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = kl(vec, M, size);
-      // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+      dist = 0;
+      // TODO: use word2vec distance similarlity here?? should we not use some
+      // other?
+      for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {
@@ -190,30 +191,18 @@ int main(int argc, char **argv)
         }
       }
     }
-
-
     for (int i = 0; i < N; ++i) {
         if (!strcmp(st4, bestw[i])) {
-          CCN++;
-          CACN++;
-          if (QID <= 5) SEAC++; else SYAC++;
-          break;
+            CCN++;
+            CACN++;
+            if (QID <= 5) SEAC++; else SYAC++;
+            break; // exit the loop if we find a best word
         }
     }
-
-    /*
-    if (!strcmp(st4, bestw[0])) {
-      CCN++;
-      CACN++;
-      if (QID <= 5) SEAC++; else SYAC++;
-    }
-    */
-
     if (QID <= 5) SECN++; else SYCN++;
     TCN++;
     TACN++;
   }
   printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
-  fflush(stdout);
   return 0;
 }

@@ -28,15 +28,16 @@ const long long max_size = 2000;         // max length of strings
 const long long N = 5;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
 
-void analogy(float *a, float *b, float *x, float *y, int size) {
+void analogy(double *a, double *b, double *x, double *y, int size) {
     for(int i = 0; i < size; ++i) {
-        float delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
+        double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
         y[i] = max(delta, 0.0);
         y[i] = min(delta, 1.0);
         assert(y[i] >= 0);
     }
 
-    float total = 0;
+    /*
+    double total = 0;
     for(int i = 0; i < size; ++i) {
         total +=  y[i];
     }
@@ -44,24 +45,25 @@ void analogy(float *a, float *b, float *x, float *y, int size) {
     for(int i = 0; i < size; ++i) {
         y[i] /= total;
     }
+    */
 }
 
-float entropylog(float x) {
-    if (x < 1e-6) {
+double entropylog(double x) {
+    if (x < 1e-3) {
         return 0;
     }
     return log(x);
 }
 
-float entropy(float *v, int size) {
-    float H = 0;
+double entropy(double *v, int size) {
+    double H = 0;
     for(int i = 0; i < size; ++i) 
         H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
     return H;
 }
 
-float crossentropy(float *v, float *lv, float *loneminusv, float *w, float *lw, float *loneminusw, int size) {
-    float H = 0;
+double crossentropy(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
+    double H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
@@ -70,8 +72,8 @@ float crossentropy(float *v, float *lv, float *loneminusv, float *w, float *lw, 
     return H;
 }
 
-float kl(float *v, float *w, int size) {
-    float H = 0;
+double kl(float *v, float *w, int size) {
+    double H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
         H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
@@ -83,9 +85,9 @@ int main(int argc, char **argv)
 {
   FILE *f;
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  float dist, len, bestd[N], vec[max_size], vecl[max_size], vecloneminus[max_size];
+  double dist, len, bestd[N], vec[max_size], vecl[max_size], vecloneminus[max_size];
   long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
-  float *M, *Ml, *Mloneminus;
+  double *M, *Ml, *Mloneminus;
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
   if (argc < 2) {
@@ -103,11 +105,11 @@ int main(int argc, char **argv)
   if (threshold) if (words > threshold) words = threshold;
   fscanf(f, "%lld", &size);
   vocab = (char *)malloc(words * max_w * sizeof(char));
-  M = (float *)malloc(words * size * sizeof(float));
-  Ml = (float *)malloc(words * size * sizeof(float));
-  Mloneminus = (float *)malloc(words * size * sizeof(float));
+  M = (double *)malloc(words * size * sizeof(double));
+  Ml = (double *)malloc(words * size * sizeof(double));
+  Mloneminus = (double *)malloc(words * size * sizeof(double));
   if (M == NULL) {
-    printf("Cannot allocate memory: %lld MB\n", words * size * sizeof(float) / 1048576);
+    printf("Cannot allocate memory: %lld MB\n", words * size * sizeof(double) / 1048576);
     return -1;
   }
   for (b = 0; b < words; b++) {
@@ -120,11 +122,13 @@ int main(int argc, char **argv)
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
 
-    float total = 0;
+    double total = 0;
     for (a = 0; a < size; a++) {
-        fread(&M[a + b * size], sizeof(float), 1, f);
+        float fl;
+        fread(&fl, sizeof(float), 1, f);
+        M[a + b * size] = fl;
         // convert these to our version.
-        M[a + b * size] = powf(2.0, M[a + b * size]);
+        M[a + b * size] = pow(2.0, M[a + b * size]);
         total += M[a + b * size];
     }
 
@@ -153,9 +157,9 @@ int main(int argc, char **argv)
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
         fflush(stdout);
-        printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (float)TCN * 100, CCN, TCN);
+        printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (double)TCN * 100, CCN, TCN);
         fflush(stdout);
-        printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (float)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
+        printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (double)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
         fflush(stdout);
       }
       QID++;
@@ -258,7 +262,7 @@ int main(int argc, char **argv)
     TCN++;
     TACN++;
   }
-  printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
+  printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(double)TQ*100);
   fflush(stdout);
   return 0;
 }

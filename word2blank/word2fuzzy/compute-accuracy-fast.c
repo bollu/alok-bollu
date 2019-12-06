@@ -49,7 +49,7 @@ void analogy(double *a, double *b, double *x, double *y, int size) {
 }
 
 double entropylog(double x) {
-    if (x < 1e-3) {
+    if (x < 1e-7) {
         return 0;
     }
     return log(x);

@@ -89,8 +89,9 @@ void dot() {
     printf("dot: %f\n", d);
 }
 
+real *vals; // [words];
+
 void cosine() {
-    real vals[words];
     for(int i = 0; i < words; ++i) vals[i] = 0;
 
     printf(
@@ -161,6 +162,7 @@ int main(int argc, char **argv) {
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
     M = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    vals = (float *)malloc((long long)words * sizeof(float));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);

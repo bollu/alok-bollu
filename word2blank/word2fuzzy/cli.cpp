@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <map>
 #include <iomanip>
+#include <set>
 #include<algorithm>
 
 
@@ -34,8 +35,6 @@ static const int FUNCTION_WORD_FREQ_CUTOFF = 20;
 // not(x, y) = 1 - x
 // and x (not x) = min x (1 - x) = 0.5
 
-static const bool NONORMALIZE = true;
-
 
 
 using namespace std;
@@ -46,7 +45,16 @@ std::map<std::string, Vec> word2vec;
 // requires the file freq-text8.txt
 map<string, int> word2freq;
 
+// function words, detected automatically
+set<string> functionwords;
+
+// map from entropy to a word index
+map<double, unsigned long long>  entropy2w; 
+map<unsigned long long, double> word2entropy;
+
 Vec *M;
+Vec *Ml;
+Vec *Mloneminus;
 char *vocab;
 long long words, size;
 
@@ -57,7 +65,7 @@ double sigmoid(double r) {
 
 
 void normalizeVec(Vec v) {
-    if (NONORMALIZE) return;
+    assert(false && "one should not need this");
 
     double totalsize = 0;
     for(int i = 0; i < size; ++i) totalsize += v[i];
@@ -478,7 +486,7 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
 
 
 void printClosestWordsKL(Vec vec, Vec *M) {
-    printf("KL divergence\n");
+    printf("KL divergence (always an answer, may not be what you're looking for)\n");
     double vals[words];
     double bestd[words];
     char bestw[N][max_size];
@@ -508,6 +516,13 @@ void printClosestWordsKL(Vec vec, Vec *M) {
     printf("\n");
 }
 
+void computeEntropies(Vec *M, int freq_cutoff) {
+    for (int c = 0; c < words; c++) {
+      const double H = entropy(M[c]);
+      word2entropy[c] = H;
+      entropy2w[H] = c;
+    }
+}
 void printAscByEntropy(Vec *M, int freq_cutoff) {
     printf("Words sorted by entropy (lowest):\n");
     double vals[words];
@@ -540,7 +555,7 @@ void printAscByEntropy(Vec *M, int freq_cutoff) {
 
 
 void printDescByEntropy(Vec *M, int minfreq) {
-    printf("Words sorted by entropy (highest):\n");
+    printf("Words sorted by entropy (highest)/ function words:\n");
     double vals[words];
     double bestd[words];
     char bestw[N][max_size];
@@ -564,11 +579,15 @@ void printDescByEntropy(Vec *M, int minfreq) {
         }
       }
     }
-    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    for (int a = 0; a < N; a++) {
+        printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+        functionwords.insert(bestw[a]);
+    }
     plotHistogram("entropies", vals, words, 10);
     printf("\n");
 }
 
+// useful for making graphs
 void printWordsAtEntropy(Vec *M, double center) {
     printf("Words at entropy (%f)\n", center);
     double vals[words];
@@ -601,6 +620,9 @@ void printWordsAtEntropy(Vec *M, double center) {
 }
 
 
+void detectPolysemousWords() {
+    cout << "polysemous words are:\n";
+}
 
 Vec interpret(AST ast) {
 
@@ -737,7 +759,6 @@ Vec interpret(AST ast) {
                   out[i] = l[i] - min(l[i], r[i]); // ORIGINAL
                   // out[i] = max(0, l[i] + r[i] - 2 * l[i] * r[i]); 
               }
-              normalizeVec(out);
               return out;
           }
 
@@ -754,9 +775,6 @@ Vec interpret(AST ast) {
 
               if (!a || !b || !x) goto INTERPRET_ERROR;
 
-              normalizeVec(a);
-              normalizeVec(b);
-              normalizeVec(x);
 
               Vec out = new double[size];
               for(int i = 0; i < size; ++i) {
@@ -767,7 +785,6 @@ Vec interpret(AST ast) {
                   delta = min(delta, 1.0);
                   out[i] = delta;
               }
-              normalizeVec(out);
               return out;
           }
 
@@ -780,8 +797,6 @@ Vec interpret(AST ast) {
                   Vec w = interpret(ast.at(i));
                   if (!w) goto INTERPRET_ERROR;
 
-                  normalizeVec(out);
-                  normalizeVec(w);
 
                   for(int j = 0; j < size; ++j) {
                       out[j] = max<double>(0.0, out[j] + w[j] - 1.0 / size);
@@ -799,8 +814,6 @@ Vec interpret(AST ast) {
                   Vec w = interpret(ast.at(i));
                   if (!w) goto INTERPRET_ERROR;
 
-                  normalizeVec(out);
-                  normalizeVec(w);
 
                   for(int j = 0; j < size; ++j) {
                       out[j] = min<double>(0, out[j] + w[j]);
@@ -838,7 +851,17 @@ Vec interpret(AST ast) {
               fflush(stdout);
               goto INTERPRET_ERROR;
 
-          } else if (command == "reldist") {
+          } else if (command == "kl") {
+              if (ast.size() != 3) goto INTERPRET_ERROR;
+              Vec a = interpret(ast.at(1));
+              Vec b = interpret(ast.at(2));
+              if (!a || !b) goto INTERPRET_ERROR;
+
+              printf("\tK-L divergence: %7.5f\n", kl(a, b));
+              fflush(stdout);
+              goto INTERPRET_ERROR;
+
+          }else if (command == "reldist") {
               if (ast.size() != 3) goto INTERPRET_ERROR;
 
             Vec *Mrel = new Vec[words];
@@ -1007,6 +1030,9 @@ Vec interpret(AST ast) {
         
            
 
+       } else if (command == "detectpolysemous") {
+           detectPolysemousWords();
+           goto INTERPRET_ERROR;
        } else  {
               cout << "unknown command: " << command;
               cout << "\n\t"; ast.print();
@@ -1046,6 +1072,8 @@ int main(int argc, char **argv) {
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
 
     M = (Vec *)malloc((long long)words * sizeof(Vec));
+    Ml = (Vec *)malloc((long long)words * sizeof(Vec));
+    Mloneminus = (Vec *)malloc((long long)words * sizeof(Vec));
 
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
@@ -1075,7 +1103,7 @@ int main(int argc, char **argv) {
     }
 
     // will we get a double stochastic embdding? xD
-    for(int i = 0; i  < 20; ++i) {
+    for(int i = 0; i  < 3; ++i) {
         printf("iteration %4d ", i);
         double err = 0;
 
@@ -1113,9 +1141,14 @@ int main(int argc, char **argv) {
         printf(" | error: %f\n", err);
     }
 
-
-
-
+    for(int b = 0; b < words; ++b) {
+        Ml[b] = new double[size];
+        Mloneminus[b] = new double[size];
+        for(int a = 0; a < size; a++) {
+            Ml[b][a] = entropylog(M[b][a]);
+            Mloneminus[b][a] = entropylog(1.0 - M[b][a]);
+        }
+    }
 
 
     fclose(f);
@@ -1140,12 +1173,23 @@ int main(int argc, char **argv) {
     }
 
 
-    printAscByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
-    printDescByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
-    printWordsAtEntropy(M, 6.26);
-    if (NONORMALIZE) {
-        cout << "NOTE: unnormalized vectors\n";
+
+    computeEntropies(M, FUNCTION_WORD_FREQ_CUTOFF);
+    {
+        cout << "descending entropy:\n";
+        int i = 0;
+        for(auto it = entropy2w.rbegin(); i < 50; ++i, ++it) {
+            const string w(vocab + max_w *it->second);
+            if (word2freq[w] < FUNCTION_WORD_FREQ_CUTOFF) continue;
+            printf("%30s\t%f\n", w.c_str(), it->first);
+        }
     }
+
+    // printAscByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
+    // printDescByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
+    // printWordsAtEntropy(M, 6.26);
+    //
+    detectPolysemousWords();
 
 
     linenoiseHistorySetMaxLen(10000);
@@ -1166,8 +1210,8 @@ int main(int argc, char **argv) {
         // printClosestWordsSetOverlap(v, M);
         // printClosestWordsSetOverlapSymmetric(v, M);
         printClosestWordsCrossEntropy(v, M);
-        printClosestWordsCrossEntropy2(v, M);
-        printClosestWordsCrossEntropySym(v, M);
+        // printClosestWordsCrossEntropy2(v, M);
+        // printClosestWordsCrossEntropySym(v, M);
         printClosestWordsKL(v, M);
     }
 }

@@ -219,7 +219,7 @@ double entropy(Vec v) {
 double crossentropy(Vec v, Vec w) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
-        if (w[i] < 1e-7) w[i] = 1e-7;
+        if (w[i] < 1e-300L) w[i] = 1e-300L;
         H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
             (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
     }
@@ -229,7 +229,7 @@ double crossentropy(Vec v, Vec w) {
 double kl(Vec v, Vec w) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
-        if (w[i] < 1e-7) w[i] = 1e-7;
+        if (w[i] < 1e-300L) w[i] = 1e-300L;
         H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
     }
     return H;
@@ -1074,33 +1074,49 @@ int main(int argc, char **argv) {
 
     }
 
-    // normalize probabilities per feature
-    for(int a = 0; a < size; ++a) {
-        double total = 0;
-        for(int b = 0; b < words; b++)  {
-            total += M[b][a];
+    // will we get a double stochastic embdding? xD
+    for(int i = 0; i  < 20; ++i) {
+        printf("iteration %4d ", i);
+        double err = 0;
+
+        // normalize probabilities per feature
+        for(int a = 0; a < size; ++a) {
+            double total = 0;
+            for(int b = 0; b < words; b++)  {
+                total += M[b][a];
+            }
+
+            err += (1.0 - total) * (1.0 - total);
+
+            for(int b = 0; b < words; b++)  {
+                M[b][a] /= total;
+                M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+            }
         }
 
-        for(int b = 0; b < words; b++)  {
-            M[b][a] /= total;
-            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+        // normalize features per vector
+        for(int b = 0; b < words; ++b) {
+            double total = 0;
+            for(int a = 0; a < size; a++)  {
+                total += M[b][a];
+            }
+
+            err += (1.0 - total) * (1.0 - total);
+
+            for(int a = 0; a < size; a++)  {
+                M[b][a] /= total;
+                M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+            }
         }
+
+
+        printf(" | error: %f\n", err);
     }
 
 
-    /*
-    for(int b = 0; b < words; ++b) {
-        double vmax = 0;
-        for(int a = 0; a < size; a++)  {
-            vmax = max(M[b][a], vmax);
-        }
 
-        for(int a = 0; a < size; a++)  {
-            M[b][a] /= vmax;
-            M[b][a] = min(1.0, max(M[b][a], 0.0));
-        }
-    }
-    */
+
+
 
     fclose(f);
 

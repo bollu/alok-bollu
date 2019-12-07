@@ -49,7 +49,7 @@ void analogy(double *a, double *b, double *x, double *y, int size) {
 }
 
 double entropylog(double x) {
-    if (x < 1e-7) {
+    if (x < 1e-400L) {
         return 0;
     }
     return log(x);
@@ -65,18 +65,19 @@ double entropy(double *v, int size) {
 double crossentropy(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
-        if (w[i] < 1e-7) w[i] = 1e-7;
+        if (w[i] < 1e-300L) w[i] = 1e-300L;
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
             (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
     }
     return H;
 }
 
-double kl(float *v, float *w, int size) {
+double kl(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
-        if (w[i] < 1e-7) w[i] = 1e-7;
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        if (w[i] < 1e-300L) w[i] = 1e-300L;
+        // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        H += -v[i] * lw[i] - (1 - v[i]) *  loneminusw[i]; //entropylog((1-w[i]));
     }
     return H;
 }
@@ -137,17 +138,32 @@ int main(int argc, char **argv)
     // for (a = 0; a < size; a++) M[a + b * size] /= len;
   }
 
-  for(a = 0; a < size; ++a) {
-      double total = 0;
-      for(b = 0; b < words; ++b) {
-          total += M[b * size + a];
+  for (int i = 0; i < 10; ++i) {
+      for(a = 0; a < size; ++a) {
+          double total = 0;
+          for(b = 0; b < words; ++b) {
+              total += M[b * size + a];
+          }
+
+          for(b = 0; b < words; ++b) {
+              M[b * size + a] /= total;
+              M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+          }
       }
-      
+
       for(b = 0; b < words; ++b) {
-          M[b * size + a] /= total;
-          M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+          double total = 0;
+          for(b = 0; b < words; ++b) {
+              total += M[b * size + a];
+          }
+
+          for(a = 0; a < size; ++a) {
+              M[b * size + a] /= total;
+              M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+          }
       }
   }
+
 
   for(b = 0; b < words; ++b) {
       for(a = 0; a < size; ++a) {
@@ -226,7 +242,7 @@ int main(int argc, char **argv)
           dist = 0;
           for (a = 0; a < size; a++) { dist += vec[a] * M[a + c * size]; }
       } else {
-          dist = crossentropy(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size);
+          dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size);
       }
 
       for (a = 0; a < N; a++) {

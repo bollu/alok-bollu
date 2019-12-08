@@ -41,8 +41,8 @@ compute-accuracy-topn : compute-accuracy-topn.c
 	$(CC) compute-accuracy-topn.c -o compute-accuracy-topn $(CFLAGS)
 	chmod +x *.sh
 
-compute-accuracy-discrete-topn: compute-accuracy-discrete-topn.c
-	$(CC) compute-accuracy-discrete-topn.c -o compute-accuracy-discrete-topn $(CFLAGS)
+compute-accuracy-discrete-topn: compute-accuracy-discrete-topn.cpp
+	$(CXX) compute-accuracy-discrete-topn.cpp -o compute-accuracy-discrete-topn $(CFLAGS)
 	chmod +x *.sh
 
 word-fuzzy-distance: word-fuzzy-distance.c

@@ -375,8 +375,8 @@ void printClosestWordsSetOverlapSymmetric(Vec vec, Vec *M) {
 
 void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: EXTRA BITS FOR word on FOCUS\n");
-    double vals[words];
-    double bestd[words];
+    double *vals = new double [words];
+    double *bestd = new double[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 1000;
@@ -401,12 +401,15 @@ void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
     for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
     plotHistogram("distances", vals, words, 10);
     printf("\n");
+
+    delete []vals;
+    delete []bestd;
 }
 
 void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: EXTRA BITS FOR FOCUS on word\n");
-    double vals[words];
-    double bestd[words];
+    double *vals = new double [words];
+    double *bestd = new double[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 100;
@@ -431,13 +434,18 @@ void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
     for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
     plotHistogram("distances", vals, words, 10);
     printf("\n");
+
+    delete []vals;
+    delete []bestd;
 }
 
 void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
     printf("CROSS ENTROPY: BOTH\n");
-    double vals[words];
-    double bestd[words];
-    double dist1[words], dist2[words], maxdist1 = -10, maxdist2 = -10;
+    double *vals = new double [words];
+    double *bestd = new double[words];
+    double *dist1 = new double[words];
+    double *dist2 = new double[words];
+    double maxdist1 = -10, maxdist2 = -10;
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 1000;
@@ -482,13 +490,18 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
     }
     plotHistogram("distances", vals, words, 10);
     printf("\n");
+
+    delete []vals;
+    delete []bestd;
+    delete []dist1;
+    delete []dist2;
 }
 
 
 void printClosestWordsKL(Vec vec, Vec *M) {
     printf("KL divergence (always an answer, may not be what you're looking for)\n");
-    double vals[words];
-    double bestd[words];
+    double *vals = new double [words];
+    double *bestd = new double[words];
     char bestw[N][max_size];
 
     for (int a = 0; a < N; a++) bestd[a] = 10000;
@@ -514,9 +527,13 @@ void printClosestWordsKL(Vec vec, Vec *M) {
     for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
     plotHistogram("distances", vals, words, 10);
     printf("\n");
+
+    delete []vals;
+    delete []bestd;
 }
 
 void computeEntropies(Vec *M, int freq_cutoff) {
+    printf ("computing entropies...\n");
     for (int c = 0; c < words; c++) {
       const double H = entropy(M[c]);
       word2entropy[c] = H;
@@ -995,15 +1012,44 @@ Vec interpret(AST ast) {
 
                 return v;
        } else if (command == "writeprobfile") {
-           cout << "writing out coefficients of every vector..." << flush;
-           FILE *f = fopen("prob.txt", "w");
-           for(int i = 0; i < words; ++i) {
+           cout << "\nL" << __LINE__ << std::flush;
+           if (ast.size() == 1) {
+               cout << "\nL" << __LINE__ << std::flush;
+               cout << "writing out coefficients of every vector..." << flush;
+               FILE *f = fopen("prob.txt", "w");
+               for(int i = 0; i < words; ++i) {
+                   for(int j = 0; j < size; ++j) {
+                       fprintf(f, "%f ", M[i][j]);
+                   }
+               }
+               fclose(f);
+               cout << "done.\n";
+           } else if (ast.size() == 2) {
+               if (ast.at(1).ty() != ASTTy::AtomString) { goto INTERPRET_ERROR; }
+
+               string s = ast.at(1).s();
+               Vec v = interpret(ast.at(1));
+
+               if (!v) { goto  INTERPRET_ERROR; }
+
+               char filename[512];
+               sprintf(filename, "prob-%s.txt", s.c_str());
+               cout << "writing out coefficients of given vector to: " <<
+                   filename << fflush;
+               FILE *f = fopen(filename, "w");
+
+               // find index of word.
+               int i = 0;
+               while (!strcmp(vocab + max_w  *i, s.c_str())) { continue; }
+
                for(int j = 0; j < size; ++j) {
                    fprintf(f, "%f ", M[i][j]);
                }
+               fclose(f);
+               cout << "done.\n";
+           } else {
+               assert(false);
            }
-           fclose(f);
-           cout << "done.\n";
           goto INTERPRET_ERROR;
        } else if (command == "writeentropyfile") {
            cout << "writing out entropy of every vector..." << flush;
@@ -1189,8 +1235,7 @@ int main(int argc, char **argv) {
     // printDescByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);
     // printWordsAtEntropy(M, 6.26);
     //
-    detectPolysemousWords();
-
+    // detectPolysemousWords();
 
     linenoiseHistorySetMaxLen(10000);
     linenoiseSetCompletionCallback(completion);

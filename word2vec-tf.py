@@ -89,10 +89,12 @@ with tf.Session() as sess:
 
   # quick - fox + dog == ? print best candidates for this
   # Fox :  quick :: fox : ? == (quick - fox) + fox = quick
-  analogy('fox', 'quick', 'dog' data_syn0)
+  analogy('fox', 'quick', 'dog', data_syn0)
   
   # TASK 2. copy and understand (plz plz plz) the data saving/loading code, and
   # save the learnt word vectors.
 
-  # TASK 3. make this parallel: use multiple indeces and
-  # multipl labels _in parallel_
+  # TASK 3. make this batced: use multiple indeces and
+  # multipl labels _in batch mode_. I presume this is requires one to
+  # change the code to "store" the (fix, cix, and labels) and then
+  # pass them as arrays to sess.run(...)

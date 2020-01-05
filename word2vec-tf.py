@@ -17,7 +17,7 @@ SAVEPATH='text0.bin'
 INPUTPATH='text0'
 EMBEDSIZE = 50
 WINDOWSIZE = 8
-NEGSAMPLES = 0
+NEGSAMPLES = 15
 LEARNING_RATE=1e-3
 NEPOCHS=10
 BATCHSIZE=1000
@@ -65,7 +65,7 @@ var_loss = tf.reduce_sum(var_losses, name="loss")
 # learning rate
 ph_lr = tf.placeholder(tf.float32, name="ph_lr")
 
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=ph_lr).minimize(var_loss)
+optimizer = tf.train.AdamOptimizer(learning_rate=ph_lr).minimize(var_loss)
 
 
 print("\n***NETWORK:***")

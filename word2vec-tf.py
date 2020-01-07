@@ -15,12 +15,12 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 SAVEFOLDER='models'
 SAVEPATH='text0.bin'
 INPUTPATH='text0'
-EMBEDSIZE = 50
+EMBEDSIZE = 100
 WINDOWSIZE = 8
 NEGSAMPLES = 15
 LEARNING_RATE=1e-3
 NEPOCHS=10
-BATCHSIZE=1000
+BATCHSIZE=100000
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -35,6 +35,11 @@ with open(INPUTPATH, "r") as f:
   VOCAB2IX = {w: i for (i, w) in enumerate(vocab)}
   # print("VOCAB2IX:\n%s" % VOCAB2IX)
   VOCABSIZE = len(vocab)
+
+
+  corpusixed = np.empty(CORPUSLEN, dtype=np.int32)
+  for i in range(CORPUSLEN):
+      corpusixed[i] = VOCAB2IX[corpus[i]]
 
 assert VOCABSIZE is not None
 assert CORPUSLEN is not None
@@ -83,7 +88,13 @@ print("***END NETWORK:***\n")
 # Step 3: push data through this program
 
 
-def epoch(curepoch, sess, data_fixs, data_cixs, data_labels, data_lr):
+def mkdata():
+  fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.float32)
+  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.float32)
+  labels = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
+
+  n = 0
+  r = np.uint32(1)
   for ixf in range(CORPUSLEN):
     l = max(0, ixf - WINDOWSIZE)
     r = min(CORPUSLEN - 1, ixf + WINDOWSIZE)
@@ -91,40 +102,41 @@ def epoch(curepoch, sess, data_fixs, data_cixs, data_labels, data_lr):
     # the fox [vc=|jumps| *vf=over* the] dog (vc.vf=1)
     for ixc in range(l, r):
       # variable[placeholder]
-      data_fixs.append(VOCAB2IX[corpus[ixf]])
-      data_cixs.append(VOCAB2IX[corpus[ixc]])
-      data_labels.append(1)
+      fixs[n] = corpusixed[ixf]
+      cixs[n] = corpusixed[ixc]
+      labels[n] = 1
+      n += 1
   
     # vc=|the| fox [jumps *vf=over* the] dog (vc.vf = 0)
     for _ in range(NEGSAMPLES):
-      ixrand = random.randint(0, CORPUSLEN-1)
+      r = r * 25214903917 + 11
+      ixrand = r % (CORPUSLEN - 1)
       if l <= ixrand <= r: continue # reject words inside window
-      data_fixs.append(VOCAB2IX[corpus[ixf]])
-      data_cixs.append(VOCAB2IX[corpus[ixrand]])
-      data_labels.append(0)
+      fixs[n] = corpusixed[ixf]
+      cixs[n] = corpusixed[ixrand]
+      labels[n] = 0
+      n += 1
+  
+    print("preprocessing: %10.2f%%" % (100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
 
+  return fixs, cixs, labels, n
 
-    while len(data_labels) >= BATCHSIZE:
-        assert len(data_labels) == len(data_cixs)
-        assert len(data_labels) == len(data_fixs)
-        # print("fix: %s | cix: %s | label: %s" % (data_fix, data_cix, data_label))
-        loss, _ = sess.run([var_loss, optimizer], 
-                           feed_dict={ph_fixs:data_fixs[:BATCHSIZE], 
-                                      ph_cixs: data_cixs[:BATCHSIZE],
-                                      ph_labels: data_labels[:BATCHSIZE],
-                                      ph_lr: data_lr})
+def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
+    i = 0
+    while (i + 1) * BATCHSIZE < n:
+      i += 1
+      loss, _ = sess.run([var_loss, optimizer], 
+                         feed_dict={ph_fixs:data_fixs[i*BATCHSIZE:(i+1)*BATCHSIZE], 
+                                    ph_cixs: data_cixs[i*BATCHSIZE:(i+1)*BATCHSIZE],
+                                    ph_labels: data_labels[i*BATCHSIZE:(i+1)*BATCHSIZE],
+                                    ph_lr: data_lr})
 
-        print("epoch: %10s | loss: %20.5f | lr: %20.8f | %10.2f %%" % (curepoch, 
-                            loss,
-                            data_lr,
-                            ((curepoch + (ixf / CORPUSLEN)) / NEPOCHS)*100))
-        # data_lr = data_lr * (1.0 - 1e-6)
-        # data_lr = max(1e-7, max(LEARNING_RATE * 1e-5, data_lr))
-
-        data_labels = data_labels[BATCHSIZE:]
-        data_fixs = data_fixs[BATCHSIZE:]
-        data_cixs = data_cixs[BATCHSIZE:]
-
+      print("epoch: %10s | loss: %20.5f | lr: %20.8f | %10.2f %%" % (curepoch, 
+                          loss,
+                          data_lr,
+                          (100 * (curepoch + (i * BATCHSIZE/ n)) / NEPOCHS)))
+      # data_lr = data_lr * (1.0 - 1e-6)
+      # data_lr = max(1e-7, max(LEARNING_RATE * 1e-5, data_lr))
 
 def train():
   saver = tf.train.Saver()
@@ -135,9 +147,14 @@ def train():
     data_cixs = []
     data_labels = []
     data_lr = LEARNING_RATE
+
+    print("making data...")
+    fixs, cixs, labels, n = mkdata()
+    print("done. n: %10s" % (n, ))
+
     for i in range(NEPOCHS):
       print("===epoch: %s===" % i)
-      epoch(i, sess, data_fixs, data_cixs, data_labels, data_lr) 
+      epoch(i, sess, n, fixs, cixs, labels, data_lr) 
   
     data_syn0 = sess.run([var_syn0])
     data_syn1neg = sess.run([var_syn1neg])

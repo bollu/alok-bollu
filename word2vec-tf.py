@@ -7,14 +7,15 @@ from tensorflow import keras
 from collections import OrderedDict
 import os
 import random
+import numba
 
 
 tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
-SAVEPATH='text0.bin'
-INPUTPATH='text0'
+SAVEPATH='text8.bin'
+INPUTPATH='text8'
 EMBEDSIZE = 100
 WINDOWSIZE = 8
 NEGSAMPLES = 15
@@ -88,19 +89,20 @@ print("***END NETWORK:***\n")
 # Step 3: push data through this program
 
 
+@numba.jit(nopython=True, parallel=True)
 def mkdata():
-  fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.float32)
-  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.float32)
+  fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
+  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
   labels = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
 
   n = 0
   r = np.uint32(1)
-  for ixf in range(CORPUSLEN):
+  for ixf in np.arange(CORPUSLEN):
     l = max(0, ixf - WINDOWSIZE)
     r = min(CORPUSLEN - 1, ixf + WINDOWSIZE)
     
     # the fox [vc=|jumps| *vf=over* the] dog (vc.vf=1)
-    for ixc in range(l, r):
+    for ixc in np.arange(l, r):
       # variable[placeholder]
       fixs[n] = corpusixed[ixf]
       cixs[n] = corpusixed[ixc]
@@ -108,7 +110,7 @@ def mkdata():
       n += 1
   
     # vc=|the| fox [jumps *vf=over* the] dog (vc.vf = 0)
-    for _ in range(NEGSAMPLES):
+    for _ in np.arange(NEGSAMPLES):
       r = r * 25214903917 + 11
       ixrand = r % (CORPUSLEN - 1)
       if l <= ixrand <= r: continue # reject words inside window
@@ -117,9 +119,10 @@ def mkdata():
       labels[n] = 0
       n += 1
   
-    print("preprocessing: %10.2f%%" % (100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
+    print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
 
   return fixs, cixs, labels, n
+
 
 def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
     i = 0
@@ -151,6 +154,12 @@ def train():
     print("making data...")
     fixs, cixs, labels, n = mkdata()
     print("done. n: %10s" % (n, ))
+
+    print("\n***LLVM of mkdata:***")
+    for v, k in mkdata.inspect_llvm().items():
+        print(v, k)
+    print("***end LLVM of mkdata:***\n")
+    # raise RuntimeError("inspection")
 
     for i in range(NEPOCHS):
       print("===epoch: %s===" % i)

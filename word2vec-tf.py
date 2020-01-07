@@ -14,14 +14,16 @@ tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
-SAVEPATH='text8.bin'
-INPUTPATH='text8'
-EMBEDSIZE = 100
+SAVEPATH='text0.bin'
+INPUTPATH='text0'
+EMBEDSIZE = 50
 WINDOWSIZE = 8
 NEGSAMPLES = 15
-LEARNING_RATE=1e-3
-NEPOCHS=10
-BATCHSIZE=100000
+LEARNING_RATE=1e-2
+NEPOCHS=15
+BATCHSIZE=10000
+DISTANCE_DOT_DECAY = 1.0 / 10.0
+REGULARIZATION_COEFF = 0
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -47,9 +49,17 @@ assert CORPUSLEN is not None
 
 
 VAL = 1.0 / EMBEDSIZE
-var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
-                                         minval=-VAL,
-                                        maxval=VAL), name="syn0")
+syn0_init = np.random.random((VOCABSIZE, EMBEDSIZE)) - 0.5
+for i in range(VOCABSIZE):
+  syn0_init[i, :] = syn0_init[i, :] / np.linalg.norm(syn0_init[i, :])
+
+# var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
+#                                          minval=-VAL,
+#                                         maxval=VAL), name="syn0")
+# 
+var_syn0 = tf.Variable(tf.constant(syn0_init, dtype=tf.float32,
+                                   shape=(VOCABSIZE, EMBEDSIZE)), name="syn0")
+# var_syn0 = tf.Variable(tf.random.normal([VOCABSIZE, EMBEDSIZE], mean=0, stddev=0.3  / EMBEDSIZE), name="syn0")
 var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), name="syn1neg")
 
 ph_fixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_fixs")
@@ -62,11 +72,24 @@ var_syn1neg_cur = tf.gather(var_syn1neg, ph_cixs, name="syn1neg_cur")
 
 var_dots = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn1neg_cur), axis=1, name="dots")
 
-var_clipped_dots = tf.math.tanh(var_dots, "clipped_dots")
+var_clipped_dots = tf.math.sigmoid(var_dots, "clipped_dots")
+# var_clipped_dots = var_dots
+
 # loss = tf.norm(tf.math.sub(ph_label, d), name="loss")
-var_losses = tf.squared_difference(ph_labels, var_clipped_dots, name="losses")
+var_losses_dot = tf.squared_difference(ph_labels, var_clipped_dots, name="losses_dot")
 # add up all the losses
-var_loss = tf.reduce_sum(var_losses, name="loss")
+var_loss_dot = tf.reduce_sum(var_losses_dot, name="loss_dot")
+
+var_lensq = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn0_cur), axis=1, name="lensq")
+
+var_regularize = tf.squared_difference(1.0, var_lensq, name="regularizations")
+var_regularize = tf.multiply(var_regularize, REGULARIZATION_COEFF,
+                             name="regularizations_scaled")
+var_regularize = tf.reduce_sum(var_regularize, name="regularization_final")
+
+
+# var_loss = tf.add(var_regularize, var_loss_dot, name="loss")
+var_loss = var_loss_dot
 
 # learning rate
 ph_lr = tf.placeholder(tf.float32, name="ph_lr")
@@ -80,7 +103,10 @@ print("syn0 cur: %s" % var_syn0_cur)
 print("syn1neg cur: %s" % var_syn1neg_cur)
 print("dots: %s" % var_dots)
 print("clipped dots: %s" % var_clipped_dots)
-print("losses: %s" % var_losses)
+print("losses_dot: %s" % var_losses_dot)
+print("loss_dot: %s" % var_loss_dot)
+print("lensq: %s" % var_lensq)
+print("regularize: %s" % var_regularize)
 print("loss: %s" % var_loss)
 print("***END NETWORK:***\n")
 
@@ -91,9 +117,9 @@ print("***END NETWORK:***\n")
 
 @numba.jit(nopython=True, parallel=True)
 def mkdata():
-  fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
-  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
-  labels = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES), dtype=np.int32)
+  fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
+  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
+  labels = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.float32)
 
   n = 0
   r = np.uint32(1)
@@ -106,6 +132,7 @@ def mkdata():
       # variable[placeholder]
       fixs[n] = corpusixed[ixf]
       cixs[n] = corpusixed[ixc]
+      # labels[n] = np.exp(-1.0 * DISTANCE_DOT_DECAY * np.fabs(ixc - ixf))
       labels[n] = 1
       n += 1
   
@@ -113,15 +140,26 @@ def mkdata():
     for _ in np.arange(NEGSAMPLES):
       r = r * 25214903917 + 11
       ixrand = r % (CORPUSLEN - 1)
-      if l <= ixrand <= r: continue # reject words inside window
+      # if l <= ixrand <= r: continue # reject words inside window
       fixs[n] = corpusixed[ixf]
       cixs[n] = corpusixed[ixrand]
       labels[n] = 0
       n += 1
   
-    print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
+    # print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
+
 
   return fixs, cixs, labels, n
+
+def shuffledata(fixs, cixs, labels):
+  print("shape: |%s|" % fixs.shape)
+  randixs = np.arange(fixs.shape)
+  randixs = np.random.shuffle(randixs)
+  fixs = fixs[randixs]
+  cixs = cixs[randixs]
+  labels = labels[randixs]
+
+  return fixs, cixs, labels
 
 
 def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
@@ -134,25 +172,22 @@ def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
                                     ph_labels: data_labels[i*BATCHSIZE:(i+1)*BATCHSIZE],
                                     ph_lr: data_lr})
 
-      print("epoch: %10s | loss: %20.5f | lr: %20.8f | %10.2f %%" % (curepoch, 
+      print("\repoch: %10s | loss: %20.5f | lr: %20.8f | %10.2f %%" % (curepoch, 
                           loss,
                           data_lr,
-                          (100 * (curepoch + (i * BATCHSIZE/ n)) / NEPOCHS)))
-      # data_lr = data_lr * (1.0 - 1e-6)
-      # data_lr = max(1e-7, max(LEARNING_RATE * 1e-5, data_lr))
+                          (100 * (curepoch + (i * BATCHSIZE/ n)) / NEPOCHS)),
+            end="")
 
 def train():
   saver = tf.train.Saver()
   with tf.Session() as sess:
     global_init = tf.global_variables_initializer()
     sess.run(global_init)
-    data_fixs = []
-    data_cixs = []
-    data_labels = []
     data_lr = LEARNING_RATE
 
-    print("making data...")
+    print("load data...\n")
     fixs, cixs, labels, n = mkdata()
+    # fixs, cixs, labels = shuffledata(fixs, cixs, labels, n)
     print("done. n: %10s" % (n, ))
 
     print("\n***LLVM of mkdata:***")
@@ -162,8 +197,10 @@ def train():
     # raise RuntimeError("inspection")
 
     for i in range(NEPOCHS):
-      print("===epoch: %s===" % i)
+      print("\n===epoch: %s===" % i)
       epoch(i, sess, n, fixs, cixs, labels, data_lr) 
+      # data_lr = data_lr * 0.5
+      # data_lr = max(1e-7, data_lr)
   
     data_syn0 = sess.run([var_syn0])
     data_syn1neg = sess.run([var_syn1neg])

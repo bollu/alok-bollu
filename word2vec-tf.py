@@ -11,7 +11,7 @@ import numba
 
 # TODO: make data loading from corpus faster (Siddharth)
 # TODO: run on text8 and generate a vector.bin file according to word2vec
-#       convention so we can run compute-accuracy and distance (Siddharth)
+#       convention so we can run compute-accuracy and repl (Siddharth)
 # TODO: include all poplar tricks such as frequency based discarding (Souvik)
 # TODO: adapt the code to GA (Souvik)
 
@@ -20,16 +20,14 @@ tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
-SAVEPATH='text8.bin'
-INPUTPATH='text8'
+SAVEPATH='text0.bin'
+INPUTPATH='text0'
 EMBEDSIZE = 50
 WINDOWSIZE = 8
 NEGSAMPLES = 15
-LEARNINGRATE=1e-2
-NEPOCHS=15
-BATCHSIZE=10000
-DISTANCE_DOT_DECAY = 1.0 / 10.0
-REGULARIZATION_COEFF = 0
+LEARNINGRATE=1e-3
+NEPOCHS=30
+BATCHSIZE=1000
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -65,58 +63,23 @@ assert CORPUSLEN is not None
 VAL = 1.0 / EMBEDSIZE
 var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
                                          minval=-VAL,
-                                        maxval=VAL), name="syn0")
+                                         maxval=VAL), name="syn0")
 
-var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), 
-                          name="syn1neg")
+var_syn1neg = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
+                                            minval=-VAL,
+                                            maxval=VAL), name="syn1neg")
+# var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), name="syn1neg")
 
 ph_fixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_fixs")
 ph_cixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_cixs")
 ph_labels = tf.placeholder(tf.float32, (BATCHSIZE, ), name="ph_labels")
-
-# loss = (label - (focus[fix] . ctx[cix])^2
-# BATCHSIZE x EMBEDSIZE
 var_syn0_cur = tf.gather(var_syn0, ph_fixs, name="syn0_cur")
 var_syn1neg_cur = tf.gather(var_syn1neg, ph_cixs, name="syn1neg_cur")
-
-# syn0       syn1neg
-# 1 2        1 0
-# 3 4        0 1
-# 5 6        2 3
-
-# syn0 * syn1neg
-# BATCHSIZE x EMBEDSIZE
-# 1  0
-# 0  4
-# 10 18
-
-# tf.reduce_sum(..., axis=1)
-# 1
-# 4
-# 28
 var_dots = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn1neg_cur), axis=1, name="dots")
-
-var_clipped_dots = tf.math.sigmoid(var_dots, "clipped_dots")
-# var_clipped_dots = var_dots
-
-# loss = tf.norm(tf.math.sub(ph_label, d), name="loss")
+var_clipped_dots = tf.math.tanh(var_dots, "clipped_dots")
 var_losses_dot = tf.squared_difference(ph_labels, var_clipped_dots, name="losses_dot")
-# add up all the losses
 var_loss = tf.reduce_sum(var_losses_dot, name="loss_dot")
 optimizer = tf.train.AdamOptimizer(learning_rate=LEARNINGRATE).minimize(var_loss)
-
-# var_lensq = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn0_cur), axis=1, name="lensq")
-# 
-# var_regularize = tf.squared_difference(1.0, var_lensq, name="regularizations")
-# var_regularize = tf.multiply(var_regularize, REGULARIZATION_COEFF,
-#                              name="regularizations_scaled")
-# var_regularize = tf.reduce_sum(var_regularize, name="regularization_final")
-# 
-# 
-# # var_loss = tf.add(var_regularize, var_loss_dot, name="loss")
-
-# learning rate
-# ph_lr = tf.placeholder(tf.float32, name="ph_lr")
 
 
 print("\n***NETWORK:***")
@@ -126,9 +89,6 @@ print("syn1neg cur: %s" % var_syn1neg_cur)
 print("dots: %s" % var_dots)
 print("clipped dots: %s" % var_clipped_dots)
 print("losses_dot: %s" % var_losses_dot)
-# print("loss_dot: %s" % var_loss_dot)
-# print("lensq: %s" % var_lensq)
-# print("regularize: %s" % var_regularize)
 print("loss: %s" % var_loss)
 print("***END NETWORK:***\n")
 
@@ -138,23 +98,16 @@ print("***END NETWORK:***\n")
 
 
 @numba.jit(nopython=True, parallel=True)
-# WTF, how is _this_ the bottleneck?
-# TODO: make this faster
 def mkdata():
   fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
-  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
   cixs = np.random.randint(low=0,
                            high=CORPUSLEN-1,
                            size=CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1))
-  # cixs = (CORPUSLEN - 1) * np.random.random(size=CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1))
-  # cixs = cixs.astype(np.int32)
   labels = np.zeros(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.float32)
 
   n = 0
-  # r = np.uint32(1)
   ixf = 0
   while ixf < CORPUSLEN:
-  # for ixf in np.arange(CORPUSLEN):
     l = max(0, ixf - WINDOWSIZE)
     r = min(CORPUSLEN - 1, ixf + WINDOWSIZE)
     windowsize = r-l
@@ -172,20 +125,11 @@ def mkdata():
         fixs[rix] = corpusixed[ixf]
         rix += 1
         n += 1
-    # fixs[n:n+windowsize] = np.repeat(corpusixed[ixf], windowsize)
-    # cixs[n:n+windowsize] = corpusixed[l:r]
-    # labels[n:n+windowsize] = 1
-    # n += windowsize
 
-    # fixs[n:n+NEGSAMPLES] = np.repeat(corpusixed[ixf], NEGSAMPLES)
-    # labels[n:n+NEGSAMPLES] = 0
-    # n += NEGSAMPLES
     print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
     ixf += 1
 
-
   return fixs, cixs, labels, n
-  # return n
 
 def shuffledata(fixs, cixs, labels):
   print("shape: |%s|" % fixs.shape)
@@ -245,7 +189,7 @@ def train():
   
     saver.save(sess, SAVEPATH)
 
-def distance():
+def repl():
   saver = tf.train.Saver()
   IX2VOCAB = {VOCAB2IX[w]:w for w in VOCAB2IX}
   with tf.Session() as sess:
@@ -258,14 +202,37 @@ def distance():
         syn0[i, :] = syn0[i, :] / np.linalg.norm(syn0[i, :])
 
     while True:
-        w = input(">")
-        if w == "exit": break
-        if w not in VOCAB2IX: continue
-        wix = VOCAB2IX[w]
-        wv = syn0[wix, :]
-        dots = np.dot(syn0, wv)
-        print ("syn0:\n%s\nwv:\n%s\ndots:\n%s" % (syn0, wv, dots))
-        print("wv len: %s" % (np.dot(wv, wv), ))
+        s = input(">")
+        if s == "exit": break
+        if len(s.split()) == 0: continue
+        c = s.split()[0]
+        if c == "dist":
+            if len(s.split()) != 2: continue
+            w = s.split()[1]
+            if w not in VOCAB2IX: continue
+            wix = VOCAB2IX[w]
+
+            v = syn0[wix, :]
+        elif c == "analogy":
+            if len(s.split()) != 4: continue
+            wa = s.split()[1]
+            wb = s.split()[2]
+            wx = s.split()[3]
+
+            if wa not in VOCAB2IX: continue
+            if wb not in VOCAB2IX: continue
+            if wx not in VOCAB2IX: continue
+
+            wa = VOCAB2IX[wa]
+            wb = VOCAB2IX[wb]
+            wx = VOCAB2IX[wx]
+
+            v = syn0[wb, :] - syn0[wa, :]  + syn0[wx, :]
+        else: continue
+
+        dots = np.tanh(np.dot(syn0, v))
+        print ("syn0:\n%s\nwv:\n%s\ndots:\n%s" % (syn0, v, dots))
+        print("v len: %s" % (np.dot(v, v), ))
         ixs = np.argsort(dots)
         ixs = np.flip(ixs)
         for ix in ixs[:30]:
@@ -273,4 +240,4 @@ def distance():
 
 if __name__ == "__main__":
     train()
-    distance()
+    repl()

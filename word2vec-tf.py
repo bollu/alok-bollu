@@ -9,17 +9,24 @@ import os
 import random
 import numba
 
+# TODO: make data loading from corpus faster (Siddharth)
+# TODO: run on text8 and generate a vector.bin file according to word2vec
+#       convention so we can run compute-accuracy and distance (Siddharth)
+# TODO: include all poplar tricks such as frequency based discarding (Souvik)
+# TODO: adapt the code to GA (Souvik)
+
+
 
 tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
-SAVEPATH='text0.bin'
-INPUTPATH='text0'
+SAVEPATH='text8.bin'
+INPUTPATH='text8'
 EMBEDSIZE = 50
 WINDOWSIZE = 8
 NEGSAMPLES = 15
-LEARNING_RATE=1e-2
+LEARNINGRATE=1e-2
 NEPOCHS=15
 BATCHSIZE=10000
 DISTANCE_DOT_DECAY = 1.0 / 10.0
@@ -40,6 +47,8 @@ with open(INPUTPATH, "r") as f:
   VOCABSIZE = len(vocab)
 
 
+  # corpus: location -> str
+  # corpusixed: location -> int (ix = index)
   corpusixed = np.empty(CORPUSLEN, dtype=np.int32)
   for i in range(CORPUSLEN):
       corpusixed[i] = VOCAB2IX[corpus[i]]
@@ -48,28 +57,44 @@ assert VOCABSIZE is not None
 assert CORPUSLEN is not None
 
 
-VAL = 1.0 / EMBEDSIZE
-syn0_init = np.random.random((VOCABSIZE, EMBEDSIZE)) - 0.5
-for i in range(VOCABSIZE):
-  syn0_init[i, :] = syn0_init[i, :] / np.linalg.norm(syn0_init[i, :])
+# syn0_init = np.random.random((VOCABSIZE, EMBEDSIZE)) - 0.5
+# for i in range(VOCABSIZE):
+#   syn0_init[i, :] = syn0_init[i, :] / np.linalg.norm(syn0_init[i, :])
+# var_syn0 = tf.Variable(tf.constant(syn0_init, dtype=tf.float32,
+#                                    shape=(VOCABSIZE, EMBEDSIZE)), name="syn0")
 
-# var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
-#                                          minval=-VAL,
-#                                         maxval=VAL), name="syn0")
-# 
-var_syn0 = tf.Variable(tf.constant(syn0_init, dtype=tf.float32,
-                                   shape=(VOCABSIZE, EMBEDSIZE)), name="syn0")
-# var_syn0 = tf.Variable(tf.random.normal([VOCABSIZE, EMBEDSIZE], mean=0, stddev=0.3  / EMBEDSIZE), name="syn0")
-var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), name="syn1neg")
+VAL = 1.0 / EMBEDSIZE
+var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
+                                         minval=-VAL,
+                                        maxval=VAL), name="syn0")
+
+var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), 
+                          name="syn1neg")
 
 ph_fixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_fixs")
 ph_cixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_cixs")
 ph_labels = tf.placeholder(tf.float32, (BATCHSIZE, ), name="ph_labels")
 
 # loss = (label - (focus[fix] . ctx[cix])^2
+# BATCHSIZE x EMBEDSIZE
 var_syn0_cur = tf.gather(var_syn0, ph_fixs, name="syn0_cur")
 var_syn1neg_cur = tf.gather(var_syn1neg, ph_cixs, name="syn1neg_cur")
 
+# syn0       syn1neg
+# 1 2        1 0
+# 3 4        0 1
+# 5 6        2 3
+
+# syn0 * syn1neg
+# BATCHSIZE x EMBEDSIZE
+# 1  0
+# 0  4
+# 10 18
+
+# tf.reduce_sum(..., axis=1)
+# 1
+# 4
+# 28
 var_dots = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn1neg_cur), axis=1, name="dots")
 
 var_clipped_dots = tf.math.sigmoid(var_dots, "clipped_dots")
@@ -78,23 +103,21 @@ var_clipped_dots = tf.math.sigmoid(var_dots, "clipped_dots")
 # loss = tf.norm(tf.math.sub(ph_label, d), name="loss")
 var_losses_dot = tf.squared_difference(ph_labels, var_clipped_dots, name="losses_dot")
 # add up all the losses
-var_loss_dot = tf.reduce_sum(var_losses_dot, name="loss_dot")
+var_loss = tf.reduce_sum(var_losses_dot, name="loss_dot")
+optimizer = tf.train.AdamOptimizer(learning_rate=LEARNINGRATE).minimize(var_loss)
 
-var_lensq = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn0_cur), axis=1, name="lensq")
-
-var_regularize = tf.squared_difference(1.0, var_lensq, name="regularizations")
-var_regularize = tf.multiply(var_regularize, REGULARIZATION_COEFF,
-                             name="regularizations_scaled")
-var_regularize = tf.reduce_sum(var_regularize, name="regularization_final")
-
-
-# var_loss = tf.add(var_regularize, var_loss_dot, name="loss")
-var_loss = var_loss_dot
+# var_lensq = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn0_cur), axis=1, name="lensq")
+# 
+# var_regularize = tf.squared_difference(1.0, var_lensq, name="regularizations")
+# var_regularize = tf.multiply(var_regularize, REGULARIZATION_COEFF,
+#                              name="regularizations_scaled")
+# var_regularize = tf.reduce_sum(var_regularize, name="regularization_final")
+# 
+# 
+# # var_loss = tf.add(var_regularize, var_loss_dot, name="loss")
 
 # learning rate
-ph_lr = tf.placeholder(tf.float32, name="ph_lr")
-
-optimizer = tf.train.AdamOptimizer(learning_rate=ph_lr).minimize(var_loss)
+# ph_lr = tf.placeholder(tf.float32, name="ph_lr")
 
 
 print("\n***NETWORK:***")
@@ -104,9 +127,9 @@ print("syn1neg cur: %s" % var_syn1neg_cur)
 print("dots: %s" % var_dots)
 print("clipped dots: %s" % var_clipped_dots)
 print("losses_dot: %s" % var_losses_dot)
-print("loss_dot: %s" % var_loss_dot)
-print("lensq: %s" % var_lensq)
-print("regularize: %s" % var_regularize)
+# print("loss_dot: %s" % var_loss_dot)
+# print("lensq: %s" % var_lensq)
+# print("regularize: %s" % var_regularize)
 print("loss: %s" % var_loss)
 print("***END NETWORK:***\n")
 
@@ -115,7 +138,9 @@ print("***END NETWORK:***\n")
 # Step 3: push data through this program
 
 
-@numba.jit(nopython=True, parallel=True)
+# @numba.jit(nopython=True, parallel=True)
+# WTF, how is _this_ the bottleneck?
+# TODO: make this faster
 def mkdata():
   fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
   cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
@@ -132,7 +157,6 @@ def mkdata():
       # variable[placeholder]
       fixs[n] = corpusixed[ixf]
       cixs[n] = corpusixed[ixc]
-      # labels[n] = np.exp(-1.0 * DISTANCE_DOT_DECAY * np.fabs(ixc - ixf))
       labels[n] = 1
       n += 1
   
@@ -140,13 +164,12 @@ def mkdata():
     for _ in np.arange(NEGSAMPLES):
       r = r * 25214903917 + 11
       ixrand = r % (CORPUSLEN - 1)
-      # if l <= ixrand <= r: continue # reject words inside window
       fixs[n] = corpusixed[ixf]
       cixs[n] = corpusixed[ixrand]
       labels[n] = 0
       n += 1
   
-    # print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
+    print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
 
 
   return fixs, cixs, labels, n
@@ -169,8 +192,8 @@ def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
       loss, _ = sess.run([var_loss, optimizer], 
                          feed_dict={ph_fixs:data_fixs[i*BATCHSIZE:(i+1)*BATCHSIZE], 
                                     ph_cixs: data_cixs[i*BATCHSIZE:(i+1)*BATCHSIZE],
-                                    ph_labels: data_labels[i*BATCHSIZE:(i+1)*BATCHSIZE],
-                                    ph_lr: data_lr})
+                                    ph_labels: data_labels[i*BATCHSIZE:(i+1)*BATCHSIZE]
+                                   })
 
       print("\repoch: %10s | loss: %20.5f | lr: %20.8f | %10.2f %%" % (curepoch, 
                           loss,
@@ -183,7 +206,7 @@ def train():
   with tf.Session() as sess:
     global_init = tf.global_variables_initializer()
     sess.run(global_init)
-    data_lr = LEARNING_RATE
+    data_lr = LEARNINGRATE
 
     print("load data...\n")
     fixs, cixs, labels, n = mkdata()
@@ -194,7 +217,6 @@ def train():
     for v, k in mkdata.inspect_llvm().items():
         print(v, k)
     print("***end LLVM of mkdata:***\n")
-    # raise RuntimeError("inspection")
 
     for i in range(NEPOCHS):
       print("\n===epoch: %s===" % i)
@@ -209,25 +231,6 @@ def train():
       os.makedirs(SAVEFOLDER)
   
     saver.save(sess, SAVEPATH)
-
-    # TASK 1. Pull out the data from the session, and _print it_. Maybe try and
-    # implement distance()
-    
-    # print distance of fox from all other words, ordered by ascending order (Dot
-    # product / cosine distance)
-    # distance('fox', data_syn0)
-  
-    # quick - fox + dog == ? print best candidates for this
-    # Fox :  quick :: fox : ? == (quick - fox) + fox = quick
-    # analogy('fox', 'quick', 'dog', data_syn0)
-    
-    # TASK 2. copy and understand (plz plz plz) the data saving/loading code, and
-    # save the learnt word vectors.
-  
-    # TASK 3. make this batced: use multiple indeces and
-    # multipl labels _in batch mode_. I presume this is requires one to
-    # change the code to "store" the (fix, cix, and labels) and then
-    # pass them as arrays to sess.run(...)
 
 def distance():
   saver = tf.train.Saver()

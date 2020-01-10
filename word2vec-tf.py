@@ -16,7 +16,6 @@ import numba
 # TODO: adapt the code to GA (Souvik)
 
 
-
 tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
@@ -138,41 +137,55 @@ print("***END NETWORK:***\n")
 # Step 3: push data through this program
 
 
-# @numba.jit(nopython=True, parallel=True)
+@numba.jit(nopython=True, parallel=True)
 # WTF, how is _this_ the bottleneck?
 # TODO: make this faster
 def mkdata():
   fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
   cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
-  labels = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.float32)
+  cixs = np.random.randint(low=0,
+                           high=CORPUSLEN-1,
+                           size=CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1))
+  # cixs = (CORPUSLEN - 1) * np.random.random(size=CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1))
+  # cixs = cixs.astype(np.int32)
+  labels = np.zeros(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.float32)
 
   n = 0
-  r = np.uint32(1)
-  for ixf in np.arange(CORPUSLEN):
+  # r = np.uint32(1)
+  ixf = 0
+  while ixf < CORPUSLEN:
+  # for ixf in np.arange(CORPUSLEN):
     l = max(0, ixf - WINDOWSIZE)
     r = min(CORPUSLEN - 1, ixf + WINDOWSIZE)
-    
-    # the fox [vc=|jumps| *vf=over* the] dog (vc.vf=1)
-    for ixc in np.arange(l, r):
-      # variable[placeholder]
-      fixs[n] = corpusixed[ixf]
-      cixs[n] = corpusixed[ixc]
-      labels[n] = 1
-      n += 1
-  
-    # vc=|the| fox [jumps *vf=over* the] dog (vc.vf = 0)
-    for _ in np.arange(NEGSAMPLES):
-      r = r * 25214903917 + 11
-      ixrand = r % (CORPUSLEN - 1)
-      fixs[n] = corpusixed[ixf]
-      cixs[n] = corpusixed[ixrand]
-      labels[n] = 0
-      n += 1
-  
+    windowsize = r-l
+
+    wix = l
+    while wix < r:
+        fixs[n] = corpusixed[ixf]
+        cixs[n] = corpusixed[wix]
+        labels[n] = 1
+        wix += 1
+        n += 1
+
+    rix = 0
+    while rix < NEGSAMPLES:
+        fixs[rix] = corpusixed[ixf]
+        rix += 1
+        n += 1
+    # fixs[n:n+windowsize] = np.repeat(corpusixed[ixf], windowsize)
+    # cixs[n:n+windowsize] = corpusixed[l:r]
+    # labels[n:n+windowsize] = 1
+    # n += windowsize
+
+    # fixs[n:n+NEGSAMPLES] = np.repeat(corpusixed[ixf], NEGSAMPLES)
+    # labels[n:n+NEGSAMPLES] = 0
+    # n += NEGSAMPLES
     print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
+    ixf += 1
 
 
   return fixs, cixs, labels, n
+  # return n
 
 def shuffledata(fixs, cixs, labels):
   print("shape: |%s|" % fixs.shape)

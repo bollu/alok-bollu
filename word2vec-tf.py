@@ -20,14 +20,14 @@ tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
-SAVEPATH='text0.bin'
-INPUTPATH='text0'
+SAVEPATH='text8.bin'
+INPUTPATH='text8'
 EMBEDSIZE = 50
 WINDOWSIZE = 8
 NEGSAMPLES = 15
 LEARNINGRATE=1e-3
-NEPOCHS=30
-BATCHSIZE=1000
+NEPOCHS=15
+BATCHSIZE=100000
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -178,8 +178,11 @@ def train():
     for i in range(NEPOCHS):
       print("\n===epoch: %s===" % i)
       epoch(i, sess, n, fixs, cixs, labels, data_lr) 
-      # data_lr = data_lr * 0.5
-      # data_lr = max(1e-7, data_lr)
+
+      # save file per epoch
+      if not os.path.exists(SAVEFOLDER):
+        os.makedirs(SAVEFOLDER)
+      saver.save(sess, SAVEPATH)
   
     data_syn0 = sess.run([var_syn0])
     data_syn1neg = sess.run([var_syn1neg])

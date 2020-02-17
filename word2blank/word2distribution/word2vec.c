@@ -551,7 +551,7 @@ void *TrainModelThread(void *id) {
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  total_loss: %.2f",
+                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  total_loss: %7.4f",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
@@ -735,7 +735,9 @@ void *TrainModelThread(void *id) {
                         for (d = 0; d < negative + 1; d++) {
                             if (d == 0) {
                                 target = word;
-                                label = 1;
+                                label = 1.0 / (1.0 + fabs(last_word - target));
+                                assert(label >= 0);
+                                assert(label <= 1);
                             } else {
                                 next_random =
                                     next_random *

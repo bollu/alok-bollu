@@ -20,7 +20,7 @@ mkdir -p slurm/
 rm word2vec distance || true
 make word2vec
 # ./word2vec -alpha 0.001 -train jabber -cbow 0 -output models/jabber -size 10 -window 4 -negative 1 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15
-./word2vec -alpha 0.025 -train text0 -cbow 0 -output models/text0-size=20 -size 20 -window 8 -negative 4 -hs 0 -sample 1e-4 -threads 1 -binary 1 -iter 20
+./word2vec -alpha 0.01 -train text8 -cbow 0 -output models/text0-size=20 -size 20 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 20 -binary 1 -iter 20
 # time ./word2vec -train text1 -output models/$GITNAME.bin -cbow 0 -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
 # $(cd models; ln -s $GITNAME.bin $NAME.bin; cd ../)
 # ./1-eval.sh models/$NAME.bin

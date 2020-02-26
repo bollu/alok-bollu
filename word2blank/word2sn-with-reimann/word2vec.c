@@ -17,7 +17,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <math.h>
 
+#define EXPENSIVE_CHECKS
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
@@ -379,6 +382,192 @@ void ReadVocab() {
     fclose(fin);
 }
 
+// given angles, precompute sin(theta_i), cos(theta_i) and 
+//  sin(theta_i) * sin(theta_{i+1}) *  ... * sin(theta_j) 0 <= i, j <= n-1
+void angleprecompute(const int n, const real theta[n-1], real coss[n-1], 
+        real sins[n-1], real sinaccum[n-1][n-1]) {
+    for(int i = 0; i < n - 1; i++) {
+        coss[i] = cos(theta[i]);
+        sins[i] = sin(theta[i]);
+        // cos^2 x + sin^2 x = 1
+        int safe =  fabs(1.0 - (coss[i] * coss[i] + sins[i] * sins[i])) < 1e-2;
+        if (!safe) {
+            printf("theta: %f | real:%f / coss: %f | real: %f / sins: %f\n", theta[i], 
+                    cos(theta[i]), coss[i], sin(theta[i]), sins[i]);
+            assert(0);
+        }
+    }
+    
+    // check interval [i..j]
+    for(int i = 0; i < n - 1; ++i) {
+        // j < i
+        for(int j = 0; j < i; ++j) { sinaccum[i][j] = 1; }
+        //j = i
+        sinaccum[i][i] = sins[i];
+        // j > 1
+        for(int j = i + 1; j < n - 1; ++j) {
+            sinaccum[i][j] = sins[j] * sinaccum[i][j-1];
+        }
+    }
+}
+
+// convert angles to vectors for a given index
+void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], const real sinaccum[n-1][n-1],
+        real out[n]) {
+
+    // reference
+    // x1          = c1
+    // x2          = s1 c2
+    // x3          = s1 s2 c3
+    // x4          = s1 s2 s3 c4
+    // x5          = s1 s2 s3 s4 c5
+    // x6 = xfinal = s1 s2 s3 s4 s5
+    for(int i = 0; i < n; i++) {
+        out[i] = (i == 0 ? 1 : sinaccum[0][i-1]) * (i == n-1 ? 1 : coss[i]);
+    }
+
+
+    #ifdef EXPENSIVE_CHECKS
+    real lensq = 0;
+    for(int i = 0; i < n; i++) {
+        lensq += out[i] * out[i];
+    }
+    if(fabs(lensq - 1) >= 0.2) { 
+        printf("lensq: %f\n", lensq);
+        printf("  cos: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", coss[i]);
+        }
+        printf("]\n"); 
+        printf("  sin: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", sins[i]);
+        }
+        printf("]\n"); 
+        printf("  vec: ["); 
+        for(int i = 0; i < n; ++i) {
+            printf("%f ", out[i]);
+        }
+        printf("]\n"); 
+    }
+    assert(fabs(lensq - 1) < 0.2);
+    #endif
+}
+
+void debugPrintAngleRepr(int n, int derix, int vecix) {
+    printf("  d/d%d[", derix);
+
+    for(int i = 0; i < vecix; ++i){
+        printf("sin(%d)", i);
+    }
+    if (vecix != n - 1) {
+        printf("cos(%d)", vecix);
+    }
+    printf("]");
+}
+
+void angle2vec(int n, const real coss[n - 1], const real sins[n - 1], const
+        real sinaccum[n-1][n-1], real out[n]);
+
+
+real uniform01(long long unsigned int* next_random){
+    *next_random =
+        *next_random * (unsigned long long)25214903917 + 11;
+    return (*next_random & 0xFFFF) / ((real) 65536);
+}
+
+real uniformsign(long long unsigned int *next_random) {
+    return uniform01(next_random) >= 0.5 ? 1 : -1;
+}
+
+// gaussian distribution, mean 0, variance 1
+real standardNormal(long long unsigned int *next_random) {
+
+    // https://en.wikibooks.org/wiki/Statistics/Distributions/Uniform
+    // mean of standard normal = sum of means of iid = 0 * NSAMPLES = 0
+    // stddev of standard normal = sum of stddevs of iid = 0 * 12 = 0
+    real sum = 0;
+    const int NSAMPLES = 10;
+    // var = (1 - (-1))^2 / 12 = 2^2 / 12 = 4 / 12 = 1 / 3
+    // stddev = sqrt(1/3)
+    const real uniformStddev = sqrtf(1.0 / 3);
+
+    for(int i = 0; i < NSAMPLES; ++i) {
+        // uniform in [-1, 1]
+        sum += uniformsign(next_random) * uniform01(next_random);
+    }
+
+    // convert gaussian X into standard normal: (X - mu) / sigma
+    return (sum - 0.0) / 2 * (uniformStddev * NSAMPLES);
+}
+
+
+// https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+void sampleRandomPointSphereGauss(int n, real *angles, long long unsigned int *next_random) {
+    for(int i = 0; i < n; ++i) {
+        // https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+        float u1 = rand() * 1.0 / RAND_MAX;
+        float u2 = rand() * 1.0 / RAND_MAX;
+
+        static const double two_pi = 2.0*3.14159265358979323846;
+        angles[i] = sqrt(-2.0 * log(u1)) * cos(2 * two_pi * u2);
+    }
+
+}
+
+void sampleRandomPointSphere(int n, real *angles, long long unsigned int *next_random) {
+    real vec[n];
+    float lensq = 0;
+    for(int i = 0; i < n; ++i) {
+        vec[i] = standardNormal(next_random);
+        lensq += vec[i] * vec[i];
+    }
+
+    const float len = sqrt(lensq);
+    for(int i = 0; i < n; ++i) {
+        vec[i] /= len;
+    };
+    
+    // n = 5
+    // x0 = cos t0
+    // x1 = sin t0 cos t1
+    // x2 = sin t0 sin t1 cos t2
+    // x3 = sin t0 sin t1 sin t2 cos t3
+    // x4 = sin t0 sin t1 sin t2 sin t3
+    //
+    // x4/x3 = sin t3 / cos t3 = tan t3
+    angles[n-2] = atan2(vec[n-1], vec[n-2]);
+    // to compute t2, we need to take atan2(x3, x2 * cos(t3))
+    for(int i = n - 3; i >= 0; i--) {
+        angles[i] =  atan2(vec[i+1], vec[i] * cos(angles[i+1]));
+    }
+
+    #ifdef EXPENSIVE_CHECKS
+    real sins[n-1], coss[n-1], sinaccum[n-1][n-1];
+    real vecinv[n];
+    angleprecompute(n, angles, coss, sins, sinaccum);
+    angle2vec(n, coss, sins, sinaccum, vecinv);
+
+    float lensq_vecinv = 0;
+    for(int i = 0; i < n; ++i) {
+        lensq_vecinv += vecinv[i] * vecinv[i];
+    }
+
+    assert (fabs(lensq_vecinv - 1) < 1e-2);
+
+    //TODO: find out why we have sign differences.
+    for(int i = n - 1; i >= 0; --i) {
+        if (fabs(fabs(vecinv[i]) - fabs(vec[i])) > 1e-2) {
+            printf("mismatch(n=%d): expected[%d] = %f | found[%d] = %f\n",  n,
+                    i, vec[i], i, vecinv[i]);
+            assert(0 && "mismatch in expected and recovered vector");
+        }
+    }
+    #endif
+
+}
+
+
 
 void InitNet() {
     long long a, b;
@@ -406,6 +595,7 @@ void InitNet() {
             printf("Memory allocation failed\n");
             exit(1);
         }
+        /*
         for (a = 0; a < vocab_size; a++) {
             for (b = 0; b < layer1_size; b++) {
                 next_random = next_random * (unsigned long long)25214903917 + 11;
@@ -414,16 +604,29 @@ void InitNet() {
             }
             normalizeVec(syn1neg + a *layer1_size);
         }
+        */
 
-        // for (a = 0; a < vocab_size; a++)
-        //     for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
+        for (a = 0; a < vocab_size; a++) {
+            sampleRandomPointSphereGauss(layer1_size, syn1neg + a *layer1_size, &next_random);
+        normalizeVec(syn1neg + a *layer1_size);
+        }
+
     }
+
+    /*
     for (a = 0; a < vocab_size; a++) {
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
             syn0[a * layer1_size + b] =
                 (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
+        normalizeVec(syn0 + a *layer1_size);
+    }
+    */
+
+
+    for (a = 0; a < vocab_size; a++) {
+        sampleRandomPointSphereGauss(layer1_size, syn0 + a *layer1_size, &next_random);
         normalizeVec(syn0 + a *layer1_size);
     }
     CreateBinaryTree();
@@ -497,7 +700,7 @@ void *TrainModelThread(void *id) {
             if ((debug_mode > 1)) {
                 now = clock();
                 printf(
-                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  total_loss: %.2f",
+                    "%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  total_loss: %6.4f",
                     13, alpha,
                     word_count_actual / (real)(iter * train_words + 1) * 100,
                     word_count_actual / ((real)(now - start + 1) /
@@ -507,8 +710,8 @@ void *TrainModelThread(void *id) {
                 fflush(stdout);
             }
 
-            alpha = starting_alpha *
-                    (1 - word_count_actual / (real)(iter * train_words + 1));
+            // alpha = starting_alpha *
+            //         (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
             if (alpha < 1e-4)
@@ -660,7 +863,7 @@ void *TrainModelThread(void *id) {
                     // HIERARCHICAL SOFTMAX
                     if (hs)
                         for (d = 0; d < vocab[word].codelen; d++) {
-                            assert(false);
+                            assert(0);
 
                             l2 = vocab[word].point[d] * layer1_size;
 
@@ -739,15 +942,18 @@ void *TrainModelThread(void *id) {
                             total_loss += g * g;
                             for (c = 0; c < layer1_size; c++) {
                                 // neu1e[c] += g * syn1neg[c + l2] -
-                                //         g * syn1neg[c + l2] * dot;
-                                neu1e[c] += g * (dot * syn0[c + l1] - syn1neg[c + l2]);
+                                //         g * syn1neg[c + l2];
+                                // neu1e[c] += g * (dot * syn0[c + l1] - syn1neg[c + l2]);
+                                neu1e[c] +=  g * syn1neg[c + l2];
                             }
 
                             for (c = 0; c < layer1_size; c++) {
                                 // syn1neg[c + l2] += g * syn0[c + l1] -
                                 //         g * syn0[c + l1] * dot;
                                 //
-                                syn1neg[c + l2] += g (dot * syn1neg[c + l2] - syn0[c + l1]);
+                                syn1neg[c + l2] +=  g * syn0[c + l1];
+                                
+                                // syn1neg[c + l2] += g * (dot * syn1neg[c + l2] - syn0[c + l1]);
                             }
                             normalizeVec(syn1neg + l2);
                         }

@@ -9,6 +9,10 @@ import os
 import random
 import numba
 
+# TODO: note that currently, we always have [SENTENCELEN] keys, so our
+# embeddings will always be [SENTENCELEN]. This is weird. We want
+# this to be dynamic.
+# make every _f a FF network?
 
 tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -16,9 +20,9 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 SAVEFOLDER='models'
 SAVEPATH='text0-transformer.bin'
 INPUTPATH='text0'
-IN_SENTENCE_LEN = 10
-OUT_SENTENCE_LEN = 10
-LEARNING_RATE=1e-2
+IN_SENTENCE_LEN = 5
+OUT_SENTENCE_LEN = 5
+LEARNING_RATE=1e-4
 NEPOCHS=10
 
 with open(INPUTPATH, "r") as f:
@@ -48,6 +52,14 @@ assert VOCABSIZE is not None
 assert CORPUSLEN is not None
 assert CORPUSIXED is not None
 
+# the red boy was shot furiously
+
+# the red boy        | VOCAB--E1--->32 --attn ---*-->E2--->16--attn----*
+#                                                |                     |
+#                                                ff                    ff
+#                                                |                     |
+#                                                v                     v
+# was shot furiously | VOCAB--E1--->32 --attn-->[L2]-E2-->16----attn--->L
 
 
 @numba.jit(nopython=True, parallel=True)
@@ -62,9 +74,17 @@ def lerp(t, val0, val1):
                        tf.math.multiply(val1, t))
 
 def differentiable_min(x):
-    xfloor_NOT_DIFF = tf.round(x)
+    xfloor_NOT_DIFF = tf.floor(x)
     xfloor_diff = (x - (tf.stop_gradient(x) - xfloor_NOT_DIFF))
     return tf.cast(xfloor_diff, dtype=tf.int32)
+
+def cross_entropy(pred, true):
+    eps = 1e-4
+    clipped_pred = tf.clip_by_value(pred, eps, 1-eps)
+    return -tf.reduce_sum(true * tf.log(clipped_pred))
+
+def l2(pred, true):
+    return tf.reduce_sum(tf.math.squared_difference(pred, true))
 
 
 # BUILD THE NEXTWORK
@@ -76,7 +96,7 @@ PH_OUTPUT_SENTENCE = tf.placeholder(tf.int32, (OUT_SENTENCE_LEN), name="ph_outpu
 
 # embedding matrices per layer
 EMBEDMS = []
-EMBEDSIZES = [VOCABSIZE, 32, 16, VOCABSIZE]
+EMBEDSIZES = [VOCABSIZE, 32, 16]
 
 for i in range(len(EMBEDSIZES)-1):
   v = 1.0 / EMBEDSIZES[i] # initialization value
@@ -87,49 +107,115 @@ for i in range(len(EMBEDSIZES)-1):
 
 print("EMBEDMS: %s" % EMBEDMS)
 
-
-index_ixs = PH_INPUT_SENTENCE
+key = PH_INPUT_SENTENCE
+mix_fns = []; reduce_fns = []
+input_embeds = []
 for i in range(0, len(EMBEDSIZES)-2):
     # embed_ixs: SLEN x 1
     # embed: SLEN x EMBEDSIZES[i+1]
-    embed = tf.gather(EMBEDMS[i], index_ixs, 
+    embed = tf.gather(EMBEDMS[i], key, 
                          name="embed-%s" % i)
     # QKV^T : EMBEDSIZES[i+1] x EMBEDSIZES[i+1]
     mixer = tf.Variable(tf.random.normal([EMBEDSIZES[i+1], EMBEDSIZES[i+1]],
                                          name="mix-%s" % i))
+    mixer = 0.5 * (mixer + tf.transpose(mixer))
+    mix_fns.append(mixer)
 
     # get indexes into next layer
     # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x EMBEDSIZES[i+1]) = (SLEN x EMBEDSIZES[i+1])
     # ensure that entires of out are in the range [0..EMBEDSIZES[i+1]-1]
     print("embed: %s | mixer: %s" % (embed, mixer))
     embed = tf.nn.relu(tf.matmul(embed, mixer))
+    input_embeds.append(embed)
 
     # now reduce to get SLENx1
     # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x 1) = SLEN x 1
     reducer = tf.Variable(tf.random.normal([EMBEDSIZES[i+1], 1], 
                                            name="red-%s" % i))
-
+    reduce_fns.append(reducer)
     # embed = SLEN x 1
-    embed = tf.math.sigmoid(tf.matmul(embed, reducer))
-    print("===embed: %s=====" % embed)
+    embed = lerp(tf.math.sigmoid(tf.matmul(embed, reducer)), 
+                 0, EMBEDSIZES[i+2])
     # reshape (SLENx1) to (SLEN)
     embed = tf.reshape(embed, [IN_SENTENCE_LEN])
-    index_ixs = differentiable_min(lerp(embed, 0, EMBEDSIZES[i+2]))
-    print("index_ixs: %s" % index_ixs)
+    print("===embed: %s=====" % embed)
+    key = tf.cast(tf.stop_gradient(tf.floor(embed)), dtype=tf.int32) # differentiable_min(lerp(embed, 0, EMBEDSIZES[i+2]))
 
-# final output empedding is the final embed
-embed_out = index_ixs
-# we now have embed_ixs as the final embedding. We need to extract an
-output_predicted = tf.cast(embed_out, dtype=tf.float32)
+output_embeds = []
+output_keys = []
+for i in range(0, len(EMBEDSIZES)-2):
+    # embed_ixs: SLEN x 1
+    # embed: SLEN x EMBEDSIZES[i+1]
+    embed = tf.gather(EMBEDMS[i], key, 
+                         name="embed-%s" % i)
+    # get indexes into next layer
+    # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x EMBEDSIZES[i+1]) = (SLEN x EMBEDSIZES[i+1])
+    # ensure that entires of out are in the range [0..EMBEDSIZES[i+1]-1]
+    embed = tf.nn.relu(tf.matmul(embed, mix_fns[i]))
+    output_embeds.append(embed)
 
-loss = \
-    tf.math.squared_difference(output_predicted, 
-                               tf.cast(PH_OUTPUT_SENTENCE, dtype=tf.float32))
-loss = tf.math.reduce_sum(loss)
+    # now reduce to get SLENx1
+    # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x 1) = SLEN x 1
+    # embed = SLEN x 1
+    embed = lerp(tf.math.sigmoid(tf.matmul(embed, reduce_fns[i])), 
+                 0, EMBEDSIZES[i+2])
+
+    # reshape (SLENx1) to (SLEN)
+    embed = tf.reshape(embed, [IN_SENTENCE_LEN])
+    # TODO: do I need the stop_gradient?
+    key = tf.cast(tf.stop_gradient(tf.floor(embed)),dtype=tf.int32) # differentiable_min(lerp(embed, 0, EMBEDSIZES[i+2]))
+    output_keys.append(key)
+    
+
+# go from input embedding at level i -> output embedding at level i
+in2out_embed_fns = []
+
+loss = tf.constant(0.)
+for i in range(len(input_embeds)):
+    in2out_embed_fn = \
+            tf.Variable(tf.random.normal([EMBEDSIZES[i+1], EMBEDSIZES[i+1]],
+                                         dtype=tf.float32,
+                                         name="in2out_embed_fn-%s" % i))
+    # make this [1 x EMBEDSIZES[i+1]] so I can multiply it
+    print("***171: %s | %s" % (input_embeds[i], in2out_embed_fn))
+    out_predict = tf.matmul(input_embeds[i], in2out_embed_fn)
+    print("***172")
+    curloss = l2(out_predict, output_embeds[i])
+    # TODO: squared difference is retarded as fuck, use cross entropy + epislon
+    loss = tf.add(loss, curloss)
+
+# loss = \
+#     tf.math.squared_difference(output_predicted, 
+#                                tf.cast(PH_OUTPUT_SENTENCE, dtype=tf.float32))
 OPTIMIZER = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(loss)
+
+# decoder that uncompresses the latent space to create a key that
+# matches where I came from.
+in2out_keys = []
+for i in range(len(EMBEDSIZES)-2):
+    # input_embeds[i]: SLEN x EMBEDSIZES[i+1]
+    # key: SLEN x 1
+    # probably need a g to hadamard product with first, otherwise
+    # no mixing is going to happen :/
+    # alternatively, attn works.
+    # f : (EMBEDSIZES[i+1] x 1)
+    in2out_key_fn = \
+            tf.Variable(tf.random.normal([EMBEDSIZES[i+1], 1],
+                                          name="in2out-key-f-%s"%i))
+    # TODO: non-linearity
+    # (SLEN x EMBEDSIZES[i+1]) @ (EMBEDSIZES[i+1] x 1) = SLEN x 1
+    out_key_predict = tf.matmul(input_embeds[i], in2out_key_fn)
+    out_key_predict = tf.sigmoid(out_key_predict)
+    # lerp it to fit in the other key space
+    out_key_predict = lerp(out_key_predict, 0, EMBEDSIZES[i])
+    curloss = cross_entropy(out_key_predict, 
+                            tf.cast(output_keys[i], dtype=tf.float32))
+    loss = tf.add(loss, curloss)
+
 
 # tf.keras.utils.plot_model(model, show_shapes=True)
 
+# need beam decoding here. 
 def try_sample_sentence(sess):
     i = 0
     in_end = i + IN_SENTENCE_LEN
@@ -138,13 +224,13 @@ def try_sample_sentence(sess):
         PH_INPUT_SENTENCE: CORPUSIXED[i:in_end],
         PH_OUTPUT_SENTENCE: CORPUSIXED[out_start:out_end]
     }
-    lossval, out = sess.run([loss, embed_out], feed_dict=feed)
+    lossval, input_embeds_val = sess.run([loss] + input_embeds, feed_dict=feed)
 
-    print("out: %50s" % out)
+    # print("out: %50s" % out)
     truth = " ".join(CORPUS[i:in_end]) + "|" + " ".join(CORPUS[out_start:out_end])
-    print("ground truth: %50s" % truth)
-    predict = " ".join([IX2VOCAB[out[i]] for i in range(OUT_SENTENCE_LEN)])
-    print("prediction: %50s" % predict)
+    print("ground truth: %50s | loss: %s" % (truth, float(lossval)))
+    # predict = " ".join([IX2VOCAB[out[i]] for i in range(OUT_SENTENCE_LEN)])
+    # print("prediction: %50s" % predict)
 
 
 def epoch(curepoch, sess):

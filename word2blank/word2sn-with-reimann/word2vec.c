@@ -511,8 +511,8 @@ void *TrainModelThread(void *id) {
                     (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
-            if (alpha < 1e-3)
-                alpha = 1e-3;
+            if (alpha < 1e-4)
+                alpha = 1e-4;
         }
         if (sentence_length == 0) {
             while (1) {
@@ -660,24 +660,17 @@ void *TrainModelThread(void *id) {
                     // HIERARCHICAL SOFTMAX
                     if (hs)
                         for (d = 0; d < vocab[word].codelen; d++) {
+                            assert(false);
 
                             l2 = vocab[word].point[d] * layer1_size;
 
 
                             float dot = 0;
-                            for (c = 0; c < layer1_size; c++)
+                            for (c = 0; c < layer1_size; c++) {
                                 dot += syn0[c + l1] * syn1neg[c + l2];
-
-                            if (dot <= -MAX_EXP)
-                                continue;
-                            else if (dot >= MAX_EXP)
-                                continue;
-                            else {
-                                // f = expTable[(
-                                //     int)((dot + MAX_EXP) *
-                                //          (EXP_TABLE_SIZE / MAX_EXP / 2))];
-                                f = dot;
                             }
+                            f = dot;
+
                             // 'g' is the gradient multiplied by the learning
                             // rate
                             g = (1 - vocab[word].code[d] - f) * alpha;
@@ -741,38 +734,27 @@ void *TrainModelThread(void *id) {
                             for (c = 0; c < layer1_size; c++)
                                 dot += syn0[c + l1] * syn1neg[c + l2];
 
-                            if (dot > MAX_EXP)
-                                g = (lbl - 1) * alpha;
-                            else if (dot < -MAX_EXP)
-                                g = (lbl - 0) * alpha;
-                            else {
-                                // g = (lbl - sigmoid(dot)) * alpha;
-                                // g = (lbl - expTable[(int)((dot + MAX_EXP) *
-                                //             (EXP_TABLE_SIZE /
-                                //              MAX_EXP / 2))]) *
-                                //     alpha;
-                                // no sigmoid necessary!
-                                g = (lbl - dot)  * alpha;
-                            }
+                            g = alpha * (lbl - dot);
 
                             total_loss += g * g;
-                            for (c = 0; c < layer1_size; c++)
-                                neu1e[c] = g * syn1neg[c + l2] -
-                                        g * syn1neg[c + l2] * dot;
+                            for (c = 0; c < layer1_size; c++) {
+                                // neu1e[c] += g * syn1neg[c + l2] -
+                                //         g * syn1neg[c + l2] * dot;
+                                neu1e[c] += g * (dot * syn0[c + l1] - syn1neg[c + l2]);
+                            }
 
-                            for (c = 0; c < layer1_size; c++)
-                                syn1neg[c + l2] += g * syn0[c + l1] -
-                                        g * syn0[c + l1] * dot;
+                            for (c = 0; c < layer1_size; c++) {
+                                // syn1neg[c + l2] += g * syn0[c + l1] -
+                                //         g * syn0[c + l1] * dot;
+                                //
+                                syn1neg[c + l2] += g (dot * syn1neg[c + l2] - syn0[c + l1]);
+                            }
                             normalizeVec(syn1neg + l2);
-
-                            for (c = 0; c < layer1_size; c++)
-                                syn0[c + l1] += neu1e[c];
-                            normalizeVec(syn0 + l1);
                         }
                     }
                     // Learn weights input -> hidden
-                    // for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
-                    // normalizeVec(syn0 + l1);
+                    for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+                    normalizeVec(syn0 + l1);
                 }
         }
         sentence_position++;

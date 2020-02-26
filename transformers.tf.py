@@ -3,7 +3,7 @@ import tensorflow.logging
 import tensorflow.random
 import numpy as np
 import numpy.linalg
-from tensorflow import keras
+# from tensorflow import keras
 from collections import OrderedDict
 import os
 import random
@@ -16,230 +16,174 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 SAVEFOLDER='models'
 SAVEPATH='text0-transformer.bin'
 INPUTPATH='text0'
-SENTENCELEN = 30
-LEARNING_RATE=0.1
+IN_SENTENCE_LEN = 10
+OUT_SENTENCE_LEN = 10
+LEARNING_RATE=1e-2
 NEPOCHS=10
-BATCHSIZE=100000
 
 with open(INPUTPATH, "r") as f:
-  corpus = f.read()
-  corpus = [w for w in corpus.split() if w]
-  CORPUSLEN = len(corpus)
+  CORPUS = f.read()
+  CORPUS = [w for w in CORPUS.split() if w]
+  CORPUSLEN = len(CORPUS)
   # print("corpus:\n|%s|" % corpus)
   # stable sort
-  vocab = list(OrderedDict.fromkeys(corpus))
+  vocab = list(OrderedDict.fromkeys(CORPUS))
   print("vocab:\n|%s|" % vocab[:5])
   
   # map words to their index in the embedding array
   VOCAB2IX = {w: i for (i, w) in enumerate(vocab)}
+  IX2VOCAB = dict(enumerate(vocab))
   # print("VOCAB2IX:\n%s" % VOCAB2IX)
   VOCABSIZE = len(vocab)
 
 
-  corpusixed = np.empty(CORPUSLEN, dtype=np.int32)
+  CORPUSIXED = np.empty(CORPUSLEN, dtype=np.int32)
   for i in range(CORPUSLEN):
-      corpusixed[i] = VOCAB2IX[corpus[i]]
+      CORPUSIXED[i] = VOCAB2IX[CORPUS[i]]
 
+assert CORPUS is not None
+assert VOCAB2IX is not None
+assert IX2VOCAB is not None
 assert VOCABSIZE is not None
 assert CORPUSLEN is not None
-
-EMBEDSIZES = [VOCABSIZE, 32, 16]
-
+assert CORPUSIXED is not None
 
 
-# numba python -> LLVM
+
 @numba.jit(nopython=True, parallel=True)
-def mkdata():
-  fixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
-  cixs = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
-  labels = np.empty(CORPUSLEN * (2*WINDOWSIZE + NEGSAMPLES + 1), dtype=np.int32)
+def mkdata(): pass
 
-  n = 0
-  r = np.uint32(1)
-  for ixf in np.arange(CORPUSLEN):
-    l = max(0, ixf - WINDOWSIZE)
-    r = min(CORPUSLEN - 1, ixf + WINDOWSIZE)
-    
-    # the fox [vc=|jumps| *vf=over* the] dog (vc.vf=1)
-    for ixc in np.arange(l, r):
-      # variable[placeholder]
-      fixs[n] = corpusixed[ixf]
-      cixs[n] = corpusixed[ixc]
-      labels[n] = 1
-      n += 1
-  
-    # vc=|the| fox [jumps *vf=over* the] dog (vc.vf = 0)
-    for _ in np.arange(NEGSAMPLES):
-      r = r * 25214903917 + 11
-      ixrand = r % (CORPUSLEN - 1)
-      # if l <= ixrand <= r: continue # reject words inside window
-      fixs[n] = corpusixed[ixf]
-      cixs[n] = corpusixed[ixrand]
-      labels[n] = 0
-      n += 1
-  
-    print((100.0 * n / (CORPUSLEN * (2 * WINDOWSIZE + NEGSAMPLES))))
+# return linear interpolation of [val0 --- val1] as specified by t
+def lerp(t, val0, val1):
+    val0 = tf.cast(val0, dtype=tf.float32);
+    val1 = tf.cast(val1, dtype=tf.float32)
+    one_minus_t = tf.math.subtract(1.0, t)
+    return tf.math.add(tf.math.multiply(val0, one_minus_t), 
+                       tf.math.multiply(val1, t))
 
-  return fixs, cixs, labels, n
+def differentiable_min(x):
+    xfloor_NOT_DIFF = tf.round(x)
+    xfloor_diff = (x - (tf.stop_gradient(x) - xfloor_NOT_DIFF))
+    return tf.cast(xfloor_diff, dtype=tf.int32)
 
 
-
-# learning rate
+# BUILD THE NEXTWORK
+# ===================================
 
 # input sentence, one-hot encoding of sentence
-ph_sentence = tf.placeholder(tf.float32, (SENTENCELEN, VOCABSIZE), name="ph_sentence")
+PH_INPUT_SENTENCE = tf.placeholder(tf.int32, (IN_SENTENCE_LEN), name="ph_input_sentence")
+PH_OUTPUT_SENTENCE = tf.placeholder(tf.int32, (OUT_SENTENCE_LEN), name="ph_output_sentence")
 
 # embedding matrices per layer
-embedM = []
-for l in range(len(EMBEDSIZES-1)):
-  v = 1.0 / EMBEDSIZES[i]
+EMBEDMS = []
+EMBEDSIZES = [VOCABSIZE, 32, 16, VOCABSIZE]
+
+for i in range(len(EMBEDSIZES)-1):
+  v = 1.0 / EMBEDSIZES[i] # initialization value
   init = tf.random.uniform([EMBEDSIZES[i], EMBEDSIZES[i+1]], 
                            minval=-v,
                            maxval=v)
-  embedM.append(tf.Variable(init, name="emedding-%s" % (i, )))
+  EMBEDMS.append(tf.Variable(init, dtype=tf.float32, name="embedm-%s" % (i, )))
+
+print("EMBEDMS: %s" % EMBEDMS)
 
 
-# atttention computation
-# computes weight of each embedding for input
-attnMs = []
+index_ixs = PH_INPUT_SENTENCE
+for i in range(0, len(EMBEDSIZES)-2):
+    # embed_ixs: SLEN x 1
+    # embed: SLEN x EMBEDSIZES[i+1]
+    embed = tf.gather(EMBEDMS[i], index_ixs, 
+                         name="embed-%s" % i)
+    # QKV^T : EMBEDSIZES[i+1] x EMBEDSIZES[i+1]
+    mixer = tf.Variable(tf.random.normal([EMBEDSIZES[i+1], EMBEDSIZES[i+1]],
+                                         name="mix-%s" % i))
 
-# embedded vectors per layer:
-# ph_sentence: SENTENCELEN x VOCABSIZE
-# embedM[0]: VOCABSIZE x EMBEDSIZE[1]
-# product: SENTENCELEN x EMBEDSIZE[1]
-embeds = [tf.matmul(ph_sentence, embedM[0])]
+    # get indexes into next layer
+    # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x EMBEDSIZES[i+1]) = (SLEN x EMBEDSIZES[i+1])
+    # ensure that entires of out are in the range [0..EMBEDSIZES[i+1]-1]
+    print("embed: %s | mixer: %s" % (embed, mixer))
+    embed = tf.nn.relu(tf.matmul(embed, mixer))
 
-for l in range(len(EMBEDSIZES-1)):
+    # now reduce to get SLENx1
+    # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x 1) = SLEN x 1
+    reducer = tf.Variable(tf.random.normal([EMBEDSIZES[i+1], 1], 
+                                           name="red-%s" % i))
 
-def mk_attended_layer(attnM, sentence, slen, dim):
-  # sentence: slen x dim
-  # attenM: slen x slen x slen
+    # embed = SLEN x 1
+    embed = tf.math.sigmoid(tf.matmul(embed, reducer))
+    print("===embed: %s=====" % embed)
+    # reshape (SLENx1) to (SLEN)
+    embed = tf.reshape(embed, [IN_SENTENCE_LEN])
+    index_ixs = differentiable_min(lerp(embed, 0, EMBEDSIZES[i+2]))
+    print("index_ixs: %s" % index_ixs)
 
-  # embeds: [w][i]: SENTENCELEN x EMBEDSIZE[l+1]
-  # gaussians: [i][j]: e^-|i - j|: exponentially decaying distance from i to j
-  #      EMBEDSIZE[l+1] x EMBEDSIZE[l+1]
-  # distributedS: [w][k] # for each word, what is my distributional semantics?
-  #                        it's a weighted sum of all the words around me.
-  #        SENTENCELEN x EMBEDSIZE[l+1]
-  # attentionS: based on the current distributedS, force each word to pick
-  # over all other words
-  distributedS = embeds[l]# tf.matmul(embeds[l], ph_gaussians)
+# final output empedding is the final embed
+embed_out = index_ixs
+# we now have embed_ixs as the final embedding. We need to extract an
+output_predicted = tf.cast(embed_out, dtype=tf.float32)
 
-  attnMs.append(tf.Variable(tf.random.normal([EMBEDSIZE[l+1], EMBEDSIZE[l+1],
-                                             EMBEDSIZE[l+1]]), name="attnMs-" + str(l))
+loss = \
+    tf.math.squared_difference(output_predicted, 
+                               tf.cast(PH_OUTPUT_SENTENCE, dtype=tf.float32))
+loss = tf.math.reduce_sum(loss)
+OPTIMIZER = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(loss)
 
-  # (SENTENCELENxEMBEDSIZE) x (DISTRLENxEMBEDSIZE) -> (SENTENCELENxEMBEDSIZE)
-  # d[w][i] x d[w][j] -> d[w][k]
-  # d[w][k] := attn[k][i][j] d[w][i] d[w][j]
-  attnS = tf.einsum("wk,kij,wi->wj", distributedS, attnMs[l], distributedS)
+# tf.keras.utils.plot_model(model, show_shapes=True)
 
-
-
-ph_lr = tf.placeholder(tf.float32, name="ph_lr")
-optimizer = tf.train.AdamOptimizer(learning_rate=ph_lr).minimize(var_loss)
-
-# Step 1: _build the program_ you want to run
-# Step 2: ask TF To kindly compile this program
-# Step 3: push data through this program
-
-
-def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
+def try_sample_sentence(sess):
     i = 0
-    while (i + 2) * BATCHSIZE < n:
+    in_end = i + IN_SENTENCE_LEN
+    out_start = in_end + 1; out_end = out_start + OUT_SENTENCE_LEN
+    feed = {
+        PH_INPUT_SENTENCE: CORPUSIXED[i:in_end],
+        PH_OUTPUT_SENTENCE: CORPUSIXED[out_start:out_end]
+    }
+    lossval, out = sess.run([loss, embed_out], feed_dict=feed)
+
+    print("out: %50s" % out)
+    truth = " ".join(CORPUS[i:in_end]) + "|" + " ".join(CORPUS[out_start:out_end])
+    print("ground truth: %50s" % truth)
+    predict = " ".join([IX2VOCAB[out[i]] for i in range(OUT_SENTENCE_LEN)])
+    print("prediction: %50s" % predict)
+
+
+def epoch(curepoch, sess):
+    i = 0
+    N = len(CORPUSIXED) - max(IN_SENTENCE_LEN, OUT_SENTENCE_LEN)
+    while i < N:
+      in_end = i + IN_SENTENCE_LEN
+      out_start = in_end + 1; out_end = out_start + OUT_SENTENCE_LEN
+
+      feed = {
+          PH_INPUT_SENTENCE: CORPUSIXED[i:in_end],
+          PH_OUTPUT_SENTENCE: CORPUSIXED[out_start:out_end]
+      }
+
+      lossval, _ = sess.run([loss, OPTIMIZER], feed_dict=feed)
+
+      try_sample_sentence(sess)
+
+
       i += 1
-      loss, _ = sess.run([var_loss, optimizer], 
-                         feed_dict={ph_fixs:data_fixs[i*BATCHSIZE:(i+1)*BATCHSIZE], 
-                                    ph_cixs: data_cixs[i*BATCHSIZE:(i+1)*BATCHSIZE],
-                                    ph_labels: data_labels[i*BATCHSIZE:(i+1)*BATCHSIZE],
-                                    ph_lr: data_lr})
-
-      print("epoch: %10s | loss: %20.5f | lr: %20.8f | %10.2f %%" % (curepoch, 
-                          loss,
-                          data_lr,
-                          (100 * (curepoch + (i * BATCHSIZE/ n)) / NEPOCHS)))
-      # data_lr = data_lr * (1.0 - 1e-6)
-      # data_lr = max(1e-7, max(LEARNING_RATE * 1e-5, data_lr))
-
-
+      print("epoch: %10s | i: %4s/%4s | loss: %20.5f" % \
+            (curepoch, i, N, lossval))
 
 def train():
   saver = tf.train.Saver()
   with tf.Session() as sess:
     global_init = tf.global_variables_initializer()
     sess.run(global_init)
-    data_fixs = []
-    data_cixs = []
-    data_labels = []
-    data_lr = LEARNING_RATE
-
     print("making data...")
-    fixs, cixs, labels, n = mkdata()
-    print("done. n: %10s" % (n, ))
-
-    # print("\n***LLVM of mkdata:***")
-    # for v, k in mkdata.inspect_llvm().items():
-    #     print(v, k)
-    # print("***end LLVM of mkdata:***\n")
-    # raise RuntimeError("inspection")
-
+    print("done.")
     for i in range(NEPOCHS):
-      print("===epoch: %s===" % i)
-      epoch(i, sess, n, fixs, cixs, labels, data_lr) 
-  
-    data_syn0 = sess.run([var_syn0])
-    data_syn1neg = sess.run([var_syn1neg])
+        print("===epoch: %s===" % i)
+        epoch(i, sess)
   
     if not os.path.exists(SAVEFOLDER):
       os.makedirs(SAVEFOLDER)
   
     saver.save(sess, SAVEPATH)
 
-    # TASK 1. Pull out the data from the session, and _print it_. Maybe try and
-    # implement distance()
-    
-    # print distance of fox from all other words, ordered by ascending order (Dot
-    # product / cosine distance)
-    # distance('fox', data_syn0)
-  
-    # quick - fox + dog == ? print best candidates for this
-    # Fox :  quick :: fox : ? == (quick - fox) + fox = quick
-    # analogy('fox', 'quick', 'dog', data_syn0)
-    
-    # TASK 2. copy and understand (plz plz plz) the data saving/loading code, and
-    # save the learnt word vectors.
-  
-    # TASK 3. make this batced: use multiple indeces and
-    # multipl labels _in batch mode_. I presume this is requires one to
-    # change the code to "store" the (fix, cix, and labels) and then
-    # pass them as arrays to sess.run(...)
 
-def distance():
-  saver = tf.train.Saver()
-  IX2VOCAB = {VOCAB2IX[w]:w for w in VOCAB2IX}
-  with tf.Session() as sess:
-    saver.restore(sess, SAVEPATH)
-    [syn0] = sess.run([var_syn0])
-    print("syn0 shape: %s" % (syn0.shape, ))
-    print(type(syn0))
+train()
 
-    for i in range(VOCABSIZE):
-        syn0[i, :] = syn0[i, :] / np.linalg.norm(syn0[i, :])
-
-    while True:
-        w = input(">")
-        if w == "exit": break
-        if w not in VOCAB2IX: continue
-        wix = VOCAB2IX[w]
-        wv = syn0[wix, :]
-        dots = np.dot(syn0, wv)
-        print ("syn0:\n%s\nwv:\n%s\ndots:\n%s" % (syn0, wv, dots))
-        print("wv len: %s" % (np.dot(wv, wv), ))
-        ixs = np.argsort(dots)
-        ixs = np.flip(ixs)
-        for ix in ixs[:30]:
-            print("%20s %10.5f" % (IX2VOCAB[ix], dots[ix]))
-
-if __name__ == "__main__":
-    test_positional_encoding()
-    train()
-    distance()

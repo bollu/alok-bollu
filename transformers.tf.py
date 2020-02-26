@@ -8,6 +8,7 @@ from collections import OrderedDict
 import os
 import random
 import numba
+import math
 
 # TODO: note that currently, we always have [SENTENCELEN] keys, so our
 # embeddings will always be [SENTENCELEN]. This is weird. We want
@@ -96,7 +97,7 @@ PH_OUTPUT_SENTENCE = tf.placeholder(tf.int32, (OUT_SENTENCE_LEN), name="ph_outpu
 
 # embedding matrices per layer
 EMBEDMS = []
-EMBEDSIZES = [VOCABSIZE, 32, 16]
+EMBEDSIZES = [VOCABSIZE, VOCABSIZE//2, 512]
 
 for i in range(len(EMBEDSIZES)-1):
   v = 1.0 / EMBEDSIZES[i] # initialization value
@@ -135,7 +136,7 @@ for i in range(0, len(EMBEDSIZES)-2):
     reduce_fns.append(reducer)
     # embed = SLEN x 1
     embed = lerp(tf.math.sigmoid(tf.matmul(embed, reducer)), 
-                 0, EMBEDSIZES[i+2])
+                 0, EMBEDSIZES[i+2]-1)
     # reshape (SLENx1) to (SLEN)
     embed = tf.reshape(embed, [IN_SENTENCE_LEN])
     print("===embed: %s=====" % embed)
@@ -158,7 +159,7 @@ for i in range(0, len(EMBEDSIZES)-2):
     # (SLEN X EMBEDSIZES[i+1]) x (EMBEDSIZES[i+1] x 1) = SLEN x 1
     # embed = SLEN x 1
     embed = lerp(tf.math.sigmoid(tf.matmul(embed, reduce_fns[i])), 
-                 0, EMBEDSIZES[i+2])
+                 0, EMBEDSIZES[i+2]-1)
 
     # reshape (SLENx1) to (SLEN)
     embed = tf.reshape(embed, [IN_SENTENCE_LEN])
@@ -168,30 +169,30 @@ for i in range(0, len(EMBEDSIZES)-2):
     
 
 # go from input embedding at level i -> output embedding at level i
-in2out_embed_fns = []
+predicted_out_states = []
 
 loss = tf.constant(0.)
-for i in range(len(input_embeds)):
+for i in range(len(EMBEDSIZES)-2):
     in2out_embed_fn = \
             tf.Variable(tf.random.normal([EMBEDSIZES[i+1], EMBEDSIZES[i+1]],
                                          dtype=tf.float32,
                                          name="in2out_embed_fn-%s" % i))
     # make this [1 x EMBEDSIZES[i+1]] so I can multiply it
-    print("***171: %s | %s" % (input_embeds[i], in2out_embed_fn))
-    out_predict = tf.matmul(input_embeds[i], in2out_embed_fn)
-    print("***172")
+    out_predict = tf.matmul(input_embeds[i], in2out_embed_fn, name="out-predict-%s"%i)
+    predicted_out_states.append(out_predict)
     curloss = l2(out_predict, output_embeds[i])
     # TODO: squared difference is retarded as fuck, use cross entropy + epislon
     loss = tf.add(loss, curloss)
 
-# loss = \
-#     tf.math.squared_difference(output_predicted, 
-#                                tf.cast(PH_OUTPUT_SENTENCE, dtype=tf.float32))
-OPTIMIZER = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(loss)
 
 # decoder that uncompresses the latent space to create a key that
 # matches where I came from.
 in2out_keys = []
+
+# predicted output keys for the SAME EMBED SIZE.
+# ie, predict the key generated for output at layer "i" from input
+# at layer "i"
+predicted_out_keys = []
 for i in range(len(EMBEDSIZES)-2):
     # input_embeds[i]: SLEN x EMBEDSIZES[i+1]
     # key: SLEN x 1
@@ -204,16 +205,19 @@ for i in range(len(EMBEDSIZES)-2):
                                           name="in2out-key-f-%s"%i))
     # TODO: non-linearity
     # (SLEN x EMBEDSIZES[i+1]) @ (EMBEDSIZES[i+1] x 1) = SLEN x 1
-    out_key_predict = tf.matmul(input_embeds[i], in2out_key_fn)
+    # out_key_predict = tf.matmul(input_embeds[i], in2out_key_fn)
+    out_key_predict = tf.matmul(predicted_out_states[i], in2out_key_fn)
+
     out_key_predict = tf.sigmoid(out_key_predict)
     # lerp it to fit in the other key space
-    out_key_predict = lerp(out_key_predict, 0, EMBEDSIZES[i])
+    out_key_predict = lerp(out_key_predict, 0, EMBEDSIZES[i]-1)
+    predicted_out_keys.append(out_key_predict)
     curloss = cross_entropy(out_key_predict, 
                             tf.cast(output_keys[i], dtype=tf.float32))
     loss = tf.add(loss, curloss)
 
 
-# tf.keras.utils.plot_model(model, show_shapes=True)
+OPTIMIZER = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(loss)
 
 # need beam decoding here. 
 def try_sample_sentence(sess):
@@ -224,13 +228,17 @@ def try_sample_sentence(sess):
         PH_INPUT_SENTENCE: CORPUSIXED[i:in_end],
         PH_OUTPUT_SENTENCE: CORPUSIXED[out_start:out_end]
     }
-    lossval, input_embeds_val = sess.run([loss] + input_embeds, feed_dict=feed)
+    lossval, out_key = sess.run([loss] + [predicted_out_keys[0]], feed_dict=feed)
 
-    # print("out: %50s" % out)
-    truth = " ".join(CORPUS[i:in_end]) + "|" + " ".join(CORPUS[out_start:out_end])
-    print("ground truth: %50s | loss: %s" % (truth, float(lossval)))
-    # predict = " ".join([IX2VOCAB[out[i]] for i in range(OUT_SENTENCE_LEN)])
-    # print("prediction: %50s" % predict)
+    out_text = [IX2VOCAB[math.floor(out_key[i])]  \
+                for i in range(OUT_SENTENCE_LEN)]
+
+    truth = " ".join(CORPUS[i:in_end]) + "|" + \
+            " ".join(CORPUS[out_start:out_end])
+    print("ground truth: %50s ;" % truth, end='')
+    print("out: %40s ;" % out_text)
+    print("out: %40s ;" % out_key)
+    print("loss: %s" % float(lossval))
 
 
 def epoch(curepoch, sess):
@@ -250,7 +258,8 @@ def epoch(curepoch, sess):
       try_sample_sentence(sess)
 
 
-      i += 1
+      print("HACK: not incrementing!")
+      #i += 1
       print("epoch: %10s | i: %4s/%4s | loss: %20.5f" % \
             (curepoch, i, N, lossval))
 

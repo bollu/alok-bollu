@@ -20,6 +20,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#define min(x, y) ((x < y) ? (x) : (y))
+#define max(x, y) ((x > y) ? (x) : (y))
+
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
@@ -53,6 +56,21 @@ clock_t start;
 int hs = 0, negative = 5;
 const int table_size = 1e8;
 int *table;
+
+
+float sigmoid(float x) {
+  return max(0, min(1, x));
+}
+
+float logit(float x) {
+    assert(x >= 0 && x <= 1);
+    return x;
+}
+
+float sigmoid_grad(float x) {
+    if (x > 1 || x < 0) return 0;
+    return 1;
+}
 
 float fastlog2(float x)  // compute log2(x) by reducing x to [0.75, 1.5)
 {
@@ -105,7 +123,45 @@ float entropylog(float x) {
     return log(x);
 }
 
-// this is fuzzy KL divergence
+
+
+float clamp01(float x) {
+    const float EPS = 1e-4;
+    if (x >= 1.0 - EPS) { return 1.0 - EPS; }
+    else if (x < EPS) { return EPS; }
+    else { return x; }
+}
+
+float max_fuzzy_entropy(int dim_size) {
+    // return -dim_size * 2 * 0.5 * entropylog(0.5);
+    return -dim_size * entropylog(0.5);
+}
+
+// >>> h
+// -x*log(x) - (1 - x)*log(1 - x)
+// >>> sympy.simplify(h.diff(x))
+// -log(x) + log(1 - x)
+float fuzzy_entropy(float *v) {
+    float H = 0;
+    for(int i = 0; i < layer1_size; ++i) {
+        const float vi = sigmoid(v[i]);
+        assert(vi == vi); 
+        H += -vi * entropylog(vi) - (1 - vi) * entropylog(1 - vi);
+    }
+    assert(H >= 0);
+    return H;
+}
+
+void fuzzy_entropy_grad(float g, float *v, float *dv) {
+    for(int i = 0; i < layer1_size; ++i) {
+        const float vi = sigmoid(v[i]);
+        assert(vi == vi); 
+        dv[i] += g * sigmoid_grad(vi) * (-entropylog(vi) + entropylog(1 - vi));
+    }
+}
+
+/*
+// this is regular KL div
 // int p(x) log (p(x)/q(x)) dx
 float kl(float *a, float *b) {
     float out = 0;
@@ -130,30 +186,13 @@ float kl(float *a, float *b) {
     return out;
 }
 
-double klfuzzy(float *v, float *w) {
-    double H = 0;
-    for(int i = 0; i < layer1_size; ++i)  {
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1 - w[i]));
-    }
-    return H;
-}
-
-float clamp01(float x) {
-    const float EPS = 1e-4;
-    if (x >= 1.0 - EPS) { return 1.0 - EPS; }
-    else if (x < EPS) { return EPS; }
-    else { return x; }
-}
-
-/*
->>> x * (sympy.log(x) - sympy.log(y))
-x*(log(x) - log(y))
->>> kl = x * (sympy.log(x) - sympy.log(y))
->>> kl.diff(x)
-log(x) - log(y) + 1
->>> kl.diff(y)
--x/y
-*/
+//>>> x * (sympy.log(x) - sympy.log(y))
+//x*(log(x) - log(y))
+//>>> kl = x * (sympy.log(x) - sympy.log(y))
+//>>> kl.diff(x)
+//log(x) - log(y) + 1
+//>>> kl.diff(y)
+//-x/y
 void klgrad_left(float g, float *a, float *b, float *da) {
     for(int i = 0; i < layer1_size; ++i) {
         float d = (entropylog(a[i]) - entropylog(b[i])) + 1.0;
@@ -169,10 +208,94 @@ void klgrad_right(float g, float *a, float *b, float *db) {
 }
 
 void normalize(float *a) {
+    assert(0 && "normalization is wrong!");
     float tot = 0;
     for(int i = 0; i < layer1_size; ++i) { tot += a[i]; }
     for(int i = 0; i < layer1_size; ++i) { a[i] /= tot; }
 
+}
+*/
+
+// >>> f
+// -x*log(y) - (1 - x)*log(1 - y)
+// >>> f.diff(x)
+// -log(y) + log(1 - y)
+// >>> f.diff(y)
+// -x/y - (x - 1)/(1 - y)
+double klfuzzy(float *v, float *w) {
+    double H = 0;
+    for(int i = 0; i < layer1_size; ++i)  {
+        assert(v[i] == v[i]); assert(w[i] == w[i]);
+        const float vi = sigmoid(v[i]), wi = sigmoid(w[i]);
+        assert(vi == vi); assert(wi == wi);
+        assert(vi >= 0); assert(wi >= 0);
+        H += -vi * entropylog(wi) - (1 - vi) *  entropylog((1.0 - wi));
+    }
+    return H;
+}
+
+// >>> f.diff(x)
+// -log(y) + log(1 - y)
+void klfuzzy_grad_left(float g, 
+        float *v, float *w, float *dv) {
+    for(int i = 0; i < layer1_size; ++i)  {
+        assert(v[i] == v[i]); assert(w[i] == w[i]);
+        const float vi = sigmoid(v[i]), wi = sigmoid(w[i]);
+        assert(vi == vi); assert(wi == wi);
+        assert(vi >= 0); assert(wi >= 0);
+
+        dv[i] += g * 
+            sigmoid_grad(vi) *
+            (-entropylog(wi) + entropylog(1.0 - wi));
+
+        if (dv[i] != dv[i]) assert(0);
+    }
+}
+
+// >>> f.diff(y)
+// -x/y - (x - 1)/(1 - y)
+void klfuzzy_grad_right(float g, 
+        float *v, float *w, float *dw) {
+    for(int i = 0; i < layer1_size; ++i)  {
+        assert(v[i] == v[i]); assert(w[i] == w[i]);
+        const float vi = sigmoid(v[i]), wi = sigmoid(w[i]);
+        assert(vi == vi); assert(wi == wi);
+        assert(vi >= 0); assert(wi >= 0);
+
+        float w_new = g * 
+            sigmoid_grad(w[i]) *
+            (-vi/wi - (vi - 1)/(1 - wi));
+        if (w_new != w_new) { continue; }
+        dw[i] += w_new;
+
+    }
+}
+
+float overlapfuzzy(float *v, float *w) {
+    float cap = 0;
+
+    for (int i = 0; i < layer1_size; ++i) {
+        assert(v[i] == v[i]); assert(w[i] == w[i]);
+        const float vi = sigmoid(v[i]), wi = sigmoid(w[i]);
+        assert(vi == vi); assert(wi == wi);
+        assert(vi >= 0); assert(wi >= 0);
+        cap += vi * wi;
+    }
+
+    return cap;
+}
+
+void overlapfuzzy_grad_left(float g, float *v, float *w, float *dv) {
+    for (int i = 0; i < layer1_size; ++i) {
+        dv[i] += g * sigmoid_grad(v[i]) * sigmoid(w[i]);
+    }
+}
+
+
+void overlapfuzzy_grad_right(float g, float *v, float *w, float *dw) {
+    for (int i = 0; i < layer1_size; ++i) {
+        dw[i] += g * sigmoid_grad(w[i]) * sigmoid(v[i]);
+    }
 }
 
 
@@ -490,6 +613,9 @@ void ReadVocab() {
 }
 
 void InitNet() {
+    // printf("\n%f %f\n", sigmoid(logit(0.5)), logit(sigmoid(0.5)));
+    fflush(stdout);
+
     long long a, b;
     unsigned long long next_random = 1;
     a = posix_memalign((void **)&syn0, 128,
@@ -515,15 +641,20 @@ void InitNet() {
             printf("Memory allocation failed\n");
             exit(1);
         }
-        for (a = 0; a < vocab_size; a++)
-            for (b = 0; b < layer1_size; b++) syn1neg[a * layer1_size + b] = 0;
+        for (a = 0; a < vocab_size; a++) {
+            for (b = 0; b < layer1_size; b++) {
+                next_random = next_random * (unsigned long long)25214903917 + 11;
+                const float f = (float)(next_random & 0xFFFF) / (float)0xFFFF;
+                syn1neg[a * layer1_size + b] = logit(f);
+            }
+        }
     }
     for (a = 0; a < vocab_size; a++) {
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a * layer1_size + b] = ((next_random & 0xFFFF) / (real)65536) / layer1_size;
+            const float f = (float)(next_random & 0xFFFF) / (float)0xFFFF;
+            syn0[a * layer1_size + b] = logit(f);
         }
-        normalize(syn0 + a * layer1_size);
     }
     CreateBinaryTree();
 }
@@ -540,7 +671,8 @@ void *TrainModelThread(void *id) {
 
 
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
-    real *neu1e = (real *)calloc(layer1_size, sizeof(real));
+    real *grad_syn0 = (real *)calloc(layer1_size, sizeof(real));
+    real *grad_syn1neg = (real *)calloc(layer1_size, sizeof(real));
     real total_loss = 0;
     FILE *fi = fopen(train_file, "rb");
     fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
@@ -605,7 +737,7 @@ void *TrainModelThread(void *id) {
         word = sen[sentence_position];
         if (word == -1) continue;
         for (c = 0; c < layer1_size; c++) neu1[c] = 0;
-        for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+        for (c = 0; c < layer1_size; c++) grad_syn0[c] = 0;
         next_random = next_random * (unsigned long long)25214903917 + 11;
         b = next_random % window;
         if (cbow) {  // train the cbow architecture
@@ -642,7 +774,7 @@ void *TrainModelThread(void *id) {
                         g = (1 - vocab[word].code[d] - f) * alpha;
                         // Propagate errors output -> hidden
                         for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1[c + l2];
+                            grad_syn0[c] += g * syn1[c + l2];
                         // Learn weights hidden -> output
                         for (c = 0; c < layer1_size; c++)
                             syn1[c + l2] += g * neu1[c];
@@ -677,7 +809,7 @@ void *TrainModelThread(void *id) {
                                                          MAX_EXP / 2))]) *
                                 alpha;
                         for (c = 0; c < layer1_size; c++)
-                            neu1e[c] += g * syn1neg[c + l2];
+                            grad_syn0[c] += g * syn1neg[c + l2];
                         for (c = 0; c < layer1_size; c++)
                             syn1neg[c + l2] += g * neu1[c];
                     }
@@ -690,7 +822,7 @@ void *TrainModelThread(void *id) {
                         last_word = sen[c];
                         if (last_word == -1) continue;
                         for (c = 0; c < layer1_size; c++)
-                            syn0[c + last_word * layer1_size] += neu1e[c];
+                            syn0[c + last_word * layer1_size] += grad_syn0[c];
                     }
             }
         } else {  // train skip-gram
@@ -702,7 +834,7 @@ void *TrainModelThread(void *id) {
                     last_word = sen[c];
                     if (last_word == -1) continue;
                     l1 = last_word * layer1_size;
-                    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+                    for (c = 0; c < layer1_size; c++) grad_syn0[c] = 0;
                     // HIERARCHICAL SOFTMAX
                     if (hs) {
                         for (d = 0; d < vocab[word].codelen; d++) {
@@ -724,7 +856,7 @@ void *TrainModelThread(void *id) {
                             g = (1 - vocab[word].code[d] - f) * alpha;
                             // Propagate errors output -> hidden
                             for (c = 0; c < layer1_size; c++)
-                                neu1e[c] += g * syn1[c + l2];
+                                grad_syn0[c] += g * syn1[c + l2];
                             // Learn weights hidden -> output
                             for (c = 0; c < layer1_size; c++)
                                 syn1[c + l2] += g * syn0[c + l1];
@@ -751,10 +883,11 @@ void *TrainModelThread(void *id) {
                                 label = 0;
                             }
                             l2 = target * layer1_size;
-                            f = kl(syn0 +  l1, syn0 + l2);
-#ifdef DEBUG
-                            printf("f: %f\n", f);
-#endif
+                            f = overlapfuzzy(syn0 +  l1, syn1neg + l2);
+                            if (f != f) { continue; }
+
+                            // printf("f: %6.4f\n", f);
+
                             // for (c = 0; c < layer1_size; c++)
                             /*
                             if (f > MAX_EXP)
@@ -768,19 +901,26 @@ void *TrainModelThread(void *id) {
                                     alpha;
                             */
                             // gradient
-#ifdef DEBUG
-                            assert(f >= 0);
-#endif
-                            if (f < 0) { continue; }
+                            // loss = (label-f)^2 + (maxh- h)^2
                             g = (label - f) * alpha;
-                            total_loss += g * g;
-                            klgrad_left(g, syn0 + l1, syn0 + l2, neu1e);
 
-                            klgrad_right(g, syn0 + l1, syn0 + l2, syn0 + l2);
-                            normalize(syn0 + l2);
+                            total_loss += g * g;
+
+
+                            overlapfuzzy_grad_left(g, syn0 + l1, 
+                                    syn1neg + l2, grad_syn0);
+                            overlapfuzzy_grad_right(g, syn0 + l1, 
+                                    syn1neg + l2, grad_syn1neg);
+
+                            for (c = 0; c < layer1_size; c++) { 
+                                syn1neg[c + l2] += grad_syn1neg[c]; 
+                                grad_syn1neg[c] = 0;
+                            }
+
+                            // normalize(syn1neg + l2);
 
                             // for (c = 0; c < layer1_size; c++)
-                            //     neu1e[c] += g * syn1neg[c + l2];
+                            //     grad_syn0[c] += g * syn1neg[c + l2];
                             // for (c = 0; c < layer1_size; c++)
                             //     syn1neg[c + l2] += g * syn0[c + l1];
 
@@ -794,8 +934,7 @@ void *TrainModelThread(void *id) {
                         next_random *
                         (unsigned long long)25214903917 +
                         11;
-                    for (c = 0; c < layer1_size; c++) { syn0[c + l1] += neu1e[c]; }
-                    normalize(syn0 + l1);
+                    for (c = 0; c < layer1_size; c++) { syn0[c + l1] += grad_syn0[c]; }
                 }
         }
         sentence_position++;
@@ -806,7 +945,8 @@ void *TrainModelThread(void *id) {
     }
     fclose(fi);
     free(neu1);
-    free(neu1e);
+    free(grad_syn0);
+    free(grad_syn1neg);
     pthread_exit(NULL);
 }
 
@@ -1030,8 +1170,7 @@ int main(int argc, char **argv) {
     vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
     expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
     for (i = 0; i < EXP_TABLE_SIZE; i++) {
-        expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) *
-                          MAX_EXP);  // Precompute the exp() table
+        expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP);  // Precompute the exp() table
         expTable[i] =
             expTable[i] / (expTable[i] + 1);  // Precompute f(x) = x / (x + 1)
     }

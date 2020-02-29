@@ -43,51 +43,41 @@ float entropylog(float x) {
     return log(x);
 }
 
-float h(float *a) {
-    int tot = 0;
-    for(int i = 0; i < size; ++i) { tot += a[i] * entropylog(a[i]); }
-    tot = -tot;
-    assert(tot >= 0);
-    return tot;
+
+
+float sigmoid(float x) {
+  if (x >= 8) { return 1.0; }
+  if (x <= 1e-5) { return 0.0; }
+
+  float p = powf(2, x);
+  return p / (1 + p);
+  // return x / sqrtf(1 + x*x);
 }
 
-// this is fuzzy KL divergence
-// int p(x) log (p(x)/q(x)) dx
-float kl(float *a, float *b) {
-    float out = 0;
-#ifdef DEBUG
-    float tota = 0; float totb = 0;
-#endif
-    for(int i = 0; i < size; i++) { 
-#ifdef DEBUG
-        tota += a[i];
-        totb += b[i];
-        
-        assert(a[i] >= 0); assert(a[i] <= 1);
-        assert(b[i] >= 0); assert(b[i] <= 1);
-#endif
-        out += a[i] * (entropylog(a[i]) - entropylog(b[i]));
+float hfuzzy(float *v) {
+    float H = 0;
+    for(int i = 0; i < size; ++i) {
+        const float vi = sigmoid(v[i]);
+        assert(vi == vi); 
+        H += -vi * entropylog(vi) - (1 - vi) * entropylog(1 - vi);
     }
-#ifdef DEBUG
-    assert(fabs(tota - 1) < 1e-5);
-    assert(fabs(totb - 1) < 1e-5);
-    assert(out >= 0);
-#endif
-
-    return out;
+    assert(H >= 0);
+    return H;
 }
 
-float crossentropy(float *a, float *b) {
-    return h(a) + kl(a, b);
-}
 
 double klfuzzy(float *v, float *w) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1 - w[i]));
+        assert(v[i] == v[i]); assert(w[i] == w[i]);
+        const float vi = sigmoid(v[i]), wi = sigmoid(w[i]);
+        assert(vi == vi); assert(wi == wi);
+        assert(vi >= 0); assert(wi >= 0);
+        H += -vi * entropylog(wi) - (1 - vi) *  entropylog((1.0 - wi));
     }
     return H;
 }
+
 
 float clamp01(float x) {
     const float EPS = 1e-4;
@@ -182,6 +172,36 @@ void dot() {
     printf("dot: %f\n", d);
 }
 
+float set_intersection_by_union(float *v, float *w) {
+
+    float overlap = 0, unionsize = 0;
+    for(int i = 0; i < size; ++i) {
+        const float vi = sigmoid(v[i]);
+        const float wi = sigmoid(w[i]);
+
+        overlap += vi * wi;
+        unionsize += vi + wi - vi*wi;
+
+    }
+    assert(unionsize >= 0);
+    assert(overlap >= 0);
+    assert(unionsize >= overlap);
+    return overlap / unionsize;
+
+}
+
+float set_intersection(float *v, float *w) {
+    float overlap = 0;
+    for(int i = 0; i < size; ++i) {
+        const float vi = sigmoid(v[i]);
+        const float wi = sigmoid(w[i]);
+        overlap += vi * wi;
+    }
+    assert(overlap >= 0);
+    return overlap;
+
+}
+
 real *vals; // [words];
 
 void cosine() {
@@ -202,25 +222,26 @@ void cosine() {
     // for (a = 0; a < size; a++) len += vec[a] * vec[a];
     // len = sqrt(len);
     // for (a = 0; a < size; a++) vec[a] /= len;
-    for (a = 0; a < N; a++) bestd[a] = 100;
+    for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
         a = 0;
         for (b = 0; b < cn; b++)
             if (bi[b] == c) a = 1;
         if (a == 1) continue;
-        dist = 0;
-        for (a = 0; a < size; a++) { 
-            dist = crossentropy(vec, M + c*size);
-            assert(dist >= 0);
-            //dist += vec[a] * M[a + c * size];
-        }
+        dist = klfuzzy(M + c*size, vec);
+        dist = klfuzzy(M + c*size, vec) + hfuzzy(M + c*size);
+        dist = klfuzzy(vec, M + c*size) + hfuzzy(M + c*size);
+        dist = set_intersection_by_union(vec, M + c*size);
+        dist = klfuzzy(vec, M + c*size);
+        dist = set_intersection(M + c*size, vec);
+        assert(dist >= 0);
 
         // store the distance value
         vals[c] = dist;
 
         for (a = 0; a < N; a++) {
-            if (dist < bestd[a]) {
+            if (dist > bestd[a]) {
                 for (d = N - 1; d > a; d--) {
                     bestd[d] = bestd[d - 1];
                     strcpy(bestw[d], bestw[d - 1]);

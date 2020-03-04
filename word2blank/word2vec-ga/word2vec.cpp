@@ -387,7 +387,7 @@ void InitNet() {
         syn0[a].alloc(layer1_size);
         for (b = 0; b < layer1_size; b++) {
             next_random = next_random * (unsigned long long)25214903917 + 11;
-            syn0[a].v[b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+            syn0[a].v[b] = 0.5; // (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
         }
     }
     printf("%callocated syn0.\n", 13);

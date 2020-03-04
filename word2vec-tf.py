@@ -20,14 +20,14 @@ tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
-SAVEPATH='text8.bin'
-INPUTPATH='text8'
-EMBEDSIZE = 50
-WINDOWSIZE = 8
-NEGSAMPLES = 15
+SAVEPATH='text0.bin'
+INPUTPATH='text0'
+EMBEDSIZE = 10
+WINDOWSIZE = 4
+NEGSAMPLES = 0
 LEARNINGRATE=1e-3
-NEPOCHS=15
-BATCHSIZE=100000
+NEPOCHS=4
+BATCHSIZE=100
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -76,8 +76,7 @@ ph_labels = tf.placeholder(tf.float32, (BATCHSIZE, ), name="ph_labels")
 var_syn0_cur = tf.gather(var_syn0, ph_fixs, name="syn0_cur")
 var_syn1neg_cur = tf.gather(var_syn1neg, ph_cixs, name="syn1neg_cur")
 var_dots = tf.reduce_sum(tf.multiply(var_syn0_cur, var_syn1neg_cur), axis=1, name="dots")
-var_clipped_dots = tf.math.tanh(var_dots, "clipped_dots")
-var_losses_dot = tf.squared_difference(ph_labels, var_clipped_dots, name="losses_dot")
+var_losses_dot = tf.squared_difference(ph_labels, var_dots, name="losses_dot")
 var_loss = tf.reduce_sum(var_losses_dot, name="loss_dot")
 optimizer = tf.train.AdamOptimizer(learning_rate=LEARNINGRATE).minimize(var_loss)
 
@@ -87,7 +86,6 @@ print("syn0: %s | syn1neg: %s" % (var_syn0, var_syn1neg))
 print("syn0 cur: %s" % var_syn0_cur)
 print("syn1neg cur: %s" % var_syn1neg_cur)
 print("dots: %s" % var_dots)
-print("clipped dots: %s" % var_clipped_dots)
 print("losses_dot: %s" % var_losses_dot)
 print("loss: %s" % var_loss)
 print("***END NETWORK:***\n")
@@ -167,7 +165,6 @@ def train():
 
     print("load data...\n")
     fixs, cixs, labels, n = mkdata()
-    # fixs, cixs, labels = shuffledata(fixs, cixs, labels, n)
     print("done. n: %10s" % (n, ))
 
     print("\n***LLVM of mkdata:***")

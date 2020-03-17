@@ -6,7 +6,7 @@ RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall \
 		 -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
 
-all: word2vec word2phrase distance word-analogy compute-accuracy
+all: word2vec word2phrase distance word-analogy compute-accuracy cli
 
 text0:
 	head -c 1000000 text8 > text0
@@ -58,4 +58,4 @@ cli: cli.cpp  linenoise.c
 
 
 clean:
-	rm -rf word2vec word2phrase distance word-analogy compute-accuracy dump-vect
+	rm -rf word2vec word2phrase distance word-analogy compute-accuracy dump-vect cli cli.o

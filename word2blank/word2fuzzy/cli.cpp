@@ -1115,6 +1115,7 @@ int main(int argc, char **argv) {
     }
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
+    printf("Number of words: %lld\t Dimensions: %lld\n", words, size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
 
     M = (Vec *)malloc((long long)words * sizeof(Vec));
@@ -1127,8 +1128,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    for (int b = 0; b < words; b++) {
-        int a = 0;
+    for (long long b = 0; b < words; b++) {
+        long long a = 0;
+        if (b % 73 == 0) printf("%lld/%lld\r", b, words);
         while (1) {
             vocab[b * max_w + a] = fgetc(f);
             if (feof(f) || (vocab[b * max_w + a] == ' ')) break;

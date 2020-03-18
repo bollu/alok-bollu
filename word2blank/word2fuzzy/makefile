@@ -52,8 +52,8 @@ dump-vect : dump-vect.c
 	$(CC) dump-vect.c -o dump-vect $(CFLAGS)
 
 cli: cli.cpp  linenoise.c
-	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS)
-	$(CXX) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS)
+	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS) -Wall -Werror
+	$(CXX) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS) -Wall -Werror
 	$(CXX)  linenoise.o cli.o -o cli $(CFLAGS)
 
 

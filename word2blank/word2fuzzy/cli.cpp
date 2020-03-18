@@ -15,7 +15,7 @@
 #include<algorithm>
 
 
-static const long long MINFREQ = 5;
+static const long long MINFREQ = 0;
 static const long long FUNCTION_WORD_FREQ_CUTOFF = 20;
 #define N 40
 #define max_w 500
@@ -208,9 +208,7 @@ std::tuple<AST, char *> parse_(char *str) {
 AST parse(char *str) { return std::get<0>(parse_(str)); }
 
 double entropylog(double x) {
-    if (x < 1e-8) {
-        return 0;
-    }
+    if (x < 1e-8) return 0;
     return log(x);
 }
 
@@ -304,7 +302,9 @@ void printClosestWordsSetOverlap(Vec vec, Vec *M) {
 
     for (long long a = 0; a < N; a++) bestd[a] = 0;
     for (long long a = 0; a < N; a++) bestw[a*max_w] = '\0';
+    printf("\n");
     for (long long c = 0; c < words; c++) {
+      printf("\r%4lld / %4lld: %4.2f%%", c, words, 100.0 * ((float)c/words));
       double intersectsize = 0;
       for (long long a = 0; a < size; a++) {
           intersectsize += vec[a] * M[c][a];
@@ -336,7 +336,9 @@ void printClosestWordsSetOverlapSymmetric(Vec vec, Vec *M) {
 
     for (long long a = 0; a < N; a++) bestd[a] = 0;
     for (long long a = 0; a < N; a++) bestw[a*max_w]= '\0';
+    printf("\n");
     for (long long c = 0; c < words; c++) {
+      printf("\r%4lld / %4lld: %4.2f%%", c, words, 100.0 * ((float)c/words));
       double intersectsize = 0;
       double unionsize = 0;
       for (long long a = 0; a < size; a++) {
@@ -373,13 +375,15 @@ void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
 
     for (long long a = 0; a < N; a++) bestd[a] = 1000;
     for (long long a = 0; a < N; a++) bestw[a*max_w] = '\0';
+    printf("\n");
     for (long long c = 0; c < words; c++) {
+      printf("\r%4lld / %4lld: %4.2f%%", c, words, 100.0 * ((float)c/words));
       const double dist = crossentropy(M[c], vec);
       vals[c] = dist;
       string w = string(vocab +c*max_w);
 
       for (long long a = 0; a < N; a++) {
-        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
+        if (dist < bestd[a]) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
@@ -405,7 +409,9 @@ void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
 
     for (long long a = 0; a < N; a++) bestd[a] = 100;
     for (long long a = 0; a < N; a++) bestw[a*max_w] = '\0';
+    printf("\n");
     for (long long c = 0; c < words; c++) {
+      printf("\r%4lld / %4lld: %4.2f%%", c, words, 100.0 * ((float)c/words));
       const double dist = crossentropy(vec, M[c]);
       vals[c] = dist;
       string w = string(vocab +c*max_w);
@@ -493,16 +499,18 @@ void printClosestWordsKL(Vec vec, Vec *M) {
     double *vals = new double [words];
     double *bestd = new double[words];
 
-    for (long long a = 0; a < N; a++) bestd[a] = 10000;
+    for (long long a = 0; a < N; a++) bestd[a] = 999999;
     for (long long a = 0; a < N; a++) bestw[a*max_w] = '\0';
+    printf("\n");
     for (long long c = 0; c < words; c++) {
+        printf("\r%4lld / %4lld: %4.2f%%", c, words, 100.0 * ((float)c/words));
       // const double dist = crossentropy(vec, M[c]);
       string w = string(vocab +c*max_w);
       const double dist = kl(M[c], vec);
       vals[c] = dist;
 
       for (long long a = 0; a < N; a++) {
-        if (dist < bestd[a] && word2freq[w] > MINFREQ) {
+        if (dist < bestd[a]) { // && word2freq[w] > MINFREQ) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
@@ -1141,48 +1149,39 @@ int main(int argc, char **argv) {
     }
 
 
-    // will we get a double stochastic embdding? xD
-    //for(long long i = 0; i  < 3; ++i) {
-    //    printf("making it doubly stochastic | iteration %4d ", i);
-    //    double err = 0;
+    printf("\nnormalizing features:\n");
+    // normalize probabilities per feature
+    for(long long a = 0; a < size; ++a) {
+        double total = 0;
+        for(long long b = 0; b < words; b++)  {
+            total += M[b][a];
+        }
 
-    //    // normalize probabilities per feature
-    //    for(long long a = 0; a < size; ++a) {
-    //        double total = 0;
-    //        for(long long b = 0; b < words; b++)  {
-    //            total += M[b][a];
-    //        }
+        for(long long b = 0; b < words; b++)  {
+            M[b][a] /= total;
+            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+        }
+        printf("\r%4lld / %4lld: %4.2f%%", a, size, 100.0 * ((float)a/size));
+    }
 
-    //        err += (1.0 - total) * (1.0 - total);
+    // normalize features per vector
+    printf("\nnormalizing vectors:\n");
+    for(long long b = 0; b < words; ++b) {
+        double total = 0;
+        for(long long a = 0; a < size; a++)  {
+            total += M[b][a];
+        }
 
-    //        for(long long b = 0; b < words; b++)  {
-    //            M[b][a] /= total;
-    //            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
-    //        }
-    //    }
-
-    //    // normalize features per vector
-    //    for(long long b = 0; b < words; ++b) {
-    //        double total = 0;
-    //        for(long long a = 0; a < size; a++)  {
-    //            total += M[b][a];
-    //        }
-
-    //        err += (1.0 - total) * (1.0 - total);
-
-    //        for(long long a = 0; a < size; a++)  {
-    //            M[b][a] /= total;
-    //            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
-    //        }
-    //    }
-
-
-    //    printf(" | error: %f\n", err);
-    //}
+        for(long long a = 0; a < size; a++)  {
+            M[b][a] /= total;
+            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+        }
+        printf("\r%4lld / %4lld: %4.2f%%", b, words, 100.0 * ((float)b/words));
+    }
 
 
 
-    printf("calculating entropy...\n");
+    printf("\ncalculating entropy...\n");
     for(long long b = 0; b < words; ++b) {
         Ml[b] = new double[size];
         Mloneminus[b] = new double[size];
@@ -1231,6 +1230,7 @@ int main(int argc, char **argv) {
     //
     //detectPolysemousWords();
 
+    printf("\ndone processing...\n\n");
     linenoiseHistorySetMaxLen(10000);
     linenoiseSetCompletionCallback(completion);
     while (1) {
@@ -1248,9 +1248,9 @@ int main(int argc, char **argv) {
 
         printClosestWordsSetOverlap(v, M);
         // printClosestWordsSetOverlapSymmetric(v, M);
-        // printClosestWordsCrossEntropy(v, M);
-        // printClosestWordsCrossEntropy2(v, M);
+        printClosestWordsCrossEntropy(v, M);
+        printClosestWordsCrossEntropy2(v, M);
         // printClosestWordsCrossEntropySym(v, M);
-        // printClosestWordsKL(v, M);
+        printClosestWordsKL(v, M);
     }
 }

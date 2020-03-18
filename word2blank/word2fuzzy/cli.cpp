@@ -316,8 +316,9 @@ void printClosestWordsSetOverlap(Vec vec, Vec *M) {
         if (dist > bestd[a]) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw+d*max_w, bestw+(d - 1*max_w));
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
+
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
           break;
@@ -351,7 +352,7 @@ void printClosestWordsSetOverlapSymmetric(Vec vec, Vec *M) {
         if (dist > bestd[a]) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw+d*max_w, bestw+(d - 1*max_w));
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -381,7 +382,7 @@ void printClosestWordsCrossEntropy(Vec vec, Vec *M) {
         if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw+d*max_w, bestw+(d - 1*max_w));
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -413,7 +414,7 @@ void printClosestWordsCrossEntropy2(Vec vec, Vec *M) {
         if (dist < bestd[a]) { // && word2freq[w] > MINFREQ) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw+d*max_w, bestw+(d - 1*max_w));
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -462,7 +463,7 @@ void printClosestWordsCrossEntropySym(Vec vec, Vec *M) {
         if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d-1];
-            strcpy(bestw+d*max_w, bestw+(d - 1*max_w));
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -541,7 +542,7 @@ void printAscByEntropy(Vec *M, long long freq_cutoff) {
         if (dist < bestd[a] && word2freq[w] > freq_cutoff) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw +d*max_w, bestw + (d - 1)*max_w);
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -568,7 +569,7 @@ void printDescByEntropy(Vec *M, long long minfreq) {
         if (dist > bestd[a] && word2freq[w] > minfreq) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw +d*max_w, bestw + (d - 1)*max_w);
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -599,7 +600,7 @@ void printWordsAtEntropy(Vec *M, double center) {
         if (dist < bestd[a] && word2freq[w] > MINFREQ) {
           for (long long d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
-            strcpy(bestw +d*max_w, bestw + (d - 1)*max_w);
+            strcpy(bestw+d*max_w, bestw+(d - 1)*max_w);
           }
           bestd[a] = dist;
           strcpy(bestw + a*max_w, &vocab[c * max_w]);
@@ -1073,7 +1074,6 @@ INTERPRET_ERROR:
 }
 
 int main(int argc, char **argv) {
-    assert(false && "init bestw");
     char file_name[512];
     FILE *f;
 
@@ -1182,6 +1182,7 @@ int main(int argc, char **argv) {
 
 
 
+    printf("calculating entropy...\n");
     for(long long b = 0; b < words; ++b) {
         Ml[b] = new double[size];
         Mloneminus[b] = new double[size];
@@ -1189,10 +1190,8 @@ int main(int argc, char **argv) {
             Ml[b][a] = entropylog(M[b][a]);
             Mloneminus[b][a] = entropylog(1.0 - M[b][a]);
         }
+        printf("\r%4lld / %4lld: %4.2f%%", b, words, 100.0 * ((float)b/words));
     }
-
-
-    fclose(f);
 
     //f = fopen("freq-text8.txt", "r");
 

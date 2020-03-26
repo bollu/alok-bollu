@@ -47,10 +47,9 @@ with open("text8", "r") as corpus:
     w2f.sort(key=lambda kv: kv[1], reverse=True)
     print("\n".join(["%20s : %s" % (kv[0], kv[1]) for kv in w2f[:20]]))
 
-with open("freq.txt", "w") as f:
-    for w in word2freq:
-        freq = word2freq[w]
-        f.write("%s|%s\n" % (w, freq))
+with open("freq.txt", "w") as fil:
+    for (w, freq) in w2f:
+        fil.write("%s|%s\n" % (w, freq))
 
 # cosine(word2vec['apollo'])
 

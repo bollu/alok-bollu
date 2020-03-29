@@ -16,7 +16,7 @@
 
 
 static const long long MINFREQ = 0;
-static const long long FUNCTION_WORD_FREQ_CUTOFF = 20;
+static const long long FUNCTION_WORD_FREQ_CUTOFF = 40;
 #define N 40
 #define max_w 500
 #define max(x, y) ((x) > (y) ? (x) : (y))
@@ -529,12 +529,13 @@ void printClosestWordsKL(Vec vec, Vec *M) {
     delete []bestd;
 }
 
-void computeEntropies(Vec *M, long long freq_cutoff) {
+void computeEntropies(Vec *M) {
     printf ("computing entropies...\n");
     for (long long c = 0; c < words; c++) {
       const double H = entropy(M[c]);
       word2entropy[c] = H;
       entropy2w[H] = c;
+      printf("\r%4lld / %4lld: %4.2f%%", c, words, 100.0 * ((float)c/words));
     }
 }
 void printAscByEntropy(Vec *M, long long freq_cutoff) {
@@ -1181,7 +1182,7 @@ int main(int argc, char **argv) {
 
 
 
-    printf("\ncalculating entropy...\n");
+    printf("\ncalculating logarithms...\n");
     for(long long b = 0; b < words; ++b) {
         Ml[b] = new double[size];
         Mloneminus[b] = new double[size];
@@ -1192,36 +1193,35 @@ int main(int argc, char **argv) {
         printf("\r%4lld / %4lld: %4.2f%%", b, words, 100.0 * ((float)b/words));
     }
 
-    //f = fopen("freq-text8.txt", "r");
-
-    //while(!feof(f)) {
-    //    char line[1000];
-    //    fscanf(f, "%s", line);
-    //    char word[1000];
-    //    for(long long j = 0; j < 1000; ++j) word[j] = 0;
-    //    long long i = 0;
-    //    for(i = 0; line[i] != '|'; ++i) {
-    //        word[i] = line[i];
-    //    }
-    //    i++;
-    //    char freqstr[996];
-    //    for(long long j = 0; j < 1000; ++j)freqstr[j] = 0;
-    //    strcpy(freqstr, line  + i);
-    //    word2freq[word] = atoi(freqstr);
-    //}
-
+    f = fopen("freq-text8.txt", "r");
+    assert (f && "unable to find freq-text8.txt");
+    while(!feof(f)) {
+        char line[1000];
+        fscanf(f, "%s", line);
+        char word[1000];
+        for(long long j = 0; j < 1000; ++j) word[j] = 0;
+        long long i = 0;
+        for(i = 0; line[i] != '|'; ++i) {
+            word[i] = line[i];
+        }
+        i++;
+        char freqstr[1000];
+        strcpy(freqstr, line  + i);
+        word2freq[word] = atoi(freqstr);
+    }
 
 
-    //computeEntropies(M, FUNCTION_WORD_FREQ_CUTOFF);
-    //{
-    //    cout << "descending entropy:\n";
-    //    long long i = 0;
-    //    for(auto it = entropy2w.rbegin(); i < 50 && it != entropy2w.rend(); ++i, ++it) {
-    //        const string w(vocab + max_w *it->second);
-    //        if (word2freq[w] < FUNCTION_WORD_FREQ_CUTOFF) continue;
-    //        printf("%30s\t%f\n", w.c_str(), it->first);
-    //    }
-    //}
+
+    computeEntropies(M);
+    {
+        cout << "\ndescending entropy, dropping words with (freq <" << FUNCTION_WORD_FREQ_CUTOFF <<  " ):\n";
+        long long i = 0;
+        for(auto it = entropy2w.rbegin(); i < 200 && it != entropy2w.rend(); ++i, ++it) {
+            const string w(vocab + max_w *it->second);
+            if (word2freq[w] < FUNCTION_WORD_FREQ_CUTOFF) continue;
+            printf("%30s\t%f\n", w.c_str(), it->first);
+        }
+    }
 
 
     //printAscByEntropy(M, FUNCTION_WORD_FREQ_CUTOFF);

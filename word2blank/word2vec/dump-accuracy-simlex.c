@@ -73,18 +73,23 @@ int main(int argc, char **argv) {
     fclose(f);
 
     f = fopen(argv[2], "r");
-    size_t n;
 
     // throw away first line.
     {
-        char *throwaway;
-        getline(&throwaway, &n, f);
+        char *throwaway; size_t throwi;
+        getline(&throwaway, &throwi, f);
     }
+
+    static const int MAX_LINES_SIMLEX = 1002;
+    float *simlex = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
+    float *oursim = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
 
     char word1[max_size], word2[max_size];
     while(!feof(f)) {
+        // word1\tword2\tPOS[1letter]\tSimLex999\t
         char *linebuf = 0;
-        getline(&linebuf, &n, f);
+        size_t linelen;
+        getline(&linebuf, &linelen, f);
         if (strlen(linebuf) == 0) { break; }
         int i = 0;
         while(linebuf[i] != '\t' && linebuf[i] != ' ') {
@@ -100,8 +105,24 @@ int main(int argc, char **argv) {
             j++;
         }
         word2[j] = '\0';
-        printf("> |%s| :: |%s| < \n", word1, word2);
+        printf("> |%s| :: |%s| :  < \n", word1, word2);
         free(linebuf);
+
+        int w1ix = -1, w2ix = -1;
+        for(int i = 0; i < words; ++i) {
+            if (!strcmp(&vocab[max_w*i], word1)) {
+                w1ix = i;
+                printf("\tvocab[%d] = %s\n", w1ix, &vocab[max_w*w1ix]);
+            }
+            if (!strcmp(&vocab[max_w*i], word2)) {
+                w2ix = i;
+                printf("\tvocab[%d] = %s\n", w2ix, &vocab[max_w*w2ix]);
+            }
+        }
+
+        if (w1ix == -1 || w2ix == -1) {
+            printf("\tSKIPPING!\n");
+        }
     }
 
     return 0;

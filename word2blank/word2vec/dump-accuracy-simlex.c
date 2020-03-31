@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #define max_size 2000
 #define N 40
@@ -84,7 +85,7 @@ int main(int argc, char **argv) {
     float *simlex = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
     float *oursim = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
 
-    char word1[max_size], word2[max_size];
+    char word1[max_size], word2[max_size], word3[max_size];
     while(!feof(f)) {
         // word1\tword2\tPOS[1letter]\tSimLex999\t
         char *linebuf = 0;
@@ -93,19 +94,39 @@ int main(int argc, char **argv) {
         if (strlen(linebuf) == 0) { break; }
         int i = 0;
         while(linebuf[i] != '\t' && linebuf[i] != ' ') {
-            word1[i] = linebuf[i];
-            i++;
+            word1[i] = linebuf[i]; i++;
         }
-        const int startix = i+1;
+        const int w2_startix = i+1;
         int j = 0;
         word1[i] = '\0';
-        while(linebuf[startix + j] != '\t' && 
-                linebuf[startix +j] != ' '  && linebuf[startix + j] != '\0') {
-            word2[j] = linebuf[startix + j];
-            j++;
+        while(linebuf[w2_startix + j] != '\t' && 
+                linebuf[w2_startix +j] != ' ') {
+            word2[j] = linebuf[w2_startix + j]; j++;
         }
         word2[j] = '\0';
-        printf("> |%s| :: |%s| :  < \n", word1, word2);
+
+
+        // skip \tPOS\t
+        assert (linebuf[w2_startix + j] == '\t' || linebuf[w2_startix + j] == ' ');
+
+        assert (linebuf[w2_startix + j+1] == 'A' ||
+                linebuf[w2_startix + j+1] == 'N' ||
+                linebuf[w2_startix + j+1] == 'V');
+
+        assert (linebuf[w2_startix + j+2] == '\t' || linebuf[w2_startix + j+2] == ' ');
+        const int w3_startix = w2_startix + j + 3;
+        int k = 0;
+        while(linebuf[w3_startix + k] != '\t' && 
+              linebuf[w3_startix + k] != ' ') {
+            word3[k] = linebuf[w3_startix + k]; k++;
+        }
+        word3[k] = '\0';
+
+        const double simlexacc = atof(word3);
+
+
+        // skip word and grab simlex score;
+        printf("> |%s| :: |%s| : simlex(%f)  <\n", word1, word2, simlexacc);
         free(linebuf);
 
         int w1ix = -1, w2ix = -1;

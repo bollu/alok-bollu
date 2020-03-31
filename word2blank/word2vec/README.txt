@@ -1,6 +1,13 @@
 Tools for computing distributed representtion of words
 ------------------------------------------------------
 
+# Computing simlex
+
+run 
+```
+simlex.py <path-to-word-vectors> <path-to-simlex.txt=../word2fuzzy/SimLex-999/SimLex-999.txt>
+```
+
 We provide an implementation of the Continuous Bag-of-Words (CBOW) and the Skip-gram model (SG), as well as several demo scripts.
 
 Given a text corpus, the word2vec tool learns a vector for every word in the vocabulary using the Continuous

@@ -45,10 +45,14 @@ double sim(int w1, int w2) {
 
 
 int main(int argc, char **argv) {
+
+    printf("are you sure you want to run this? You likely wish to run spearman.py");
     if (argc < 3) {
         printf(
-            "Usage: ./distance <VECFILE> <SIMLEXFILE\nwhere VECFILE contains word projections in "
-            "the BINARY FORMAT\n");
+            "Usage: ./distance <VECFILE> <SIMLEXFILE> [OUTFILE]"
+            "\nwhere VECFILE contains word projections in the BINARY FORMAT"
+            "\nSIMLEXFILE is the SimLex-999.txt from SimLex"
+            "\n[OUTFILE] is the optional file to dump <simlexscore>:<vecscore>");
         return 0;
     }
     strcpy(file_name, argv[1]);
@@ -96,7 +100,8 @@ int main(int argc, char **argv) {
     float *oursims = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
 
     char word1[max_size], word2[max_size], word3[max_size];
-    for(int n = 0; !feof(f);) {
+    int n = 0;
+    for(; !feof(f);) {
         // word1\tword2\tPOS[1letter]\tSimLex999\t
         char *linebuf = 0;
         size_t linelen;
@@ -136,30 +141,39 @@ int main(int argc, char **argv) {
 
 
         // skip word and grab simlex score;
-        printf("> |%s| :: |%s| : simlex(%f)  <\n", word1, word2, simlexes[n]);
+        fprintf(stderr, "> |%s| :: |%s| : simlex(%f)  <\n", word1, word2, simlexes[n]);
         free(linebuf);
 
         int w1ix = -1, w2ix = -1;
         for(int i = 0; i < words; ++i) {
             if (!strcmp(&vocab[max_w*i], word1)) {
                 w1ix = i;
-                printf("\tvocab[%d] = %s\n", w1ix, &vocab[max_w*w1ix]);
+                fprintf(stderr, "\tvocab[%d] = %s\n", w1ix, &vocab[max_w*w1ix]);
             }
             if (!strcmp(&vocab[max_w*i], word2)) {
                 w2ix = i;
-                printf("\tvocab[%d] = %s\n", w2ix, &vocab[max_w*w2ix]);
+                fprintf(stderr, "\tvocab[%d] = %s\n", w2ix, &vocab[max_w*w2ix]);
             }
         }
 
         if (w1ix == -1 || w2ix == -1) {
-            printf("\tSKIPPING!\n");
+            fprintf(stderr, "\tSKIPPING!\n");
             continue;
         }
         /// ==== all vectors legal====
         oursims[n] = sim(w1ix, w2ix);
-        printf("\tw2v(%f)\n", oursims[n]);
+        fprintf(stderr, "\tw2v(%f)\n", oursims[n]);
         n++;
 
+    }
+
+    if (argc == 4) {
+        f = fopen(argv[3], "w");
+        assert(f != 0);
+        for(int i = 0; i < n; ++i) {
+            fprintf(f, "%f %f\n", simlexes[i], oursims[i]);
+        }
+        fclose(f);
     }
 
     return 0;

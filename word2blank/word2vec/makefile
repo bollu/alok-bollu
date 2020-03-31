@@ -53,6 +53,9 @@ word-fuzzy-distance: word-fuzzy-distance.c
 dump-vect : dump-vect.c
 	$(CC) dump-vect.c -o dump-vect $(CFLAGS)
 
+dump-accuracy-simlex : dump-accuracy-simlex.c
+	$(CC) dump-accuracy-simlex.c -o dump-accuracy-simlex $(CFLAGS)
+
 cli: cli.cpp  linenoise.c
 	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS)
 	$(CXX) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS)

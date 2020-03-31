@@ -33,6 +33,16 @@ long long words, size, a, b, c, d, cn, bi[100];
 float *M;
 char *vocab;
 
+double sim(int w1, int w2) {
+    assert (w1 >= 0);
+    assert (w2 >= 0);
+    real *v1 = M + size * w1;
+    real *v2 = M + size * w2;
+    float s = 0;
+    for(int i = 0; i < size; ++i) s += v1[i] * v2[i];
+    return s;
+}
+
 
 int main(int argc, char **argv) {
     if (argc < 3) {
@@ -82,11 +92,11 @@ int main(int argc, char **argv) {
     }
 
     static const int MAX_LINES_SIMLEX = 1002;
-    float *simlex = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
-    float *oursim = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
+    float *simlexes = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
+    float *oursims = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
 
     char word1[max_size], word2[max_size], word3[max_size];
-    while(!feof(f)) {
+    for(int n = 0; !feof(f);) {
         // word1\tword2\tPOS[1letter]\tSimLex999\t
         char *linebuf = 0;
         size_t linelen;
@@ -122,11 +132,11 @@ int main(int argc, char **argv) {
         }
         word3[k] = '\0';
 
-        const double simlexacc = atof(word3);
+        simlexes[n] = atof(word3);
 
 
         // skip word and grab simlex score;
-        printf("> |%s| :: |%s| : simlex(%f)  <\n", word1, word2, simlexacc);
+        printf("> |%s| :: |%s| : simlex(%f)  <\n", word1, word2, simlexes[n]);
         free(linebuf);
 
         int w1ix = -1, w2ix = -1;
@@ -143,7 +153,13 @@ int main(int argc, char **argv) {
 
         if (w1ix == -1 || w2ix == -1) {
             printf("\tSKIPPING!\n");
+            continue;
         }
+        /// ==== all vectors legal====
+        oursims[n] = sim(w1ix, w2ix);
+        printf("\tw2v(%f)\n", oursims[n]);
+        n++;
+
     }
 
     return 0;

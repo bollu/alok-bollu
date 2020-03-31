@@ -23,3 +23,5 @@ prob.txt
 compute-accuracy-discrete-topn
 compute-accuracy-fast
 compute-accuracy-topn
+dump-accuracy-simlex
+dump-accuracy-simlex.temp.txt

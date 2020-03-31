@@ -4,7 +4,7 @@ CXX = g++
 DEBUG=-fsanitize=address -fsanitize=undefined -g -O0
 RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall \
-		 -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
+		 -funroll-loops -Wno-unused-result ${DEBUG} -fuse-ld=gold
 
 all: word2vec word2phrase distance word-analogy compute-accuracy cli
 
@@ -50,6 +50,9 @@ word-fuzzy-distance: word-fuzzy-distance.c
 
 dump-vect : dump-vect.c
 	$(CC) dump-vect.c -o dump-vect $(CFLAGS)
+
+dump-accuracy-simlex : dump-accuracy-simlex.c
+	$(CC) dump-accuracy-simlex.c -o dump-accuracy-simlex $(CFLAGS)
 
 cli: cli.cpp  linenoise.c
 	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS) -Wall -Werror

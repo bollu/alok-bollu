@@ -25,7 +25,7 @@
 #define max(i, j) ((i) > (j) ? (i) : (j))
 
 const long long max_size = 2000;         // max length of strings
-const long long N = 5;                   // number of closest words
+const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
 
 void analogy(double *a, double *b, double *x, double *y, int size) {
@@ -62,7 +62,7 @@ double entropy(double *v, int size) {
     return H;
 }
 
-double crossentropy(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
+double crossentropyfuzzy(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
@@ -71,11 +71,28 @@ double crossentropy(double *v, double *lv, double *loneminusv, double *w, double
     return H;
 }
 
+double crossentropy(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
+    double H = 0;
+    // pi log qi
+    for(int i = 0; i < size; ++i)  {
+        H -= v[i] * lw[i];
+    }
+    return H;
+}
+
+double klfuzzy(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
+    double H = 0;
+    for(int i = 0; i < size; ++i)  {
+        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+    }
+    return H;
+}
+
 double kl(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
         // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
-        H += -v[i] * lw[i] - (1 - v[i]) *  loneminusw[i]; //entropylog((1-w[i]));
+        H += -v[i] * (lv[i] - lw[i]);
     }
     return H;
 }
@@ -234,6 +251,8 @@ int main(int argc, char **argv)
         // assert(vec[i] <= 1.1);
         // vecl[i] = entropylog(vec[i]);
         // vecloneminus[i] = entropylog(1 - vec[i]);
+        assert(vec[i] >= 0);
+        assert(vec[i] <= 1);
         vecl[i] = log(vec[i]);
         vecloneminus[i] = log1p(-vec[i]);
     }
@@ -249,7 +268,7 @@ int main(int argc, char **argv)
       } else {
           ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
           ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
-          dist = crossentropy(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size);
+          dist = crossentropyfuzzy(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size);
       }
 
       for (a = 0; a < N; a++) {

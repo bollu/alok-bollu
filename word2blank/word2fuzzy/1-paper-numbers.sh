@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-rm compute-accuracy-topn
-rm dump-accuracy-simlex
+set -e
+set -o xtrace
+rm compute-accuracy-topn || true
+rm dump-accuracy-simlex || true
 make dump-accuracy-simlex
 make compute-accuracy-topn 
 MODELPATH=~/work/alok-bollu/models/

@@ -18,29 +18,56 @@
 #include <string.h>
 #include <assert.h>
 
+#define min(i, j) ((i) < (j) ? (i) : (j))
+#define max(i, j) ((i) > (j) ? (i) : (j))
+
 #define max_size 2000
 #define N 40
 #define max_w 50
 
-typedef float real;
+typedef double real;
 
 FILE *f;
 char st1[max_size];
 char *bestw[N];
 char file_name[max_size], st[100][max_size];
-float dist, bestd[N], vec[max_size];
 long long words, size, a, b, c, d, cn, bi[100];
-float *M;
+real *M, *Ml, *Mloneminus;
 char *vocab;
 
-double sim(int w1, int w2) {
-    assert (w1 >= 0);
-    assert (w2 >= 0);
-    real *v1 = M + size * w1;
-    real *v2 = M + size * w2;
-    float s = 0;
-    for(int i = 0; i < size; ++i) s += v1[i] * v2[i];
-    return s;
+real entropylog(real x) {
+    return log(x);
+}
+
+real entropy(real *v, int size) {
+    real H = 0;
+    for(int i = 0; i < size; ++i) 
+        H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
+    return H;
+}
+
+real crossentropy(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
+    real H = 0;
+    for(int i = 0; i < size; ++i)  {
+        H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
+            (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
+    }
+    return H;
+}
+
+real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
+    real H = 0;
+    for(int i = 0; i < size; ++i)  {
+        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        //H += -v[i] * lw[i] - (1 - v[i]) *  loneminusw[i]; //entropylog((1-w[i]));
+    }
+    return H;
+}
+
+real sim(int w1, int w2) {
+    return crossentropy(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
+        M + size * w2, Ml + size * w2, Mloneminus + size *w2,
+        size);
 }
 
 
@@ -65,7 +92,9 @@ int main(int argc, char **argv) {
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
     for (a = 0; a < N; a++) bestw[a] = (char *)malloc(max_size * sizeof(char));
-    M = (float *)malloc((long long)words * (long long)size * sizeof(float));
+    M = (real *)malloc((long long)words * (long long)size * sizeof(real));
+    Ml = (real *)malloc(words * size * sizeof(real));
+    Mloneminus = (real *)malloc(words * size * sizeof(real));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);
@@ -79,10 +108,62 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
+        for (a = 0; a < size; a++) { 
+            float fl; 
+            fread(&fl, sizeof(float), 1, f);
+            M[a + b * size] = fl;
+
+        }
+
+        real len = 0;
+        for (a = 0; a < size; a++) { len += M[a + b * size] * M[a + b * size]; }
+        len = sqrt(len);
+        for (a = 0; a < size; a++) { M[a + b * size] /= len; }
+
+        // take exponent
+        for (a = 0; a < size; a++) { M[a + b * size] = pow(2.0, M[a + b * size]); }
+        
     }
     fclose(f);
 
+    // normalize across our words.
+    /*
+    for(b = 0; b < words; ++b) {
+        double total = 0;
+        for(a = 0; a < size; ++a) {
+            total += M[b * size + a];
+        }
+
+        for(a = 0; a < size; ++a) {
+            M[b * size + a] /= total;
+            M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+        }
+    }
+    */
+
+
+    // normalize across our features.
+    for(a = 0; a < size; ++a) {
+        double total = 0;
+        for(b = 0; b < words; ++b) {
+            total += M[b * size + a];
+        }
+
+        for(b = 0; b < words; ++b) {
+            M[b * size + a] /= total;
+            M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+        }
+    }
+
+
+    for(b = 0; b < words; ++b) {
+        for(a = 0; a < size; ++a) {
+            Ml[b * size + a] = entropylog(M[b * size + a]);
+            Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
+        }
+    }
+
+    // open simlex file to read
     f = fopen(argv[2], "r");
 
     // throw away first line.
@@ -92,8 +173,8 @@ int main(int argc, char **argv) {
     }
 
     static const int MAX_LINES_SIMLEX = 1002;
-    float *simlexes = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
-    float *oursims = (float *)malloc(sizeof(float) * MAX_LINES_SIMLEX);
+    real *simlexes = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
+    real *oursims = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
 
     char word1[max_size], word2[max_size], word3[max_size];
     int n = 0;
@@ -157,7 +238,8 @@ int main(int argc, char **argv) {
             continue;
         }
         /// ==== all vectors legal====
-        oursims[n] = sim(w1ix, w2ix);
+        oursims[n] = 1 - 10*sim(w1ix, w2ix);
+        assert(oursims[n] >= 0);
         fprintf(stderr, "\tw2v(%f)\n", oursims[n]);
         n++;
 

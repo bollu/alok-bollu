@@ -46,7 +46,7 @@ real entropy(real *v, int size) {
     return H;
 }
 
-real crossentropy(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
+real fuzzycrossentropy(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
     real H = 0;
     for(int i = 0; i < size; ++i)  {
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
@@ -55,7 +55,7 @@ real crossentropy(real *v, real *lv, real *loneminusv, real *w, real *lw, real *
     return H;
 }
 
-real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
+real fuzzykl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
     real H = 0;
     for(int i = 0; i < size; ++i)  {
         H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
@@ -64,8 +64,21 @@ real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw
     return H;
 }
 
+real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
+    real H = 0;
+    for(int i = 0; i < size; ++i)  {
+        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+    }
+    return H;
+}
+
 real sim(int w1, int w2) {
-    return crossentropy(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
+    return kl(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
+        M + size * w2, Ml + size * w2, Mloneminus + size *w2,
+        size) + kl(M + size * w2, Ml + size * w2, Mloneminus + size *w2, 
+        M + size * w1, Ml + size * w1, Mloneminus + size *w1,
+        size);
+    return fuzzycrossentropy(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
         M + size * w2, Ml + size * w2, Mloneminus + size *w2,
         size);
 }
@@ -126,8 +139,6 @@ int main(int argc, char **argv) {
     }
     fclose(f);
 
-    // normalize across our words.
-    /*
     for(b = 0; b < words; ++b) {
         double total = 0;
         for(a = 0; a < size; ++a) {
@@ -139,21 +150,20 @@ int main(int argc, char **argv) {
             M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
         }
     }
-    */
 
 
     // normalize across our features.
-    for(a = 0; a < size; ++a) {
-        double total = 0;
-        for(b = 0; b < words; ++b) {
-            total += M[b * size + a];
-        }
+    // for(a = 0; a < size; ++a) {
+    //     double total = 0;
+    //     for(b = 0; b < words; ++b) {
+    //         total += M[b * size + a];
+    //     }
 
-        for(b = 0; b < words; ++b) {
-            M[b * size + a] /= total;
-            M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
-        }
-    }
+    //     for(b = 0; b < words; ++b) {
+    //         M[b * size + a] /= total;
+    //         M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+    //     }
+    // }
 
 
     for(b = 0; b < words; ++b) {
@@ -238,7 +248,7 @@ int main(int argc, char **argv) {
             continue;
         }
         /// ==== all vectors legal====
-        oursims[n] = 1 - 10*sim(w1ix, w2ix);
+        oursims[n] = 100 - sim(w1ix, w2ix);
         assert(oursims[n] >= 0);
         fprintf(stderr, "\tw2v(%f)\n", oursims[n]);
         n++;

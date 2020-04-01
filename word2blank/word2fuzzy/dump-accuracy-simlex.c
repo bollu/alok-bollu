@@ -49,25 +49,17 @@ real entropy(real *v, int size) {
 real fuzzycrossentropy(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
     real H = 0;
     for(int i = 0; i < size; ++i)  {
-        H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
-            (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
+        H += v[i] * (lv[i] - lw[i]) + (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
     }
     return H;
 }
 
-real fuzzykl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
-    real H = 0;
-    for(int i = 0; i < size; ++i)  {
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
-        //H += -v[i] * lw[i] - (1 - v[i]) *  loneminusw[i]; //entropylog((1-w[i]));
-    }
-    return H;
-}
 
 real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw, int size) {
     real H = 0;
     for(int i = 0; i < size; ++i)  {
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        H += -v[i] * log(w[i]) - (1 - v[i]) *  log1p(-w[i]);
     }
     return H;
 }

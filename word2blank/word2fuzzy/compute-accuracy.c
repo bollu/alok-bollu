@@ -50,8 +50,10 @@ float crossentropy(float *v, float *w, int size) {
     float H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
-        H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
-            (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
+        // H += v[i] * (entropylog(v[i]) - entropylog(w[i])) + 
+        //     (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
+        H += v[i] * (log(v[i]) - log(w[i])) + 
+              (1 - v[i]) * (log1p(-v[i]) - log1p(-w[i]));
     }
     return H;
 }
@@ -60,7 +62,8 @@ float kl(float *v, float *w, int size) {
     float H = 0;
     for(int i = 0; i < size; ++i)  {
         if (w[i] < 1e-7) w[i] = 1e-7;
-        H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
+        H += -v[i] * log1p(w[i]) - (1 - v[i]) *  log1p(-w[i]);
     }
     return H;
 }
@@ -122,6 +125,8 @@ int main(int argc, char **argv)
     for (a = 0; a < size; a++) M[a + b * size] /= len;
   }
   fclose(f);
+
+  printf("TopN: %d\n", N);
   TCN = 0;
   while (1) {
     for (a = 0; a < N; a++) bestd[a] = 0;

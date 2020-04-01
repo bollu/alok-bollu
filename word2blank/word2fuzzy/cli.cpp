@@ -1150,23 +1150,22 @@ int main(int argc, char **argv) {
     }
 
 
-    printf("\nnormalizing features:\n");
-    // normalize probabilities per feature
-    for(long long a = 0; a < size; ++a) {
-        double total = 0;
-        for(long long b = 0; b < words; b++)  {
-            total += M[b][a];
-        }
+    // printf("\nnormalizing each word vector:\n");
+    // for(long long a = 0; a < size; ++a) {
+    //     double total = 0;
+    //     for(long long b = 0; b < words; b++)  {
+    //         total += M[b][a];
+    //     }
 
-        for(long long b = 0; b < words; b++)  {
-            M[b][a] /= total;
-            M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
-        }
-        printf("\r%4lld / %4lld: %4.2f%%", a, size, 100.0 * ((float)a/size));
-    }
+    //     for(long long b = 0; b < words; b++)  {
+    //         M[b][a] /= total;
+    //         M[b][a] = max<double>(min<double>(1.0, M[b][a]), 0.0);
+    //     }
+    //     printf("\r%4lld / %4lld: %4.2f%%", a, size, 100.0 * ((float)a/size));
+    // }
 
     // normalize features per vector
-    printf("\nnormalizing vectors:\n");
+    printf("\nnormalizing along features:\n");
     for(long long b = 0; b < words; ++b) {
         double total = 0;
         for(long long a = 0; a < size; a++)  {

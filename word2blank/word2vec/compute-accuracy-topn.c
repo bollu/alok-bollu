@@ -20,7 +20,7 @@
 #include <ctype.h>
 
 const long long max_size = 2000;         // max length of strings
-const long long N = 5;                   // number of closest words
+const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
 
 int main(int argc, char **argv)
@@ -68,6 +68,7 @@ int main(int argc, char **argv)
     for (a = 0; a < size; a++) M[a + b * size] /= len;
   }
   fclose(f);
+  printf("topN: %lld\n", N);
   TCN = 0;
   while (1) {
     for (a = 0; a < N; a++) bestd[a] = 0;

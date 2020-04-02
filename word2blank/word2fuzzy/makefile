@@ -37,6 +37,11 @@ compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh
 
+
+compute-accuracy-topn-phrases : compute-accuracy-topn-phrases.c
+	$(CC) compute-accuracy-topn-phrases.c -o compute-accuracy-topn-phrases $(CFLAGS)
+	chmod +x *.sh
+
 compute-accuracy-topn : compute-accuracy-topn.c
 	$(CC) compute-accuracy-topn.c -o compute-accuracy-topn $(CFLAGS)
 	chmod +x *.sh

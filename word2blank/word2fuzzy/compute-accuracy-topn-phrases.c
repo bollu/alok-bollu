@@ -98,6 +98,80 @@ double kl(double *v, double *lv, double *loneminusv, double *w, double *lw, doub
 }
 
 
+const int ARGVECFILE = 1;
+const int ARGQUESTIONSFILE = 2;
+const int ARGN = 3;
+
+void addphrases(const char *str, char *vocab, 
+        double *M, double *Ml, double *Mloneminus,
+        const int size, long long int *words) {
+    // check that word has an _ in it.
+    int isphrase = 0;
+    for(int i = 0; i< strlen(str); ++i) {
+        isphrase = isphrase || str[i] == '_';
+    }
+
+    if (!isphrase) return;
+
+    // word was in vocab
+    for(int i = 0; i < *words; ++i) {
+        if (!strcmp(vocab + i * max_w, str)) return;
+    }
+
+    // OK, phrase is actually new. add to dict.
+    strcpy(vocab + *words *max_w, str);
+
+    for(int i = 0; i < size; ++i) {
+        M[*words * size  + i] = 1.0;
+    }
+
+    char subphrase[max_w];
+    int i = 0, bufi = 0;
+    while(1) {
+        bufi = 0;
+        while(str[i] != '_' && str[i] != '\0') {
+            subphrase[bufi] = str[i];
+            bufi++; i++;
+        }
+        subphrase[bufi] = 0;
+        fprintf(stderr, "## word: %s | subphrase: %s\n", str, subphrase);
+
+        // now lookup word in subphrase in our corpus...
+        int found = 0;
+        for(int w = 0; w < *words; ++w) {
+            if (strcmp(vocab + w * max_w, subphrase) == 0) { continue; }
+
+            found = 1;
+            for(int i = 0; i < size; ++i) {
+                M[*words * size + i] *= M[w * size + i];
+            }
+            break;
+        }
+        if (!found) {
+            // phrase does not exist in our corpus.
+            fprintf(stderr, "subword out of corpus: |%s|\n", subphrase);
+            assert(0 && "subphrase out of corpus!");
+            // early exit, return.
+            return;
+        }
+
+        if (str[i] == '\0') { break;  }
+        else { assert(str[i] == '_'); i++; }
+    }
+
+
+    double total = 0;
+    for(int i = 0; i < size; ++i) { total += M[*words * size + i]; }
+    for(int i = 0; i < size; ++i) { 
+        M[*words * size + i] /= total;
+        Ml[*words * size + i] = log(M[*words * size + i]);
+        Mloneminus[*words * size + i] = log1p(-M[*words * size + i]);
+    }
+
+    *words = *words + 1;
+    return;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -105,17 +179,19 @@ int main(int argc, char **argv)
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[max_n][max_size], file_name[max_size];
   double dist, bestd[max_n], vec[max_size], vecl[max_size], vecloneminus[max_size];
   long long words, size, a, b, c, d, b1, b2, b3;
-  double *M, *Ml, *Mloneminus, *tempM, *tempMl, *tempMloneminus;
+  double *M, *Ml, *Mloneminus;
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
-  if (argc < 3) {
-    printf("Usage: ./compute-accuracy <FILE> <N>\n"
-            "- FILE contains word projections\n"
-            "- N is topN closest words to try and match\n");
+  if (argc < 4) {
+    printf("Usage: ./compute-accuracy <VECFILE> <QUESTIONSFILE> <N> \n"
+            "- VECFILE contains word projections\n"
+            "- QUESTIONSFILE contains questions.\n"
+            "- N is topN closest words to try and match\n"
+          );
     return 0;
   }
-  strcpy(file_name, argv[1]);
-  long long N = atoi(argv[2]);
+  strcpy(file_name, argv[ARGVECFILE]);
+  long long N = atoi(argv[ARGN]);
   f = fopen(file_name, "rb");
   if (f == NULL) {
     printf("Input file not found\n");
@@ -123,22 +199,19 @@ int main(int argc, char **argv)
   }
   fscanf(f, "%lld", &words);
   fscanf(f, "%lld", &size);
-  const long long PHRASES = words + words * words;
 
-  vocab = (char *)malloc(words * max_w * sizeof(char));
-  M = (double *)malloc(words * size * sizeof(double));
-  Ml = (double *)malloc(words * size * sizeof(double));
-  Mloneminus = (double *)malloc(words * size * sizeof(double));
-
-  tempM = (double *)malloc(size * sizeof(double));
-  tempMl = (double *)malloc(size * sizeof(double));
-  tempMloneminus = (double *)malloc(size * sizeof(double));
+  const long  MAXWORDS = 2 * words;
+  vocab = (char *)malloc(words * 2 * max_w * sizeof(char));
+  M = (double *)malloc(words * 2 * size * sizeof(double));
+  Ml = (double *)malloc(words * 2 * size * sizeof(double));
+  Mloneminus = (double *)malloc(words * 2 * size * sizeof(double));
 
   if (M == NULL) {
     printf("Cannot allocate memory: %lld MB\n", words * size * sizeof(double) / 1048576);
     return -1;
   }
-  for (b = 0; b < words; b++) {
+  b = 0;
+  while(!feof(f)) {
     a = 0;
     while (1) {
       vocab[b * max_w + a] = fgetc(f);
@@ -147,6 +220,9 @@ int main(int argc, char **argv)
     }
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
+    b++;
+
+
 
     for (a = 0; a < size; a++) {
         float fl;
@@ -160,6 +236,7 @@ int main(int argc, char **argv)
     for (a = 0; a < size; a++) { M[a + b * size] /= len; }
 
   }
+  fclose(f);
 
 
   // take exponent
@@ -199,18 +276,41 @@ int main(int argc, char **argv)
   // normalize the features across each words
   for(b = 0; b < words; ++b) {
       double total = 0;
-      for(a = 0; a < size; ++a) {
-          total += M[b * size + a];
-      }
-
-      for(a = 0; a < size; ++a) {
-          M[b * size + a] /= total;
-          M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
-      }
+      for(a = 0; a < size; ++a) { total += M[b * size + a]; }
+      for(a = 0; a < size; ++a) { M[b * size + a] /= total; }
   }
 
 
+  // now parse the input file and check if we can find the concepts.
+  f = fopen(argv[ARGQUESTIONSFILE], "rb");
+  if (!f) { printf("unable to open questions file: |%s|\n", argv[ARGQUESTIONSFILE]); }
+  assert(f && "unable to open questions file");
+  while(!feof(f)) {
+      fscanf(f, "%s", st1);
+      for (a = 0; a < strlen(st1); a++) st1[a] = toupper(st1[a]);
+      if (!strcmp(st1, ":") || !strcmp(st1, "EXIT") || feof(f)) { continue; }
+      fscanf(f, "%s", st2);
+      for (a = 0; a < strlen(st2); a++) st2[a] = toupper(st2[a]);
+      fscanf(f, "%s", st3);
+      for (a = 0; a < strlen(st3); a++) st3[a] = toupper(st3[a]);
+      fscanf(f, "%s", st4);
+      for (a = 0; a < strlen(st4); a++) st4[a] = toupper(st4[a]);
 
+      // split at '_' and take intersections.
+      fprintf(stderr, "%s:%s :: %s:%s\n", st1, st2, st3, st4);
+      assert(words < MAXWORDS);
+      addphrases(st1, vocab, M, Ml, Mloneminus, size, &words);
+      assert(words < MAXWORDS);
+      addphrases(st2, vocab, M, Ml, Mloneminus, size, &words);
+      assert(words < MAXWORDS);
+      addphrases(st3, vocab, M, Ml, Mloneminus, size, &words);
+      assert(words < MAXWORDS);
+      addphrases(st4, vocab, M, Ml, Mloneminus, size, &words);
+      assert(words < MAXWORDS);
+
+  }
+  fclose(f);
+   
 
   for(b = 0; b < words; ++b) {
       for(a = 0; a < size; ++a) {
@@ -221,15 +321,17 @@ int main(int argc, char **argv)
   }
 
 
-  fclose(f);
   printf("TopN: %d\n", (int)N);
   TCN = 0;
+  f = fopen(argv[ARGQUESTIONSFILE], "rb");
+  if (!f) { printf("unable to open questions file: |%s|\n", argv[ARGQUESTIONSFILE]); }
+  assert(f && "unable to open questions file");
   while (1) {
     for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
-    scanf("%s", st1);
+    fscanf(f, "%s", st1);
     for (a = 0; a < strlen(st1); a++) st1[a] = toupper(st1[a]);
-    if ((!strcmp(st1, ":")) || (!strcmp(st1, "EXIT")) || feof(stdin)) {
+    if ((!strcmp(st1, ":")) || (!strcmp(st1, "EXIT")) || feof(f)) {
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
         fflush(stdout);
@@ -239,22 +341,22 @@ int main(int argc, char **argv)
         fflush(stdout);
       }
       QID++;
-      scanf("%s", st1);
-      if (feof(stdin)) break;
+      fscanf(f, "%s", st1);
+      if (feof(f)) break;
       printf("%s:\n", st1);
       TCN = 0;
       CCN = 0;
       continue;
     }
     if (!strcmp(st1, "EXIT")) break;
-    scanf("%s", st2);
+    fscanf(f, "%s", st2);
     for (a = 0; a < strlen(st2); a++) st2[a] = toupper(st2[a]);
-    scanf("%s", st3);
+    fscanf(f, "%s", st3);
     for (a = 0; a<strlen(st3); a++) st3[a] = toupper(st3[a]);
-    scanf("%s", st4);
+    fscanf(f, "%s", st4);
 
     for (a = 0; a < strlen(st4); a++) st4[a] = toupper(st4[a]);
-    for (b = 0; b < PHRASES; b++) if (!strcmp(&vocab[b * max_w], st1)) break;
+    for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st1)) break;
     b1 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st2)) break;
     b2 = b;
@@ -267,11 +369,11 @@ int main(int argc, char **argv)
     for (a = 0; a < N; a++) bestd[a] = 100;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
-    if (b1 == PHRASES) continue;
-    if (b2 == PHRASES) continue;
-    if (b3 == PHRASES) continue;
-    for (b = 0; b < PHRASES; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
-    if (b == PHRASES) continue;
+    if (b1 == words) continue;
+    if (b2 == words) continue;
+    if (b3 == words) continue;
+    for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
+    if (b == words) continue;
 
 
 
@@ -289,43 +391,16 @@ int main(int argc, char **argv)
     }
 
     TQS++;
-    for (c = 0; c < PHRASES; c++) {
+    for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
         
-      if (c < words) {
           ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
           ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
-          dist = klfuzzy(vec, vecl, vecloneminus, 
-                  &M[c * size], &Ml[c * size], &Mloneminus[c * size],
-                  size);
-      } else {
-          long long i = (c - words) / words;
-          long long j = ((c - words) - i * words) % words;
-          assert(i >= 0);
-          assert(i < words);
-          assert(j >= 0);
-          assert(j < words);
-          double total = 0;
-          for(int k = 0; k < size; ++k) {
-              tempM[k] = M[i*size+k] * M[j*size+k];
-              total += tempM[k];
-          }
-
-          // normalize
-          for(int k = 0; k < size; ++k) {
-              tempM[k] /= total;
-              tempMl[k] = log(tempM[k]);
-              tempMloneminus[k] = log1p(-tempM[k]);
-          }
-
-
-          dist = klfuzzy(vec, vecl, vecloneminus, 
-                  tempM, tempMl, tempMloneminus,
-                  size);
-
-      }
+      dist = klfuzzy(vec, vecl, vecloneminus, 
+              &M[c * size], &Ml[c * size], &Mloneminus[c * size],
+              size);
 
       for (a = 0; a < N; a++) {
         if (dist < bestd[a]) {

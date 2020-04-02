@@ -22,8 +22,8 @@
 #define max(i, j) ((i) > (j) ? (i) : (j))
 
 #define max_size 2000
-#define N 40
-#define max_w 50
+#define N 25
+#define max_w 100
 
 typedef double real;
 
@@ -64,17 +64,19 @@ real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw
     return H;
 }
 
-real sim(int w1, int w2) {
+real sim_kl(int w1, int w2) {
     return kl(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
         M + size * w2, Ml + size * w2, Mloneminus + size *w2,
         size) + kl(M + size * w2, Ml + size * w2, Mloneminus + size *w2, 
         M + size * w1, Ml + size * w1, Mloneminus + size *w1,
         size);
+}
+
+real sim_cross_entropy(int w1, int w2) {
     return fuzzycrossentropy(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
         M + size * w2, Ml + size * w2, Mloneminus + size *w2,
         size);
 }
-
 
 int main(int argc, char **argv) {
 
@@ -100,6 +102,11 @@ int main(int argc, char **argv) {
     M = (real *)malloc((long long)words * (long long)size * sizeof(real));
     Ml = (real *)malloc(words * size * sizeof(real));
     Mloneminus = (real *)malloc(words * size * sizeof(real));
+    if (M == NULL) {
+        printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
+               (long long)words * size * sizeof(float) / 1048576, words, size);
+        return -1;
+    }
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);
@@ -176,8 +183,9 @@ int main(int argc, char **argv) {
 
     static const int MAX_LINES_SIMLEX = 1002;
     real *simlexes = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
-    real *oursims = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
-
+    real *oursims_kl = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
+    real *oursims_cross_entropy = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
+    
     char word1[max_size], word2[max_size], word3[max_size];
     int n = 0;
     for(; !feof(f);) {
@@ -240,21 +248,32 @@ int main(int argc, char **argv) {
             continue;
         }
         /// ==== all vectors legal====
-        oursims[n] = 100 - sim(w1ix, w2ix);
-        assert(oursims[n] >= 0);
-        fprintf(stderr, "\tw2v(%f)\n", oursims[n]);
-        n++;
-
-    }
-
-    if (argc == 4) {
-        f = fopen(argv[3], "w");
-        assert(f != 0);
-        for(int i = 0; i < n; ++i) {
-            fprintf(f, "%f %f\n", simlexes[i], oursims[i]);
+        oursims_kl[n] = 100 - sim_kl(w1ix, w2ix);
+        oursims_cross_entropy[n] = 100 - sim_cross_entropy(w1ix, w2ix);
+        assert(oursims_kl[n] >= 0);
+        assert(oursims_cross_entropy[n] >= 0);
+        switch(atoi(argv[3]))
+        {
+          case 1: fprintf(stderr, "\tfuzzy: kl(%f)\n", oursims_kl[n]);
+             break;
+          case 2: fprintf(stderr, "\tfuzzy: cross entropy(%f)\n", oursims_cross_entropy[n]);
+             break;
         }
-        fclose(f);
+        n++;
     }
-
-    return 0;
+		if (argc == 5) {
+		        f = fopen(argv[4], "w");
+		        assert(f != 0);
+		        for(int i = 0; i < n; ++i) {
+								switch(atoi(argv[3]))
+                {
+                  case 1: fprintf(f, "%f %f\n", simlexes[i], oursims_kl[i]);
+                     break;
+                  case 2: fprintf(f, "%f %f\n", simlexes[i], oursims_cross_entropy[i]);
+                     break;
+                }
+		        }
+		        fclose(f);
+		    }
+		    return 0;
 }

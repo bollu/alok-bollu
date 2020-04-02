@@ -25,8 +25,8 @@
 #define max(i, j) ((i) > (j) ? (i) : (j))
 
 const long long max_size = 2000;         // max length of strings
-const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
+const long long max_n = 100; // max top-n vectors asked for.
 
 void analogy(double *a, double *b, double *x, double *y, int size) {
     for(int i = 0; i < size; ++i) {
@@ -100,25 +100,26 @@ double kl(double *v, double *lv, double *loneminusv, double *w, double *lw, doub
 int main(int argc, char **argv)
 {
   FILE *f;
-  char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  double dist, bestd[N], vec[max_size], vecl[max_size], vecloneminus[max_size];
-  long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
+  char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[max_n][max_size], file_name[max_size];
+  double dist, bestd[max_n], vec[max_size], vecl[max_size], vecloneminus[max_size];
+  long long words, size, a, b, c, d, b1, b2, b3;
   double *M, *Ml, *Mloneminus;
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
-  if (argc < 2) {
-    printf("Usage: ./compute-accuracy <FILE> <threshold>\nwhere FILE contains word projections, and threshold is used to reduce vocabulary of the model for fast approximate evaluation (0 = off, otherwise typical value is 30000)\n");
+  if (argc < 3) {
+    printf("Usage: ./compute-accuracy <FILE> <N>\n"
+            "- FILE contains word projections\n"
+            "- N is topN closest words to try and match\n");
     return 0;
   }
   strcpy(file_name, argv[1]);
-  if (argc > 2) threshold = atoi(argv[2]);
+  long long N = atoi(argv[2]);
   f = fopen(file_name, "rb");
   if (f == NULL) {
     printf("Input file not found\n");
     return -1;
   }
   fscanf(f, "%lld", &words);
-  if (threshold) if (words > threshold) words = threshold;
   fscanf(f, "%lld", &size);
   vocab = (char *)malloc(words * max_w * sizeof(char));
   M = (double *)malloc(words * size * sizeof(double));
@@ -149,36 +150,40 @@ int main(int argc, char **argv)
     len = sqrt(len);
     for (a = 0; a < size; a++) { M[a + b * size] /= len; }
 
-    // take exponent
-    for (a = 0; a < size; a++) { M[a + b * size] = pow(2.0, M[a + b * size]); }
+  }
+
+
+  // take exponent
+  for(b = 0; b < words; ++b) {
+      for (a = 0; a < size; a++) { M[a + b * size] = pow(2.0, M[a + b * size]); }
   }
 
   // normalize the features of each word
-  for(b = 0; b < words; ++b) {
-      double total = 0;
-      for(a = 0; a < size; ++a) {
-          total += M[b * size + a];
-      }
-
-      for(a = 0; a < size; ++a) {
-          M[b * size + a] /= total;
-          M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
-      }
-  }
-
-
-  // normalize each feature of all words
-  // for(a = 0; a < size; ++a) {
+  // for(b = 0; b < words; ++b) {
   //     double total = 0;
-  //     for(b = 0; b < words; ++b) {
+  //     for(a = 0; a < size; ++a) {
   //         total += M[b * size + a];
   //     }
 
-  //     for(b = 0; b < words; ++b) {
+  //     for(a = 0; a < size; ++a) {
   //         M[b * size + a] /= total;
   //         M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
   //     }
   // }
+
+
+  // normalize each feature of all words
+  for(a = 0; a < size; ++a) {
+      double total = 0;
+      for(b = 0; b < words; ++b) {
+          total += M[b * size + a];
+      }
+
+      for(b = 0; b < words; ++b) {
+          M[b * size + a] /= total;
+          M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
+      }
+  }
 
 
 
@@ -268,7 +273,9 @@ int main(int argc, char **argv)
       } else {
           ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
           ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
-          dist = crossentropyfuzzy(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size);
+          dist = klfuzzy(vec, vecl, vecloneminus, 
+                  &M[c * size], &Ml[c * size], &Mloneminus[c * size],
+                  size);
       }
 
       for (a = 0; a < N; a++) {

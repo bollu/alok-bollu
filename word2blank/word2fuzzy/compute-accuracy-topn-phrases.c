@@ -91,9 +91,9 @@ double klfuzzy(double *v, double *lv, double *loneminusv, double *w, double *lw,
 double kl(double *v, double *lv, double *loneminusv, double *w, double *lw, double *loneminusw, int size) {
     double H = 0;
     for(int i = 0; i < size; ++i)  {
-        // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
-        H += -v[i] * (lv[i] - lw[i]);
+        H += v[i] * (lv[i] - lw[i]);
     }
+    assert(H >= 0);
     return H;
 }
 
@@ -398,7 +398,7 @@ int main(int argc, char **argv)
         
           ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
           ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
-      dist = klfuzzy(vec, vecl, vecloneminus, 
+      dist = crossentropy(vec, vecl, vecloneminus, 
               &M[c * size], &Ml[c * size], &Mloneminus[c * size],
               size);
 

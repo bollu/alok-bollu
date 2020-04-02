@@ -105,7 +105,7 @@ int main(int argc, char **argv)
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[max_n][max_size], file_name[max_size];
   double dist, bestd[max_n], vec[max_size], vecl[max_size], vecloneminus[max_size];
   long long words, size, a, b, c, d, b1, b2, b3;
-  double *M, *Ml, *Mloneminus;
+  double *M, *Ml, *Mloneminus, *tempM, *tempMl, *tempMloneminus;
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
   if (argc < 3) {
@@ -125,12 +125,17 @@ int main(int argc, char **argv)
   fscanf(f, "%lld", &size);
   const long long PHRASES = words + words * words;
 
-  vocab = (char *)malloc(PHRASES * max_w * sizeof(char));
-  M = (double *)malloc(PHRASES * size * sizeof(double));
-  Ml = (double *)malloc(PHRASES * size * sizeof(double));
-  Mloneminus = (double *)malloc(PHRASES * size * sizeof(double));
+  vocab = (char *)malloc(words * max_w * sizeof(char));
+  M = (double *)malloc(words * size * sizeof(double));
+  Ml = (double *)malloc(words * size * sizeof(double));
+  Mloneminus = (double *)malloc(words * size * sizeof(double));
+
+  tempM = (double *)malloc(size * sizeof(double));
+  tempMl = (double *)malloc(size * sizeof(double));
+  tempMloneminus = (double *)malloc(size * sizeof(double));
+
   if (M == NULL) {
-    printf("Cannot allocate memory: %lld MB\n", PHRASES * size * sizeof(double) / 1048576);
+    printf("Cannot allocate memory: %lld MB\n", words * size * sizeof(double) / 1048576);
     return -1;
   }
   for (b = 0; b < words; b++) {
@@ -163,6 +168,7 @@ int main(int argc, char **argv)
   }
 
 
+  /* try to build all pairs vectors. not sustainable.
   for(long long i = 0; i < words; ++i) {
       for(long long j = 0; j < words; ++j) {
           const long long ix = words + i * words + j;
@@ -175,6 +181,7 @@ int main(int argc, char **argv)
           }
       }
   }
+  */
 
   // normalize each feature across all words.
   // for(a = 0; a < size; ++a) {
@@ -190,7 +197,7 @@ int main(int argc, char **argv)
   // }
 
   // normalize the features across each words
-  for(b = 0; b < PHRASES; ++b) {
+  for(b = 0; b < words; ++b) {
       double total = 0;
       for(a = 0; a < size; ++a) {
           total += M[b * size + a];
@@ -205,7 +212,7 @@ int main(int argc, char **argv)
 
 
 
-  for(b = 0; b < PHRASES; ++b) {
+  for(b = 0; b < words; ++b) {
       for(a = 0; a < size; ++a) {
           Ml[b * size + a] = log(M[b * size + a]);
           // Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
@@ -286,15 +293,38 @@ int main(int argc, char **argv)
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      if (0) {
-          dist = 0;
-          for (a = 0; a < size; a++) { dist += vec[a] * M[a + c * size]; }
-      } else {
+        
+      if (c < words) {
           ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
           ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
           dist = klfuzzy(vec, vecl, vecloneminus, 
                   &M[c * size], &Ml[c * size], &Mloneminus[c * size],
                   size);
+      } else {
+          long long i = (c - words) / words;
+          long long j = ((c - words) - i * words) % words;
+          assert(i >= 0);
+          assert(i < words);
+          assert(j >= 0);
+          assert(j < words);
+          double total = 0;
+          for(int k = 0; k < size; ++k) {
+              tempM[k] = M[i*size+k] * M[j*size+k];
+              total += tempM[k];
+          }
+
+          // normalize
+          for(int k = 0; k < size; ++k) {
+              tempM[k] /= total;
+              tempMl[k] = log(tempM[k]);
+              tempMloneminus[k] = log1p(-tempM[k]);
+          }
+
+
+          dist = klfuzzy(vec, vecl, vecloneminus, 
+                  tempM, tempMl, tempMloneminus,
+                  size);
+
       }
 
       for (a = 0; a < N; a++) {

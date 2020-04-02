@@ -19,8 +19,8 @@
 #include <assert.h>
 
 #define max_size 2000
-#define N 40
-#define max_w 50
+#define N 25
+#define max_w 100
 
 typedef float real;
 

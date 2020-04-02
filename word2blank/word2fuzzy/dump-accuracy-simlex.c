@@ -66,35 +66,41 @@ real kl(real *v, real *lv, real *loneminusv, real *w, real *lw, real *loneminusw
 
 real sim_kl(int w1, int w2) {
     return kl(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
-        M + size * w2, Ml + size * w2, Mloneminus + size *w2,
-        size) + kl(M + size * w2, Ml + size * w2, Mloneminus + size *w2, 
-        M + size * w1, Ml + size * w1, Mloneminus + size *w1,
-        size);
+            M + size * w2, Ml + size * w2, Mloneminus + size *w2,
+            size) + kl(M + size * w2, Ml + size * w2, Mloneminus + size *w2, 
+                M + size * w1, Ml + size * w1, Mloneminus + size *w1,
+                size);
 }
 
 real sim_cross_entropy(int w1, int w2) {
     return fuzzycrossentropy(M + size * w1, Ml + size * w1, Mloneminus + size *w1, 
-        M + size * w2, Ml + size * w2, Mloneminus + size *w2,
-        size);
+            M + size * w2, Ml + size * w2, Mloneminus + size *w2,
+            size);
 }
+
+static const int ARG_VECFILE = 1;
+static const int ARG_SIMLEXFILE = 2;
+static const int ARG_KL_CROSSENTROPY = 3;
+static const int ARG_OUTFILE = 4;
 
 int main(int argc, char **argv) {
 
-    printf("are you sure you want to run this? You likely wish to run spearman.py");
-    if (argc < 3) {
+    printf("are you sure you want to run this? You likely wish to run spearman.py.\n");
+    if (argc < 4) {
         printf(
-            "Usage: ./distance <VECFILE> <SIMLEXFILE> [OUTFILE]"
-            "\nwhere VECFILE contains word projections in the BINARY FORMAT"
-            "\nSIMLEXFILE is the SimLex-999.txt from SimLex"
-            "\n[OUTFILE] is the optional file to dump <simlexscore>:<vecscore>");
+                "Usage: ./distance <VECFILE> <SIMLEXFILE> ['kl/'crossentropy'] [OUTFILE]"
+                "\nwhere VECFILE contains word projections in the BINARY FORMAT"
+                "\nSIMLEXFILE is the SimLex-999.txt from SimLex"
+                "\n[OUTFILE] is the optional file to dump <simlexscore>:<vecscore>");
         return 0;
     }
-    strcpy(file_name, argv[1]);
+    strcpy(file_name, argv[ARG_VECFILE]);
     f = fopen(file_name, "rb");
     if (f == NULL) {
         printf("Input file not found\n");
         return -1;
     }
+
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
@@ -104,12 +110,12 @@ int main(int argc, char **argv) {
     Mloneminus = (real *)malloc(words * size * sizeof(real));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
-               (long long)words * size * sizeof(float) / 1048576, words, size);
+                (long long)words * size * sizeof(float) / 1048576, words, size);
         return -1;
     }
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
-               (long long)words * size * sizeof(float) / 1048576, words, size);
+                (long long)words * size * sizeof(float) / 1048576, words, size);
         return -1;
     }
     for (b = 0; b < words; b++) {
@@ -134,7 +140,7 @@ int main(int argc, char **argv) {
 
         // take exponent
         for (a = 0; a < size; a++) { M[a + b * size] = pow(2.0, M[a + b * size]); }
-        
+
     }
     fclose(f);
 
@@ -173,7 +179,7 @@ int main(int argc, char **argv) {
     }
 
     // open simlex file to read
-    f = fopen(argv[2], "r");
+    f = fopen(argv[ARG_SIMLEXFILE], "r");
 
     // throw away first line.
     {
@@ -183,9 +189,8 @@ int main(int argc, char **argv) {
 
     static const int MAX_LINES_SIMLEX = 1002;
     real *simlexes = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
-    real *oursims_kl = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
-    real *oursims_cross_entropy = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
-    
+    real *oursims = (real *)malloc(sizeof(real) * MAX_LINES_SIMLEX);
+
     char word1[max_size], word2[max_size], word3[max_size];
     int n = 0;
     for(; !feof(f);) {
@@ -219,7 +224,7 @@ int main(int argc, char **argv) {
         const int w3_startix = w2_startix + j + 3;
         int k = 0;
         while(linebuf[w3_startix + k] != '\t' && 
-              linebuf[w3_startix + k] != ' ') {
+                linebuf[w3_startix + k] != ' ') {
             word3[k] = linebuf[w3_startix + k]; k++;
         }
         word3[k] = '\0';
@@ -248,32 +253,26 @@ int main(int argc, char **argv) {
             continue;
         }
         /// ==== all vectors legal====
-        oursims_kl[n] = 100 - sim_kl(w1ix, w2ix);
-        oursims_cross_entropy[n] = 100 - sim_cross_entropy(w1ix, w2ix);
-        assert(oursims_kl[n] >= 0);
-        assert(oursims_cross_entropy[n] >= 0);
-        switch(atoi(argv[3]))
-        {
-          case 1: fprintf(stderr, "\tfuzzy: kl(%f)\n", oursims_kl[n]);
-             break;
-          case 2: fprintf(stderr, "\tfuzzy: cross entropy(%f)\n", oursims_cross_entropy[n]);
-             break;
+        assert(oursims[n] >= 0);
+        if (!strcmp(argv[ARG_KL_CROSSENTROPY], "kl")) {
+            oursims[n] = 100 - sim_kl(w1ix, w2ix);
+
+        } else if (!strcmp(argv[ARG_KL_CROSSENTROPY], "crossentropy")) {
+            oursims[n] = 100 - sim_cross_entropy(w1ix, w2ix);
+
+        } else { 
+            fprintf(stderr, "unknown option for type of divergence: |%s|\n", argv[ARG_KL_CROSSENTROPY]);
+            assert(0 && "unknown divergence type.");
         }
         n++;
     }
-		if (argc == 5) {
-		        f = fopen(argv[4], "w");
-		        assert(f != 0);
-		        for(int i = 0; i < n; ++i) {
-								switch(atoi(argv[3]))
-                {
-                  case 1: fprintf(f, "%f %f\n", simlexes[i], oursims_kl[i]);
-                     break;
-                  case 2: fprintf(f, "%f %f\n", simlexes[i], oursims_cross_entropy[i]);
-                     break;
-                }
-		        }
-		        fclose(f);
-		    }
-		    return 0;
+    if (argc == 5) {
+        f = fopen(argv[4], "w");
+        assert(f != 0);
+        for(int i = 0; i < n; ++i) {
+            fprintf(f, "%f %f\n", simlexes[i], oursims[i]);
+        }
+        fclose(f);
+    }
+    return 0;
 }

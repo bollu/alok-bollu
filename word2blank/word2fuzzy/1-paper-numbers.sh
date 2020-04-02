@@ -16,7 +16,7 @@ SIMLEXPATH=~/work/alok-bollu/word2blank/word2fuzzy/SimLex-999
 ./compute-accuracy-topn ${W2VPATH}/text8-size=50  5 < questions-words.txt >  fuzzy-w2v-size=50-accuracy.txt
 ./compute-accuracy-topn ${W2VPATH}/text8-size=20  5 < questions-words.txt >  fuzzy-w2v-size=20-accuracy.txt
 ./compute-accuracy-topn ${W2VPATH}/text8-size=10  5 < questions-words.txt >  fuzzy-w2v-size=10-accuracy.txt
-./simlex.py  $W2VPATH/text8-size=200 $SIMLEXPATH/SimLex-999.txt > simlex-200.txt
+./simlex.py  $W2VPATH/text8-size=200 $SIMLEXPATH/SimLex-999.txt crossentropy > simlex-200.txt
 ./simlex.py  $W2VPATH/text8-size=100 $SIMLEXPATH/SimLex-999.txt > simlex-100.txt
 ./simlex.py  $W2VPATH/text8-size=50 $SIMLEXPATH/SimLex-999.txt > simlex-50.txt
 ./simlex.py  $W2VPATH/text8-size=20 $SIMLEXPATH/SimLex-999.txt > simlex-20.txt

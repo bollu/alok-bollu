@@ -25,3 +25,5 @@ models.zip
 dump-accuracy-simlex
 dump-accuracy-simlex.temp.txt
 compute-accuracy-ranked
+compute-composition
+dump-composition.temp.txt

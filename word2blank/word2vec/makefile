@@ -62,7 +62,7 @@ dump-accuracy-simlex : dump-accuracy-simlex.c
 
 
 compute-composition: compute-composition.cpp
-	$(CC) compute-composition.cpp -o compute-composition $(CFLAGS)
+	$(CC) -O2 compute-composition.cpp -o compute-composition -lm  -Wno-unused-result
 
 cli: cli.cpp  linenoise.c
 	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS)

@@ -28,13 +28,19 @@ const long long max_size = 2000;         // max length of strings
 const long long max_w = 50;              // max length of vocabulary entries
 const long long max_n = 800; // max top-n vectors asked for.
 
+// A    :   B  :: X    : Y?
+// man : king :: woman: queen?
+// king - man + woman
+// B/A U X
+// (B U X) \cap A^C) 
 void analogy(double *a, double *b, double *x, double *y, int size) {
     for(int i = 0; i < size; ++i) {
-        double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
+        // double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
+        double bmina = b[i]  - min(b[i], a[i]);
+        double delta =  bmina + x[i] - bmina * x[i];
         y[i] = delta;
-        y[i] = max(delta, 0.0);
-        y[i] = min(delta, 1.0);
         assert(y[i] >= 0);
+        assert(y[i] <= 1);
     }
     // double total = 0;
     // for(int i = 0; i < size; ++i) { total +=  y[i]; }
@@ -54,6 +60,9 @@ double crossentropyfuzzy(double *v, double *lv, double *loneminusv, double *w, d
     for(int i = 0; i < size; ++i)  {
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
             (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
+    }
+    if (H < 0) {
+        fprintf(stderr, "H: %4.2f\n", H); fflush(stderr);
     }
     assert(H >= 0);
     return H;
@@ -253,11 +262,10 @@ int main(int argc, char **argv)
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
-      ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
-      dist = crossentropyfuzzy(vec, vecl, vecloneminus, 
+      dist = crossentropyfuzzy( vec, vecl, vecloneminus, 
               &M[c * size], &Ml[c * size], &Mloneminus[c * size],
               size);
+
 
       for (a = 0; a < N; a++) {
         if (dist < bestd[a]) {

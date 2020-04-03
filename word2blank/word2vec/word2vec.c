@@ -17,6 +17,8 @@
 #include <string.h>
 #include <math.h>
 #include <pthread.h>
+#include <math.h>
+#include <assert.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -640,8 +642,9 @@ void TrainModel() {
   start = clock();
   for (a = 0; a < num_threads; a++) pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
   for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
-  fo = fopen(output_file, "wb");
   if (classes == 0) {
+    fo = fopen(output_file, "wb");
+    assert(fo);
     // Save the word vectors
     // EMBEDSIZE := layer1_size
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
@@ -651,7 +654,24 @@ void TrainModel() {
       else for (b = 0; b < layer1_size; b++) fprintf(fo, "%lf ", syn0[a * layer1_size + b]);
       fprintf(fo, "\n");
     }
+    fclose(fo);
+
+    char negpath[512];
+    sprintf(negpath, "syn1neg-%s", output_file);
+    fo = fopen(negpath, "wb");
+    assert(fo);
+    fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+    for (a = 0; a < vocab_size; a++) {
+      fprintf(fo, "%s ", vocab[a].word);
+      if (binary) for (b = 0; b < layer1_size; b++) fwrite(&syn1neg[a * layer1_size + b], sizeof(real), 1, fo);
+      else for (b = 0; b < layer1_size; b++) fprintf(fo, "%lf ", syn1neg[a * layer1_size + b]);
+      fprintf(fo, "\n");
+    }
+    fclose(fo);
+
+
   } else {
+    fo = fopen(output_file, "wb");
     // Run K-means on the word vectors
     int clcn = classes, iter = 10, closeid;
     int *centcn = (int *)malloc(classes * sizeof(int));

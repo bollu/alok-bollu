@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -644,7 +645,7 @@ void TrainModel() {
   for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
   if (classes == 0) {
     fo = fopen(output_file, "wb");
-    assert(fo);
+    assert(fo != NULL);
     // Save the word vectors
     // EMBEDSIZE := layer1_size
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
@@ -657,9 +658,11 @@ void TrainModel() {
     fclose(fo);
 
     char negpath[512];
-    sprintf(negpath, "syn1neg-%s", output_file);
+    char *outdir = strdup(dirname(output_file));
+    char *outfilename = strdup(basename(output_file));
+    sprintf(negpath, "%s/syn1neg-%s", outdir, outfilename);
     fo = fopen(negpath, "wb");
-    assert(fo);
+    assert(fo != NULL);
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
       fprintf(fo, "%s ", vocab[a].word);
@@ -714,8 +717,8 @@ void TrainModel() {
     free(centcn);
     free(cent);
     free(cl);
+    fclose(fo);
   }
-  fclose(fo);
 }
 
 int ArgPos(char *str, int argc, char **argv) {

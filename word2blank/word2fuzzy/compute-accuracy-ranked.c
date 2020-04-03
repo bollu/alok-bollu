@@ -35,9 +35,17 @@ const long long max_n = 800; // max top-n vectors asked for.
 // (B U X) \cap A^C) 
 void analogy(double *a, double *b, double *x, double *y, int size) {
     for(int i = 0; i < size; ++i) {
+        // ---- 2. (better default)----
         // double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
-        double bmina = b[i]  - min(b[i], a[i]);
-        double delta =  bmina + x[i] - bmina * x[i];
+        
+        // ---- 3. very very close but slightly worse :(
+        double b_plus_x = b[i] + x[i] - b[i] * x[i];
+        double delta = b_plus_x - min(b_plus_x, a[i]);
+        
+        // ------4.
+        //double b_minus_a = b[i]  - min(b[i], a[i]);
+        //double x_minus_a = x[i]  - min(x[i], a[i]);
+        //double delta = b_minus_a + x_minus_a - b_minus_a * x_minus_a;
         y[i] = delta;
         assert(y[i] >= 0);
         assert(y[i] <= 1);
@@ -61,9 +69,11 @@ double crossentropyfuzzy(double *v, double *lv, double *loneminusv, double *w, d
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
             (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
     }
+
     if (H < 0) {
         fprintf(stderr, "H: %4.2f\n", H); fflush(stderr);
-    }
+    } 
+    assert(H == H);
     assert(H >= 0);
     return H;
 }
@@ -253,8 +263,8 @@ int main(int argc, char **argv)
         // vecloneminus[i] = entropylog(1 - vec[i]);
         assert(vec[i] >= 0);
         assert(vec[i] <= 1);
-        vecl[i] = log(vec[i]);
-        vecloneminus[i] = log1p(-vec[i]);
+        vecl[i] = vec[i] == 0 ? 0 : log(vec[i]);
+        vecloneminus[i] = (1 - vec[i]) == 0 ? 0 : log1p(-vec[i]);
     }
 
     TQS++;
@@ -262,7 +272,7 @@ int main(int argc, char **argv)
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = crossentropyfuzzy( vec, vecl, vecloneminus, 
+      dist = crossentropyfuzzy(vec, vecl, vecloneminus, 
               &M[c * size], &Ml[c * size], &Mloneminus[c * size],
               size);
 
@@ -291,7 +301,7 @@ int main(int argc, char **argv)
         if (!strcmp(st4, bestw[i])) {
           fprintf(stderr, "\tfound!\n"); fflush(stderr);
           CCN += 1.0 / (i + 1);
-          CACN++;
+          CACN += 1.0 / (i + 1);
           if (QID <= 5) SEAC++; else SYAC++;
           break;
         }

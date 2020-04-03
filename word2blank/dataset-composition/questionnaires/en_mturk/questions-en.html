@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<title>Noun compounds in English</title>  <!-- XXX don't forget to update this line -->
+
+<!--
+Example NN: death sentence
+Example AN: yellow house
+
+undefdet_head: "a"/"an"/"" according to head
+undefdet_compound: "a"/"an" according to modif; but "" if head is plural
+  (THIS ASSUMES modifier-head compounds, so "vitamin A" WOULD FAIL)
+
+relatedto_modifier:
+  if modifier is a noun: "related to"
+  if modifier is an adjective: ""
+
+something_modifier:
+  if modifier is a noun: ""
+  if modifier is an adjective: "something"
+-->
+
+<link href="https://s3.amazonaws.com/mturk-public/bs30/css/bootstrap.min.css" rel="stylesheet" />
+
+
+<style type="text/css">
+    .opt-comment {
+        color: #888888;
+        font-size: 80%;
+    }
+
+    .indentation {
+        padding-left: 20pt;
+    }
+
+    .radio-table {
+        margin-left: 10px;
+    }
+
+    input[type=radio] {
+        appearance: none;
+        -moz-appearance: none;  /* make Firefox respect settings */
+        width   : 20px;
+        height  : 20px;
+        margin  : 5px;
+        padding : 0;
+    }
+
+    td {
+        line-height: 0;
+    }
+
+    .bigyes, .bigno {
+        padding: 10px;
+        width: 50px;
+        font-size: 10pt;
+        text-align: center;
+        color: grey;
+    }
+    .number {
+        color:grey;
+        font-size: 8pt;
+        text-align: center;
+    }
+
+    .tooltippy {
+        position: relative;
+    }
+
+    .tooltippy .ttip {
+        display: none;
+        position: absolute;
+        z-index: 1;
+
+        /*
+        width: 50em;
+        */
+        line-height: 0;
+        white-space: nowrap;
+
+        font-size: 12;
+        padding: 20px 20px;
+        border: 1px solid black;
+        background-color: #FFF;
+        box-shadow: 2px 2px 6px #000;
+        top: 2em;
+        left: 50%;
+    }
+
+    .tooltippy:hover .ttip {
+        display: inline;
+    }
+
+
+    fieldset {
+        padding: 10px;
+        background: #fbfbfb;
+        border-radius: 5px;
+        margin-bottom: 5px;
+    }
+
+    ul.with-inputfields li {
+        margin-top: 3pt;
+    }
+</style>
+
+</head>
+
+
+<!--=====================================================-->
+<!--=====================================================-->
+<body>
+
+<section class="container" id="Survey" style="margin-bottom:15px; padding: 10px 10px; font-family: Verdana, Geneva, sans-serif; color:#333333; font-size:0.9em;">
+
+
+<!--=====================================================-->
+<div class="row col-xs-12 col-md-12"><!-- Instructions -->
+<div class="panel panel-primary">
+<div class="panel-heading"><strong>Instructions</strong></div>
+<div class="panel-body">
+<p>In this task, you will read an English expression. Then, you will
+  evaluate what the individual contribution of each word is to the global meaning of the expression.</p>
+<!-- THIS SHOULD BE IN THE FORM INSTEAD: <li>Our goal is to better understand how the noun compounds are interpreted in English by the native speakers of the current language:</p> -->
+
+<ul>
+<li>Each HIT should take 1 to 2 minutes to complete.</li>
+<li>If this is your first HIT, you are required to <a href="http://goo.gl/forms/zMJ3l4MPpw" target="_blank"> fill out this qualification form</a> in order to be paid.</li> <!-- You will not be paid if you do not inform your <em>worker ID</em> in the qualification form.</li> -->
+<li>Each HIT asks you to read 3 sentences containing a given expression. If you do not understand them, you should abandon the HIT.</li>
+<li>If the expression sounds ambiguous to you, consider ONLY the meaning that is reflected in the 3 sentences.</li>
+  <!-- <li>For each of the first 3 questions, you must select a value between 0 and 5, where 0 means <em>absolutely not</em> and 5 means <em>yes, exactly</em>. The other values represent intermediary levels of agreement.</li>
+  <li>After those, you must propose 3 alternatives for the noun compound that maintain an equivalent or similar meaning. You should favor short expressions, with 1 to 3 words. You must provide at least 2 alternatives, otherwise your HIT will be rejected.</li>
+  -->
+  <li>Do not think for too long about each question, as there are no wrong answers.</li>
+  <!-- <li>If you have any problems or suggestions, please fill out the last field in this page.</li> -->
+</ul>
+</div>
+</div>
+</div>
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>1. Read the following expression:</label><br/>
+<span class="indentation"></span><span style="font-size: 20pt"><em>${compound}</em></span>
+</fieldset>
+
+
+<!--=====================================================-->
+<fieldset>
+<label>2. Read the following sentences containing the expression <em>${compound}</em>:</label><br/>
+<!-- <span class="opt-comment">Certaines phrases peuvent contenir des coquilles.</span> -->
+<ul>
+<li><em>${examplesent1}</em></li>
+<li><em>${examplesent2}</em></li>
+<li><em>${examplesent3}</em></li>
+</ul>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<!--<hr/><li>Comprenez vous le <u>sens</u> de <em>{compound}</em> dans les phrases ci-dessus ? <br/>
+<small>Si vous avez un doute, vous pouvez consulter le <a target="_blank" href="{link-wiktionnary}">dictionnaire</a> avant de répondre</small> <br/>
+
+<input required type="radio" name="known" value="YES"/> YES <br/>
+<input required type="radio" name="known" value="NO"/> NO
+</li>
+-->
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>3. Type in 2 to 3 expressions that are equivalent to <em>${compound}</em>:</label><br/>
+
+<ul class="with-inputfields">
+<li><span class="tooltippy"><input type="text" name="paraphrase1" placeholder="Required"/><span class="ttip">Prioritize short expressions, with 1 to 3 words each, and trying to include the words <em>${head}</em> and/or <em>${modifier}</em></span></span></li>
+<li><span class="tooltippy"><input type="text" name="paraphrase2" placeholder="Required"/><span class="ttip">Prioritize short expressions, with 1 to 3 words each, and trying to include the words <em>${head}</em> and/or <em>${modifier}</em></span></span></li>
+<li><span class="tooltippy"><input type="text" name="paraphrase3"/><span class="ttip">Prioritize short expressions, with 1 to 3 words each, and trying to include the words <em>${head}</em> and/or <em>${modifier}</em></span></span></li>
+</ul>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>4. In your opinion, ${be} ${undefdet_compound} <em>${compound}</em> always literally ${undefdet_head} <em>${head}</em>? </label><br/>
+
+<br/>
+<table class="radio-table">
+    <tbody>
+    <tr>
+        <td class="bigno" rowspan="2">NO</td> <td class="number">0</td> <td class="number">1</td> <td class="number">2</td> <td class="number">3</td> <td class="number">4</td> <td class="number">5</td> <td class="bigyes" rowspan="2">YES</td>
+    </tr>
+    <tr>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="0"/><div class="ttip">Absolutely not &mdash; ${undefdet_compound} <em>${compound}</em> ${have} <u>nothing to do</u> with ${undefdet_head} <em>${head}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="1"/><div class="ttip">No &mdash; I see only a <u>vague relation</u> between ${undefdet_compound} <em>${compound}</em> and ${undefdet_head} <em>${head}</em><!---, mais c'est tiré par les cheveux--></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="2"/><div class="ttip">Not really &mdash; the meaning of <em>${compound}</em> is <u>associated</u> with <em>${head}</em>, but only <u>indirectly</u></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="3"/><div class="ttip">Sort of &mdash; the meaning of <em>${compound}</em> is <u>directly associated</u> to <em>${head}</em>, even if these meanings are not identical</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="4"/><div class="ttip">Yes &mdash; ${undefdet_compound} <em>${compound}</em> <u>${be} actually</u> ${undefdet_head} <em>${head}</em>, for an uncommon sense of the word <em>${head}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="5"/><div class="ttip">Exactly! &mdash; ${undefdet_compound} <em>${compound}</em> ${be} <u>always literally</u> ${undefdet_head} <em>${head}</em></div></td>
+    </tr>
+    </tbody>
+</table>
+</fieldset>
+
+
+<!--=====================================================-->
+<fieldset>
+<label>5. In your opinion, ${be} the meaning of ${undefdet_compound} <em>${compound}</em> always literally related to ${something_modifier} <em>${modifier}</em>? </label><br/>
+
+<br/>
+<table class="radio-table">
+    <tbody>
+    <tr>
+        <td class="bigno" rowspan="2">NO</td> <td class="number">0</td> <td class="number">1</td> <td class="number">2</td> <td class="number">3</td> <td class="number">4</td> <td class="number">5</td> <td class="bigyes" rowspan="2">YES</td>
+    </tr>
+    <tr>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="0"/><div class="ttip">Absolutely not &mdash; ${undefdet_compound} <em>${compound}</em> ${have} <u>nothing</u> to do with ${something_modifier} <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="1"/><div class="ttip">No &mdash; I see only a <u>vague relation</u> between ${undefdet_compound} <em>${compound}</em> and ${something_modifier} <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="2"/><div class="ttip">Not really &mdash; the meaning of <em>${compound}</em> is <u>associated</u> with ${something_modifier} <em>${modifier}</em>, but only <u>indirectly</u></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="3"/><div class="ttip">Sort of &mdash; the meaning of <em>${compound}</em> is <u>directly associated</u> with ${something_modifier} <em>${modifier}</em>, even if these meanings are not identical</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="4"/><div class="ttip">Yes &mdash; the expression <em>${compound}</em> <u>actually</u> means ${something_modifier} <em>${modifier}</em>, for an uncommon sense of the word <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="5"/><div class="ttip">Exactly! &mdash; the expression <em>${compound}</em> <u>always literally</u> means ${something_modifier} <em>${modifier}</em></div></td>
+    </tr>
+    </tbody>
+</table>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<fieldset>
+    <label>6. Given your previous replies, would you say that ${undefdet_compound} <em>${compound}</em> ${be} always literally ${undefdet_head} <em>${head}</em> which ${be} ${relatedto_modifier} <em>${modifier}</em>? </label><br/>
+
+<br/>
+<table class="radio-table">
+    <tbody>
+    <tr>
+        <td class="bigno" rowspan="2">NO</td> <td class="number">0</td> <td class="number">1</td> <td class="number">2</td> <td class="number">3</td> <td class="number">4</td> <td class="number">5</td> <td class="bigyes" rowspan="2">YES</td>
+    </tr>
+    <tr>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="0"/><div class="ttip">Absolutely not &mdash; it <u>doesn't make any sense</u> to imagine ${undefdet_head} <em>${head}</em> which ${be} ${relatedto_modifier} <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="1"/><div class="ttip">No &mdash; it is <u>weird</u> to imagine ${undefdet_head} <em>${head}</em> which ${be} ${relatedto_modifier} <em>${modifier}</em>, even if the meaning is understandable</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="2"/><div class="ttip">Not really &mdash; the meaning of <em>${compound}</em> is <u>associated</u> with ${undefdet_head} <em>${head}</em> and with ${something_modifier} <em>${modifier}</em>, but only in an indirect manner</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="3"/><div class="ttip">Sort of &mdash; the meaning of <em>${compound}</em> is <u>directly associated</u> with ${undefdet_head} <em>${head}</em> and ${something_modifier} <em>${modifier}</em>, even if these meanings are not identical</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="4"/><div class="ttip">Yes &mdash; ${undefdet_compound} <em>${compound}</em> <u>${be} actually</u> ${undefdet_head} <em>${head}</em> which ${be} ${relatedto_modifier} <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="5"/><div class="ttip">Exactly! &mdash; ${undefdet_compound} <em>${compound}</em> ${be} <u>always literally</u> ${undefdet_head} <em>${head}</em> which ${be} ${relatedto_modifier} <em>${modifier}</em></div></td>
+    </tr>
+    </tbody>
+</table>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>7. You can type here any comments you may have:</label><br/>
+<span class="tooltippy"><span class="indentation"></span><textarea cols="40" rows="5" name="comments"></textarea><span class="ttip">You should only fill out this field if you have problems, questions or suggestions</span></span>
+</fieldset>
+
+<br/>
+<input type="submit" value="SEND"/>
+
+</section>
+</body>
+</html>

@@ -1,0 +1,48 @@
+html,body {
+  height:100%;
+}
+
+h3 {
+  font-family: Arial,sans-serif
+  font-size:50px;
+  /*color:#b0b0b0;*/
+}
+
+h4 {
+  font-family: Arial,sans-serif;
+  color:#000000;
+}
+
+li {
+  font-family: Arial,sans-serif;
+  color:#000000;
+}
+
+h5 {
+  font-family: Arial,sans-serif;
+  color:#000000;
+}
+.lead {
+  color:#DDCCEE;
+}
+
+
+/* Custom container */
+.container-full {
+  margin: 0 auto;
+  width: 100%;
+  min-height:10%;
+  background-color:#FFFFFF;
+  color:#000000;
+  overflow:hidden;
+}
+
+.container-full a {
+  color:#000000;
+  text-decoration:none;
+}
+
+.v-center {
+  margin-top:7%;
+}
+  

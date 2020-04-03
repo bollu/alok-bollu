@@ -39,7 +39,7 @@ void analogy(double *a, double *b, double *x, double *y, int size) {
         // double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
         
         // ---- 3. very very close but slightly worse :(
-        double b_plus_x = b[i] + x[i] - b[i] * x[i];
+        double b_plus_x = b[i] + x[i];
         double delta = b_plus_x - min(b_plus_x, a[i]);
         
         // ------4.

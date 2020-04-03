@@ -24,6 +24,8 @@
 #define max_w  50              // max length of vocabulary entries
 #define max_n  80000L              // max # of top-N vectors
 
+#define min(i, j) ((i) < (j) ? (i) : (j))
+
 char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[max_n][max_size], file_name[max_size];
 float dist, len, bestd[max_n], vec[max_size];
 int main(int argc, char **argv)
@@ -148,7 +150,7 @@ int main(int argc, char **argv)
         if (!strcmp(st4, bestw[i])) {
             fprintf(stderr, "\tfound!\n"); fflush(stderr);
             CCN += 1.0 / (i + 1);
-            CACN += 1;
+            CACN += 1.0 / (i + 1);
             if (QID <= 5) SEAC += 1; else SYAC += 1;
             break; // exit the loop if we find a best word
         }

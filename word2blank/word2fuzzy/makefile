@@ -63,6 +63,9 @@ dump-vect : dump-vect.c
 dump-accuracy-simlex : dump-accuracy-simlex.c
 	$(CC) dump-accuracy-simlex.c -o dump-accuracy-simlex $(CFLAGS)
 
+compute-composition: compute-composition.cpp
+	$(CC) -O2 compute-composition.cpp -o compute-composition -lm  -Wno-unused-result
+
 cli: cli.cpp  linenoise.c
 	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS) -Wall -Werror
 	$(CXX) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS) -Wall -Werror

@@ -247,7 +247,7 @@ int main(int argc, char **argv) {
     fprintf(stdout, 
           "%f %f\n", 
           atof(outs[LINE_COMPOSITIONALITY_IX]), 
-          comp(w1ix, w2ix));
+          100 - comp(w1ix, w2ix));
   }
   free(line);
   fclose(f);

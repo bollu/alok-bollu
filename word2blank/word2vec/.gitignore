@@ -24,3 +24,4 @@ compute-accuracy-topn
 models.zip
 dump-accuracy-simlex
 dump-accuracy-simlex.temp.txt
+compute-accuracy-ranked

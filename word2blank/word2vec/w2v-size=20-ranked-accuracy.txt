@@ -1,0 +1,44 @@
+topN: 200
+capital-common-countries:
+ACCURACY TOP1: 32.56 %  (164.76 / 506)
+Total accuracy: 89.53 %   Semantic accuracy: 89.53 %   Syntactic accuracy: -nan % 
+capital-world:
+ACCURACY TOP1: 19.43 %  (692.40 / 3564)
+Total accuracy: 82.73 %   Semantic accuracy: 82.73 %   Syntactic accuracy: -nan % 
+currency:
+ACCURACY TOP1: 13.21 %  (78.73 / 596)
+Total accuracy: 79.00 %   Semantic accuracy: 79.00 %   Syntactic accuracy: -nan % 
+city-in-state:
+ACCURACY TOP1: 10.09 %  (235.11 / 2330)
+Total accuracy: 75.96 %   Semantic accuracy: 75.96 %   Syntactic accuracy: -nan % 
+family:
+ACCURACY TOP1: 27.21 %  (114.27 / 420)
+Total accuracy: 76.05 %   Semantic accuracy: 76.05 %   Syntactic accuracy: -nan % 
+gram1-adjective-to-adverb:
+ACCURACY TOP1: 9.70 %  (96.24 / 992)
+Total accuracy: 73.47 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 54.13 % 
+gram2-opposite:
+ACCURACY TOP1: 6.32 %  (47.79 / 756)
+Total accuracy: 70.21 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 45.42 % 
+gram3-comparative:
+ACCURACY TOP1: 25.26 %  (336.53 / 1332)
+Total accuracy: 71.11 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 59.22 % 
+gram4-superlative:
+ACCURACY TOP1: 4.30 %  (42.67 / 992)
+Total accuracy: 68.30 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 54.17 % 
+gram5-present-participle:
+ACCURACY TOP1: 20.75 %  (219.11 / 1056)
+Total accuracy: 68.97 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 58.74 % 
+gram6-nationality-adjective:
+ACCURACY TOP1: 47.04 %  (715.52 / 1521)
+Total accuracy: 71.20 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 65.78 % 
+gram7-past-tense:
+ACCURACY TOP1: 13.77 %  (214.79 / 1560)
+Total accuracy: 70.55 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 65.57 % 
+gram8-plural:
+ACCURACY TOP1: 22.55 %  (300.35 / 1332)
+Total accuracy: 70.78 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 66.68 % 
+gram9-plural-verbs:
+ACCURACY TOP1: 13.69 %  (119.10 / 870)
+Total accuracy: 70.37 %   Semantic accuracy: 76.05 %   Syntactic accuracy: 66.32 % 
+Questions seen / total: 17827 19544   91.21 % 

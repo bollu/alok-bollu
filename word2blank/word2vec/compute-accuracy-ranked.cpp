@@ -24,20 +24,19 @@
 #define max_w  50              // max length of vocabulary entries
 #define max_n  80000L              // max # of top-N vectors
 
-char st1[max_size];
-char st2[max_size], st3[max_size], st4[max_size], bestw[max_n][max_size], file_name[max_size];
+char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[max_n][max_size], file_name[max_size];
 float dist, len, bestd[max_n], vec[max_size];
-long long words, size, a, b, c, d, b1, b2, b3;
-float *M;
-char *vocab;
 int main(int argc, char **argv)
 {
   FILE *f;
-  int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
-  if (argc < 3) {
-    printf("Usage: ./compute-accuracy <FILE> <N>\n"
-            "- FILE contains word projections\n"
-            "- <N> is top-N vectors to use"); 
+  long long words, size, a, b, c, d, b1, b2, b3;
+  float *M;
+  char *vocab;
+  int TCN, TACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
+  double CCN = 0, CACN = 0;
+  if (argc != 2) {
+    printf("Usage: ./compute-accuracy <FILE>\n"
+            "- FILE contains word projections\n");
     return 0;
   }
   strcpy(file_name, argv[1]);
@@ -46,8 +45,7 @@ int main(int argc, char **argv)
     printf("Input file not found\n");
     return -1;
   }
-  fscanf(f, "%lld", &words); 
-  const long N = words; assert(N < max_n);
+  fscanf(f, "%lld", &words); long long N = 200; assert (N < max_n);
   fscanf(f, "%lld", &size);
   vocab = (char *)malloc(words * max_w * sizeof(char));
   M = (float *)malloc(words * size * sizeof(float));
@@ -81,7 +79,7 @@ int main(int argc, char **argv)
     if ((!strcmp(st1, ":")) || (!strcmp(st1, "EXIT")) || feof(stdin)) {
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
-        printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (float)TCN * 100, CCN, TCN);
+        printf("ACCURACY TOP1: %.2f %%  (%4.2f / %d)\n", CCN / (float)TCN * 100, CCN, (int)TCN);
         fflush(stdout);
         printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (float)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
         fflush(stdout);
@@ -108,16 +106,20 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
+
+    fprintf(stderr, "%s : %s :: %s : %s?\n", st1, st2, st3, st4);
+    fflush(stderr);
+
     for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
-    TQ++;
+    TQ += 1;
     if (b1 == words) continue;
     if (b2 == words) continue;
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
     for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
-    TQS++;
+    TQS += 1;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
@@ -136,19 +138,26 @@ int main(int argc, char **argv)
         }
       }
     }
+
+    for (int i = 0; i < N; i++) {
+        fprintf(stderr, "\t%20s:%f\n", bestw[i], bestd[i]);
+        fflush(stderr);
+    }
+
     for (int i = 0; i < N; ++i) {
         if (!strcmp(st4, bestw[i])) {
-            CCN++;
-            CACN++;
-            if (QID <= 5) SEAC++; else SYAC++;
+            fprintf(stderr, "\tfound!\n"); fflush(stderr);
+            CCN += 1.0 / (i + 1);
+            CACN += 1;
+            if (QID <= 5) SEAC += 1; else SYAC += 1;
             break; // exit the loop if we find a best word
         }
     }
-    if (QID <= 5) SECN++; else SYCN++;
-    TCN++;
-    TACN++;
+    if (QID <= 5) SECN += 1; else SYCN += 1;
+    TCN += 1;
+    TACN += 1;
   }
-  printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
+  printf("Questions seen / total: %d %d   %.2f %% \n", (int)TQS, (int)TQ, TQS/(float)TQ*100);
   fflush(stdout);
   return 0;
 }

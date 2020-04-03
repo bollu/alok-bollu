@@ -47,6 +47,10 @@ compute-accuracy-topn : compute-accuracy-topn.c
 	$(CC) compute-accuracy-topn.c -o compute-accuracy-topn $(CFLAGS)
 	chmod +x *.sh
 
+compute-accuracy-ranked : compute-accuracy-ranked.cpp
+	$(CC) compute-accuracy-ranked.cpp -o compute-accuracy-ranked $(CFLAGS)
+	chmod +x *.sh
+
 word-fuzzy-distance: word-fuzzy-distance.c
 	$(CC) word-fuzzy-distance.c -o word-fuzzy-distance $(CFLAGS)
 

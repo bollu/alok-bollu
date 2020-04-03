@@ -6,22 +6,14 @@
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 
-### SET NAME (NO .bin) ###
-NAME=TEXT1
-########
-########
+set -e
+set -o xtrace
 
-
-DATE=`date '+%Y-%m-%d--%H:%M:%S'`
-GITNAME=$(git rev-parse --short HEAD)
-FOLDERNAME=$GITNAME
 mkdir -p models/
 mkdir -p slurm/
+rm word2vec
+gcc -lm -pthread  -march=native -Wall \
+    -funroll-loops -Wno-unused-result -O3 -fuse-ld=gold \
+    word2vec.c -o word2vec
 
-make word2vec
-# ./word2vec -alpha 0.001 -train jabber -cbow 0 -output models/jabber -size 10 -window 4 -negative 1 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15
-./word2vec -alpha 0.025 -train text8 -cbow 0 -output models/text8-size=500 -size 500 -window 15 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 20
-# time ./word2vec -train text1 -output models/$GITNAME.bin -cbow 0 -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
-# $(cd models; ln -s $GITNAME.bin $NAME.bin; cd ../)
-# ./1-eval.sh models/$NAME.bin
-# ./1-save-models.sh
+time ./word2vec -train text8 -output models/size=200-04-april-2020.bin -cbow 0 -size 200 -window 8 -negative 25 -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 

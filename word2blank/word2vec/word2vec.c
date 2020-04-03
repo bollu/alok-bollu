@@ -658,9 +658,10 @@ void TrainModel() {
     fclose(fo);
 
     char negpath[512];
-    char *outdir = strdup(dirname(output_file));
-    char *outfilename = strdup(basename(output_file));
+    char *outdir = dirname(strdup(output_file));
+    char *outfilename = basename(strdup(output_file));
     sprintf(negpath, "%s/syn1neg-%s", outdir, outfilename);
+    fprintf(stderr, "storing neg file at: |%s|\n", negpath);
     fo = fopen(negpath, "wb");
     assert(fo != NULL);
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);

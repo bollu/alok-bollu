@@ -86,6 +86,9 @@ double comp(int w1, int w2) {
 
 int main(int argc, char **argv) {
   FILE *f;
+  fprintf(stderr,
+          "Are you sure you wish to run this? You proabbly want to run"
+         "./compute-composition.py.\n");
   if (argc < 3) {
     printf("Usage: ./compute-accuracy <VECFILE> <COMPOSITION FILE>\n"
             "- VECFILE contains word projections\n"

@@ -13,6 +13,6 @@ tempfile.close()
 
 with open(TEMPFILEPATH, "r") as f:
     pairs = np.asarray([ [float(w) for w in l.strip().split()] for l in f.readlines()])
-    print(pairs[-10:])
     print(pairs[0])
     print("spearman correlation: %s" % (scipy.stats.spearmanr(pairs[:, 0], pairs[:, 1]), ))
+    print("pearson correlation: %s" % (scipy.stats.pearsonr(pairs[:, 0], pairs[:, 1]), ))

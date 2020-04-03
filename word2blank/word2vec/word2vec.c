@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -414,9 +415,6 @@ void *TrainModelThread(void *id) {
     real f, g;
     clock_t now;
 
-    real *random_arr = (real *)calloc(1000 + vocab_size, sizeof(real));
-    int random_ix = 0;
-
     real *neu1 = (real *)calloc(layer1_size, sizeof(real));
     real *neu1e = (real *)calloc(layer1_size, sizeof(real));
     real total_loss = 0;
@@ -438,12 +436,10 @@ void *TrainModelThread(void *id) {
                 total_loss = 0;
                 fflush(stdout);
             }
-            /*
             alpha = starting_alpha *
                     (1 - word_count_actual / (real)(iter * train_words + 1));
             if (alpha < starting_alpha * 0.0001)
                 alpha = starting_alpha * 0.0001;
-            */
         }
         if (sentence_length == 0) {
             while (1) {
@@ -645,8 +641,6 @@ void *TrainModelThread(void *id) {
                             for (c = 0; c < layer1_size; c++)
                                 syn1neg[c + l2] += g * syn0[c + l1];
 
-                            random_arr[random_ix++] = l2;
-                            if (random_ix > 1000) random_ix = 0;
 
                         }
                     }
@@ -690,8 +684,9 @@ void TrainModel() {
             pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
         for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
     }
-    fo = fopen(output_file, "wb");
     if (classes == 0) {
+        fo = fopen(output_file, "wb");
+        assert(fo);
         // Save the word vectors
         fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
         for (a = 0; a < vocab_size; a++) {
@@ -704,7 +699,31 @@ void TrainModel() {
                     fprintf(fo, "%lf ", syn0[a * layer1_size + b]);
             fprintf(fo, "\n");
         }
+
+        fclose(fo);
+
+        char output_file_neg[512];
+        sprintf(output_file_neg, "neg-%s", output_file);
+        fo = fopen(output_file, "wb");
+        assert(fo);
+        // Save the negative word vectors
+        fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+        for (a = 0; a < vocab_size; a++) {
+            fprintf(fo, "%s ", vocab[a].word);
+            if (binary)
+                for (b = 0; b < layer1_size; b++)
+                    fwrite(&syn1neg[a * layer1_size + b], sizeof(real), 1, fo);
+            else
+                for (b = 0; b < layer1_size; b++)
+                    fprintf(fo, "%lf ", syn1neg[a * layer1_size + b]);
+            fprintf(fo, "\n");
+        }
+        fclose(fo);
+
+
     } else {
+        assert(0);
+        fo = fopen(output_file, "wb");
         // Run K-means on the word vectors
         int clcn = classes, iter = 10, closeid;
         int *centcn = (int *)malloc(classes * sizeof(int));

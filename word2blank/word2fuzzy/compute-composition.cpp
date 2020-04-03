@@ -55,6 +55,7 @@ char *vocab;
 
 const int ARGVECFILE = 1;
 const int ARGCOMPOSITIONFILE = 2;
+const int ARGSIMTYPE = 3;
 
 const int LINE_HEAD_LEMMA_IX = 3;
 const int LINE_MODIFIER_LEMMA_IX = 4;
@@ -94,21 +95,6 @@ double klfuzzy(double *v, double *lv, double *loneminusv, double *w, double *lw,
     assert(H >= 0);
     return H;
 }
-
-
-real comp(int w1, int w2) {
-    real *v1 = M + size * w1;
-    real *l1 = Ml + size * w1;
-    real *loneminus1 = Mloneminus + size *w1;
-
-    real *v2 = M + size * w2;
-    real *l2 = Ml + size * w2;
-    real *loneminus2 = Mloneminus + size *w2;
-
-    return crossentropyfuzzy(v2, l2, loneminus2, v1, l1, loneminus1, size) + crossentropyfuzzy(v1, l1, loneminus1, v2, l2, loneminus2, size);
-    // klfuzzy(v1, l1, loneminus1, v2, l2, loneminus2, size);
-}
-
 void parse(char *in, char *outs[13]) {
 	char buf[10000L];
 	int nsections = 0;
@@ -136,10 +122,15 @@ int main(int argc, char **argv) {
   fprintf(stderr,
           "Are you sure you wish to run this? You proabbly want to run"
          "./compute-composition.py.\n");
-  if (argc < 3) {
-    printf("Usage: ./compute-accuracy <VECFILE> <COMPOSITION FILE>\n"
+  if (argc < 4) {
+    fprintf(stderr,
+            "Usage: ./compute-accuracy <VECFILE> <SIMTYPE>\n"
             "- VECFILE contains word projections\n"
             "- <COMPOSITIONFILE> is the path to the composition data\n"
+            "- <SIMTYPE> is the type of similarity metric to use\n"
+            "  + klheadmod for K-L(head, mod)\n"
+            "  + xhheadmod for cross(x) entropy(h)(head, mod)\n"
+            "  + xhsym for symmetric cross entropy\n"
           );
     return 0;
   }
@@ -244,10 +235,29 @@ int main(int argc, char **argv) {
     if (w1ix == -1 || w2ix == -1) { continue; }
     assert(w1ix >= 0); assert(w2ix >= 0);
 
+    real *v1 = M + size * w1ix;
+    real *l1 = Ml + size * w1ix;
+    real *loneminus1 = Mloneminus + size *w1ix;
+
+    real *v2 = M + size * w2ix;
+    real *l2 = Ml + size * w2ix;
+    real *loneminus2 = Mloneminus + size *w2ix;
+
+    double simval = -1;
+    if (!strcmp(argv[ARGSIMTYPE], "xhsym")) {
+        simval = 100 -1 * (crossentropyfuzzy(v2, l2, loneminus2, v1, l1, loneminus1, size) + 
+            crossentropyfuzzy(v1, l1, loneminus1, v2, l2, loneminus2, size));
+    } else if (!strcmp(argv[ARGSIMTYPE], "xhheadmod")) {
+        simval = -crossentropyfuzzy(v1, l1, loneminus1, v2, l2, loneminus2,  size);
+    } else if (!strcmp(argv[ARGSIMTYPE], "klheadmod")) {
+        simval = -crossentropyfuzzy(v1, l1, loneminus1, v2, l2, loneminus2,  size);
+    } else {
+        assert(false && "unknown sim type");
+    }
     fprintf(stdout, 
           "%f %f\n", 
           atof(outs[LINE_COMPOSITIONALITY_IX]), 
-          100 - comp(w1ix, w2ix));
+          simval);
   }
   free(line);
   fclose(f);

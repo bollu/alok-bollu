@@ -77,6 +77,7 @@ double crossentropy(double *v, double *lv, double *loneminusv, double *w, double
     for(int i = 0; i < size; ++i)  {
         H -= v[i] * lw[i];
     }
+    assert(H >= 0);
     return H;
 }
 
@@ -241,7 +242,7 @@ int main(int argc, char **argv)
 
   // take exponent
   for(b = 0; b < words; ++b) {
-      for (a = 0; a < size; a++) { M[a + b * size] = pow(2.0, M[a + b * size]); }
+      for (a = 0; a < size; a++) { M[a + b * size] = pow(M_E, M[a + b * size]); }
   }
 
 
@@ -366,7 +367,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "%s : %s :: %s : %s?\n", st1, st2, st3, st4);
     fflush(stderr);
 
-    for (a = 0; a < N; a++) bestd[a] = 100;
+    for (a = 0; a < N; a++) bestd[a] = 1000;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;

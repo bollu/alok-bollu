@@ -26,39 +26,26 @@
 
 const long long max_size = 2000;         // max length of strings
 const long long max_w = 50;              // max length of vocabulary entries
-const long long max_n = 100; // max top-n vectors asked for.
+const long long max_n = 800; // max top-n vectors asked for.
 
 void analogy(double *a, double *b, double *x, double *y, int size) {
     for(int i = 0; i < size; ++i) {
         double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
+        y[i] = delta;
         y[i] = max(delta, 0.0);
         y[i] = min(delta, 1.0);
         assert(y[i] >= 0);
     }
-
-    /*
-    double total = 0;
-    for(int i = 0; i < size; ++i) {
-        total +=  y[i];
-    }
-
-    for(int i = 0; i < size; ++i) {
-        y[i] /= total;
-    }
-    */
+    // double total = 0;
+    // for(int i = 0; i < size; ++i) { total +=  y[i]; }
+    // for(int i = 0; i < size; ++i) { y[i] /= total; }
 }
 
-double entropylog(double x) {
-    if (x < 1e-400L) {
-        return 0;
-    }
-    return log(x);
-}
 
 double entropy(double *v, int size) {
     double H = 0;
     for(int i = 0; i < size; ++i) 
-        H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
+        H += -v[i] * log(v[i]) - (1 - v[i]) * log(1 - v[i]);
     return H;
 }
 
@@ -68,6 +55,7 @@ double crossentropyfuzzy(double *v, double *lv, double *loneminusv, double *w, d
         H += v[i] * (lv[i] - lw[i]) + // (entropylog(v[i]) - entropylog(w[i])) + 
             (1 - v[i]) * (loneminusv[i] - loneminusw[i]); // (1 - v[i]) * (entropylog((1 - v[i])) - entropylog((1-w[i])));
     }
+    assert(H >= 0);
     return H;
 }
 
@@ -77,6 +65,7 @@ double crossentropy(double *v, double *lv, double *loneminusv, double *w, double
     for(int i = 0; i < size; ++i)  {
         H -= v[i] * lw[i];
     }
+    assert(H >= 0);
     return H;
 }
 
@@ -86,6 +75,7 @@ double klfuzzy(double *v, double *lv, double *loneminusv, double *w, double *lw,
         // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
         H += -v[i] * lw[i] - (1 - v[i]) *  loneminusw[i];
     }
+    assert(H >= 0);
     return H;
 }
 
@@ -93,8 +83,12 @@ double kl(double *v, double *lv, double *loneminusv, double *w, double *lw, doub
     double H = 0;
     for(int i = 0; i < size; ++i)  {
         // H += -v[i] * entropylog(w[i]) - (1 - v[i]) *  entropylog((1-w[i]));
-        H += -v[i] * (lv[i] - lw[i]);
+        H += v[i] * (lv[i] - lw[i]);
     }
+    if (H < 0) {
+        fprintf(stderr, "H: %4.2f\n", H); fflush(stderr);
+    }
+    assert(H >= 0);
     return H;
 }
 
@@ -106,15 +100,16 @@ int main(int argc, char **argv)
   long long words, size, a, b, c, d, b1, b2, b3;
   double *M, *Ml, *Mloneminus;
   char *vocab;
-  int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
-  if (argc < 3) {
+  int TCN, TACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
+  double CCN = 0, CACN = 0;
+  if (argc < 2) {
     printf("Usage: ./compute-accuracy <FILE> <N>\n"
             "- FILE contains word projections\n"
-            "- N is topN closest words to try and match\n");
+            );
     return 0;
   }
   strcpy(file_name, argv[1]);
-  long long N = atoi(argv[2]);
+  const long long N = 200; assert(N <= max_n);
   f = fopen(file_name, "rb");
   if (f == NULL) {
     printf("Input file not found\n");
@@ -160,31 +155,21 @@ int main(int argc, char **argv)
   }
 
   // normalize the features of each word
-  // for(b = 0; b < words; ++b) {
-  //     double total = 0;
-  //     for(a = 0; a < size; ++a) {
-  //         total += M[b * size + a];
-  //     }
-
-  //     for(a = 0; a < size; ++a) {
-  //         M[b * size + a] /= total;
-  //         M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
-  //     }
-  // }
+  //#for(b = 0; b < words; ++b) {
+  //#    double total = 0;
+  //#   for(a = 0; a < size; ++a) { total += M[b * size + a]; }
+  //#    for(a = 0; a < size; ++a) {
+  //#        M[b * size + a] /= total;
+  //#    }
+  //#}
 
 
   // normalize each feature of all words
-  // for(a = 0; a < size; ++a) {
-  //     double total = 0;
-  //     for(b = 0; b < words; ++b) {
-  //         total += M[b * size + a];
-  //     }
-
-  //     for(b = 0; b < words; ++b) {
-  //         M[b * size + a] /= total;
-  //         M[b * size + a] = max(min(1.0, M[b * size + a]), 0.0);
-  //     }
-  // }
+  for(a = 0; a < size; ++a) {
+      double total = 0;
+      for(b = 0; b < words; ++b) { total += M[b * size + a]; }
+      for(b = 0; b < words; ++b) { M[b * size + a] /= total; }
+  }
 
 
 
@@ -208,7 +193,7 @@ int main(int argc, char **argv)
       if (TCN == 0) TCN = 1;
       if (QID != 0) {
         fflush(stdout);
-        printf("ACCURACY TOP1: %.2f %%  (%d / %d)\n", CCN / (double)TCN * 100, CCN, TCN);
+        printf("ACCURACY TOP1: %.2f %%  (%4.2f / %d)\n", CCN / (double)TCN * 100, CCN, TCN);
         fflush(stdout);
         printf("Total accuracy: %.2f %%   Semantic accuracy: %.2f %%   Syntactic accuracy: %.2f %% \n", CACN / (double)TACN * 100, SEAC / (float)SECN * 100, SYAC / (float)SYCN * 100);
         fflush(stdout);
@@ -239,7 +224,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "%s : %s :: %s : %s?\n", st1, st2, st3, st4);
     fflush(stderr);
 
-    for (a = 0; a < N; a++) bestd[a] = 100;
+    for (a = 0; a < N; a++) bestd[a] = 99999;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -268,16 +253,11 @@ int main(int argc, char **argv)
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      if (0) {
-          dist = 0;
-          for (a = 0; a < size; a++) { dist += vec[a] * M[a + c * size]; }
-      } else {
-          ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
-          ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
-          dist = klfuzzy(vec, vecl, vecloneminus, 
-                  &M[c * size], &Ml[c * size], &Mloneminus[c * size],
-                  size);
-      }
+      ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
+      ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
+      dist = crossentropyfuzzy(vec, vecl, vecloneminus, 
+              &M[c * size], &Ml[c * size], &Mloneminus[c * size],
+              size);
 
       for (a = 0; a < N; a++) {
         if (dist < bestd[a]) {
@@ -302,7 +282,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < N; ++i) {
         if (!strcmp(st4, bestw[i])) {
           fprintf(stderr, "\tfound!\n"); fflush(stderr);
-          CCN++;
+          CCN += 1.0 / (i + 1);
           CACN++;
           if (QID <= 5) SEAC++; else SYAC++;
           break;

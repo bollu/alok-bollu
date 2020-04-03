@@ -26,3 +26,4 @@ compute-accuracy-topn
 dump-accuracy-simlex
 dump-accuracy-simlex.temp.txt
 compute-accuracy-topn-phrases
+compute-accuracy-ranked

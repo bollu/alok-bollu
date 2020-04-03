@@ -1,0 +1,4 @@
+TopN: 100
+capital-common-countries:
+ACCURACY TOP1: 0.00 %  (0.00 / 506)
+Total accuracy: 0.00 %   Semantic accuracy: 0.00 %   Syntactic accuracy: -nan % 

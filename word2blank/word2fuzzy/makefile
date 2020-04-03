@@ -46,6 +46,10 @@ compute-accuracy-topn : compute-accuracy-topn.c
 	$(CC) compute-accuracy-topn.c -o compute-accuracy-topn $(CFLAGS)
 	chmod +x *.sh
 
+compute-accuracy-ranked : compute-accuracy-ranked.c
+	$(CC) compute-accuracy-ranked.c -o compute-accuracy-ranked $(CFLAGS)
+	chmod +x *.sh
+
 compute-accuracy-discrete-topn: compute-accuracy-discrete-topn.cpp
 	$(CXX) compute-accuracy-discrete-topn.cpp -o compute-accuracy-discrete-topn $(CFLAGS)
 	chmod +x *.sh

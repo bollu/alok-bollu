@@ -21,6 +21,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+const int VECTORS = 1;
+
 #define min(i, j) ((i) < (j) ? (i) : (j))
 #define max(i, j) ((i) > (j) ? (i) : (j))
 
@@ -44,10 +46,10 @@ void analogy(double *a, double *aneg,
     // (B U X) cap Ac
     for(int i = 0; i < size; ++i) {
         const double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
-        y[i] = max(delta, 0.0);
-        y[i] = min(delta, 1.0);
+        y[i] = min(max(delta, 0.0), 1.0);
         assert(y[i] >= 0);
     }
+
 
     // (B U X) / A
     // [(B U X) cap Ac]
@@ -105,7 +107,7 @@ double crossentropyfuzzyneg(double *v, double *lv, double *loneminusv,
 
 
     // return crossentropyfuzzy(v, lv, loneminusv, w, lw, loneminusw, size);
-    return crossentropyfuzzy(negv, lnegv, lnegoneminusv, negw, lnegw, lnegoneminusw, size);
+    // return crossentropyfuzzy(negv, lnegv, lnegoneminusv, negw, lnegw, lnegoneminusw, size);
 
     double H = 0;
     for(int i = 0; i < size; ++i)  {
@@ -268,60 +270,63 @@ int main(int argc, char **argv)
     for (a = 0; a < size; a++) { len += Mneg[a + b * size] * Mneg[a + b * size]; }
     len = sqrt(len);
     assert(len == len);
+    if (len == 0) { fprintf(stderr, "word with 0 len: |%s|\n", curword); }
     if (len > 0) { for (a = 0; a < size; a++) { Mneg[a + b * size] /= len; } }
     for (a = 0; a < size; a++) { assert(Mneg[a + b * size]  == Mneg[a + b * size]); }
   }
   fclose(f);
 
+  if(!VECTORS) {
 
-  // take exponent
-  for(b = 0; b < words; ++b) {
-      for (a = 0; a < size; a++) { M[a + b * size] = pow(M_E, M[a + b * size]); }
-  }
-
-
-  // take exponent
-  for(b = 0; b < words; ++b) {
-      for (a = 0; a < size; a++) { Mneg[a + b * size] = pow(M_E, Mneg[a + b * size]); }
-  }
-
-
-
-  // normalize each feature of all words
-  for(a = 0; a < size; ++a) {
-      double total = 0;
-      for(b = 0; b < words; ++b) { total += M[b * size + a]; }
-      for(b = 0; b < words; ++b) { M[b * size + a] /= total; }
-  }
-
-  // Cache values of Ml
-  for(b = 0; b < words; ++b) {
-      for(a = 0; a < size; ++a) {
-          Ml[b * size + a] = log(M[b * size + a]);
-          // Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
-          Mloneminus[b * size + a] = log1p(- M[b * size + a]);
+      // take exponent
+      for(b = 0; b < words; ++b) {
+          for (a = 0; a < size; a++) { M[a + b * size] = pow(M_E, M[a + b * size]); }
       }
-  }
 
 
-  // normalize each feature of all words
-  for(a = 0; a < size; ++a) {
-      double total = 0;
-      for(b = 0; b < words; ++b) { total += Mneg[b * size + a]; }
-      for(b = 0; b < words; ++b) { Mneg[b * size + a] /= total; }
-  }
+      // take exponent
+      for(b = 0; b < words; ++b) {
+          for (a = 0; a < size; a++) { Mneg[a + b * size] = pow(M_E, Mneg[a + b * size]); }
+      }
 
 
-  // Cache values
-  for(b = 0; b < words; ++b) {
+
+      // normalize each feature of all words
       for(a = 0; a < size; ++a) {
-          const double l =  log(Mneg[b * size + a]);
-          Mnegl[b * size + a] = l == l ? l : 0;
-          assert(Mnegl[b * size + a] == Mnegl[b * size + a]);
-          // Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
-          const double l2 = log1p(- Mneg[b * size + a]);
-          Mnegloneminus[b * size + a] = l2 == l2 ? l2 : 0;
-          assert(Mnegloneminus[b * size + a] == Mnegloneminus[b * size + a]);
+          double total = 0;
+          for(b = 0; b < words; ++b) { total += M[b * size + a]; }
+          for(b = 0; b < words; ++b) { M[b * size + a] /= total; }
+      }
+
+      // Cache values of Ml
+      for(b = 0; b < words; ++b) {
+          for(a = 0; a < size; ++a) {
+              Ml[b * size + a] = log(M[b * size + a]);
+              // Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
+              Mloneminus[b * size + a] = log1p(- M[b * size + a]);
+          }
+      }
+
+
+      // normalize each feature of all words
+      for(a = 0; a < size; ++a) {
+          double total = 0;
+          for(b = 0; b < words; ++b) { total += Mneg[b * size + a]; }
+          for(b = 0; b < words; ++b) { Mneg[b * size + a] /= total; }
+      }
+
+
+      // Cache values
+      for(b = 0; b < words; ++b) {
+          for(a = 0; a < size; ++a) {
+              const double l =  log(Mneg[b * size + a]);
+              Mnegl[b * size + a] = l == l ? l : 0;
+              assert(Mnegl[b * size + a] == Mnegl[b * size + a]);
+              // Mloneminus[b * size + a] = entropylog(1.0 - M[b * size + a]);
+              const double l2 = log1p(- Mneg[b * size + a]);
+              Mnegloneminus[b * size + a] = l2 == l2 ? l2 : 0;
+              assert(Mnegloneminus[b * size + a] == Mnegloneminus[b * size + a]);
+          }
       }
   }
 
@@ -367,7 +372,11 @@ int main(int argc, char **argv)
     fprintf(stderr, "%s : %s :: %s : %s?\n", st1, st2, st3, st4);
     fflush(stderr);
 
-    for (a = 0; a < N; a++) bestd[a] = 99999;
+    if (VECTORS) {
+        for (a = 0; a < N; a++) bestd[a] = -99999;
+    } else {
+        for (a = 0; a < N; a++) bestd[a] = 99999;
+    }
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -378,28 +387,32 @@ int main(int argc, char **argv)
 
 
 
-    // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
-    analogy(&M[b1 * size], &Mneg[b1 * size],
-            &M[b2 * size], &Mneg[b2 * size],
-            &M[b3 * size], &Mneg[b3 * size],
-            vec, vecneg,
-            size);
-    for(int i = 0; i < size; ++i) {
-        // assert(vec[i] >= 0);
-        // assert(vec[i] <= 1.1);
-        // vecl[i] = entropylog(vec[i]);
-        // vecloneminus[i] = entropylog(1 - vec[i]);
-        assert(vec[i] >= 0);
-        assert(vec[i] <= 1);
-        vecl[i] = vec[i] == 0 ? 0 : log(vec[i]);
-        vecloneminus[i] = (1 - vec[i]) == 0 ? 0 : log1p(-vec[i]);
+    if(VECTORS) {
+        for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
+        for (a = 0; a < size; a++) vecneg[a] = (Mneg[a + b2 * size] - Mneg[a + b1 * size]) + Mneg[a + b3 * size];
+    } else {
+        analogy(&M[b1 * size], &Mneg[b1 * size],
+                &M[b2 * size], &Mneg[b2 * size],
+                &M[b3 * size], &Mneg[b3 * size],
+                vec, vecneg,
+                size);
+        for(int i = 0; i < size; ++i) {
+            // assert(vec[i] >= 0);
+            // assert(vec[i] <= 1.1);
+            // vecl[i] = entropylog(vec[i]);
+            // vecloneminus[i] = entropylog(1 - vec[i]);
+            assert(vec[i] >= 0);
+            assert(vec[i] <= 1);
+            vecl[i] = vec[i] == 0 ? 0 : log(vec[i]);
+            vecloneminus[i] = (1 - vec[i]) == 0 ? 0 : log1p(-vec[i]);
 
-        assert(vecneg[i] >= 0);
-        assert(vecneg[i] <= 1);
-        vecnegl[i] = vecneg[i] == 0 ? 0 : log(vecneg[i]);
-        assert(vecnegl[i] == vecnegl[i]);
-        vecnegloneminus[i] = (1 - vecneg[i]) == 0 ? 0 : log1p(-vecneg[i]);
-        assert(vecnegloneminus[i] == vecnegloneminus[i]);
+            assert(vecneg[i] >= 0);
+            assert(vecneg[i] <= 1);
+            vecnegl[i] = vecneg[i] == 0 ? 0 : log(vecneg[i]);
+            assert(vecnegl[i] == vecnegl[i]);
+            vecnegloneminus[i] = (1 - vecneg[i]) == 0 ? 0 : log1p(-vecneg[i]);
+            assert(vecnegloneminus[i] == vecnegloneminus[i]);
+        }
     }
 
     TQS++;
@@ -407,9 +420,11 @@ int main(int argc, char **argv)
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      if (0) {
+      if (VECTORS) {
           dist = 0;
           for (a = 0; a < size; a++) { dist += vec[a] * M[a + c * size]; }
+          // for (a = 0; a < size; a++) { dist -= vecneg[a] * M[a + c * size]; }
+          for (a = 0; a < size; a++) { dist += vecneg[a] * Mneg[a + c * size]; }
       } else {
           ///dist = kl(vec, vecl, vecloneminus, &M[c * size], &Ml[c * size], &Mloneminus[c * size], size) +
           ///    kl(&M[c * size], &Ml[c * size], &Mloneminus[c * size], vec, vecl, vecloneminus, size);
@@ -422,7 +437,9 @@ int main(int argc, char **argv)
       }
 
       for (a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        
+        if ((VECTORS && dist > bestd[a]) ||
+            (!VECTORS && dist < bestd[a])) {
           for (d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);

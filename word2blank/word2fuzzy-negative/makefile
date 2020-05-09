@@ -4,7 +4,7 @@ CXX = g++
 DEBUG=-fsanitize=address -fsanitize=undefined -O2 -g
 RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall \
-		 -funroll-loops -Wno-unused-result ${DEBUG} -fuse-ld=gold
+		 -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
 
 all: word2vec word2phrase distance word-analogy compute-accuracy cli
 

@@ -1,28 +1,4 @@
 TopN: 5
 capital-common-countries:
-ACCURACY TOP1: 97.04 %  (491 / 506)
-Total accuracy: 97.04 %   Semantic accuracy: 97.04 %   Syntactic accuracy: -nan % 
-capital-world:
-ACCURACY TOP1: 69.08 %  (2462 / 3564)
-Total accuracy: 72.56 %   Semantic accuracy: 72.56 %   Syntactic accuracy: -nan % 
-currency:
-ACCURACY TOP1: 22.48 %  (134 / 596)
-Total accuracy: 66.16 %   Semantic accuracy: 66.16 %   Syntactic accuracy: -nan % 
-city-in-state:
-ACCURACY TOP1: 69.10 %  (1610 / 2330)
-Total accuracy: 67.14 %   Semantic accuracy: 67.14 %   Syntactic accuracy: -nan % 
-family:
-ACCURACY TOP1: 67.38 %  (283 / 420)
-Total accuracy: 67.15 %   Semantic accuracy: 67.15 %   Syntactic accuracy: -nan % 
-gram1-adjective-to-adverb:
-ACCURACY TOP1: 26.41 %  (262 / 992)
-Total accuracy: 62.35 %   Semantic accuracy: 67.15 %   Syntactic accuracy: 26.41 % 
-gram2-opposite:
-ACCURACY TOP1: 18.92 %  (143 / 756)
-Total accuracy: 58.76 %   Semantic accuracy: 67.15 %   Syntactic accuracy: 23.17 % 
-gram3-comparative:
-ACCURACY TOP1: 65.84 %  (877 / 1332)
-Total accuracy: 59.66 %   Semantic accuracy: 67.15 %   Syntactic accuracy: 41.62 % 
-gram4-superlative:
-ACCURACY TOP1: 27.52 %  (273 / 992)
-Total accuracy: 56.89 %   Semantic accuracy: 67.15 %   Syntactic accuracy: 38.19 % 
+ACCURACY TOP1: 97.23 %  (492 / 506)
+Total accuracy: 97.23 %   Semantic accuracy: 97.23 %   Syntactic accuracy: -nan % 

@@ -36,11 +36,11 @@ const long long max_n = 800; // max top-n vectors asked for.
 void analogy(double *a, double *b, double *x, double *y, int size) {
     for(int i = 0; i < size; ++i) {
         // ---- 2. (better default)----
-        // double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
+        double delta = (b[i] + x[i]) - min(b[i] + x[i], a[i]);
         
         // ---- 3. very very close but slightly worse :(
-        double b_plus_x = b[i] + x[i];
-        double delta = b_plus_x - min(b_plus_x, a[i]);
+        // double b_plus_x = b[i] + x[i];
+        // double delta = b_plus_x - min(b_plus_x, a[i]);
         
         // ------4.
         //double b_minus_a = b[i]  - min(b[i], a[i]);
@@ -274,7 +274,10 @@ int main(int argc, char **argv)
       if (c == b3) continue;
       dist = crossentropyfuzzy(vec, vecl, vecloneminus, 
               &M[c * size], &Ml[c * size], &Mloneminus[c * size],
-              size);
+              size) + 
+          crossentropyfuzzy(&M[c * size], &Ml[c * size], &Mloneminus[c * size],
+                  vec, vecl, vecloneminus, 
+                  size);
 
 
       for (a = 0; a < N; a++) {

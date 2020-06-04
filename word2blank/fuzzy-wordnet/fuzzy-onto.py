@@ -1,25 +1,22 @@
 import os
+import gensim
 from tqdm import tqdm
 import numpy as np
 from sklearn import preprocessing
+from gensim.models.keyedvectors import KeyedVectors
+from collections import OrderedDict
 
-def load_bin_vec(fname):
-    word_vecs = {}
-    with open(fname, "rb") as f:
-        header = f.readline()
-        vocab_size, layer1_size = map(int, header.split())
-        binary_len = np.dtype('float32').itemsize * layer1_size
-        for line in tqdm(range(vocab_size)):
-            word = []
-            while True:
-               ch = f.read(1)
-               if ch == b' ':
-                   word = ''.join([str(i).strip('b\'').strip('\'') for i in word])
-                   break
-               if ch != b'\n':
-                   word.append(ch)
-            word_vecs[word] = np.frombuffer(f.read(binary_len), dtype='float32')
-    return word_vecs
+def load_embedding(fpath):
+    """
+        Using Gensim to load FastText embeddings
+    """
+    emb = dict()
+    wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=500000)
+    for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
+        coefs = np.asarray(vector, dtype='float32')
+        if word.lower() not in emb:
+            emb[word.lower()] = coefs
+    return emb
 
 def normalize(word_vecs, l_dim):
     """
@@ -28,35 +25,46 @@ def normalize(word_vecs, l_dim):
     """
     vec_mat = np.array(list(word_vecs.values()))
     vec_mat = np.exp(vec_mat)                       # e^x for x in all vectors
-    if l_dim == 0:
-        vec_mat = preprocessing.normalize(vec_mat, norm='l1', axis=0)
-    elif l_dim == 1:
-        vec_mat = preprocessing.normalize(vec_mat, norm='l1', axis=1)
-    
+    vec_mat = preprocessing.normalize(vec_mat, norm='l1', axis=l_dim)
     vecs = np.vsplit(vec_mat, len(word_vecs.keys()))
     word_vecs = zip(list(word_vecs.keys()), vecs)
     return dict(word_vecs)
         
 
-def discretize(word_vecs, threshold):
+def discretize(word_vecs, l_dim):
     """
         forall x in word_vecs[word]::
             x = 1 if x > threshold
             x = 0 otherwise
+        threshold = average
     """
+    vec_mat = np.array(list(word_vecs.values())).reshape(len(word_vecs), 300)
+    threshold = np.mean(vec_mat, axis=l_dim)
+    vec_mat = (vec_mat >= threshold) * 1
+    vecs = np.vsplit(vec_mat, len(word_vecs.keys()))
+    word_vecs = dict(zip(list(word_vecs.keys()), vecs))
+    word_vecs['<TOP>'] = np.ones(300, dtype=int)
+    word_vecs['<BOT>'] = np.zeros(300, dtype=int)
+    return word_vecs
+
+def construct_ontology(word_vecs):
     pass
 
-def construct_ontology(word_vecs, desc):
-    """
-        desc(0): discretized
-        desc(1): not discretized
-    """
-    pass
+def similarity(word_vecs, word):
+    vec = word_vecs[word]
+    sim = dict()
+    for w in word_vecs:
+        sim[(word, w)] = int(np.reshape(np.dot(vec, np.transpose(word_vecs[w])), 1)[0])
+    return sim
+
 
 if __name__ == '__main__':
-    dirname = '../MODELS/'
-    fname = 'vanilla200.bin'
-    word_vecs = load_bin_vec(os.path.join(dirname, fname))
+    dirname = '/scratch/alokdebnath/MODELS/'
+    fname = 'wiki-news-300d-1M.bin'
+    NDIMS = 300
+    word_vecs = load_embedding(os.path.join(dirname, fname))
     word_vecs = normalize(word_vecs, 0)
-    print(np.reshape(word_vecs['the'], 200))
-
+    word_vecs = discretize(word_vecs, 0)
+    sims = similarity(word_vecs, 'nepotism')
+    dd = OrderedDict(sorted(sims.items(), key=lambda x: x[1], reverse=True))
+    print(list(dd.items())[:10])

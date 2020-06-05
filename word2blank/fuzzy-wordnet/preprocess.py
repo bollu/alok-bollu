@@ -14,8 +14,8 @@ def load_embedding(fpath, VOCAB):
     wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
     for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
         coefs = np.asarray(vector, dtype='float32')
-        if word not in emb:
-            emb[word] = coefs
+        if word.lower() not in emb:
+            emb[word.lower()] = coefs
     return emb
 
 def normalize(word_vecs, l_dim):
@@ -92,12 +92,9 @@ def logicalor(emb, w1, w2):
 def logicalxor(emb, w1, w2):
     return decode(emb, np.logical_xor(emb[w1], emb[w2]))
 
-def constructgraph(emb):
-    pass
-
 if __name__ == '__main__':
     dirname = '../MODELS/'
-    fname = 'gensim_glove_vectors.txt'
+    fname = 'wiki-news-300d-1M.bin'
     NDIMS = 300
     VOCAB = 50000
     nsim = 10
@@ -107,8 +104,8 @@ if __name__ == '__main__':
     for w in word_vecs:
         word_vecs[w] = np.reshape(word_vecs[w], NDIMS)
 
-    w1 = 'view'
-    w2 = 'idea'
+    w1 = 'condition'
+    w2 = 'relation'
 
     print('sim({})'.format(w1), end='\t')
     print(topn_similarity(word_vecs, w1, nsim))
@@ -125,11 +122,11 @@ if __name__ == '__main__':
     print('{} - {}'.format(w1, w2), end='\t')
     print(difference(word_vecs, w1, w2))
 
-    print('{} AND {}'.format(w1, w2), end='\t')
-    print(logicaland(word_vecs, w1, w2))
-
     print('{} OR {}'.format(w1, w2), end='\t')
     print(logicalor(word_vecs, w1, w2))
+    
+    print('{} AND {}'.format(w1, w2), end='\t')
+    print(logicaland(word_vecs, w1, w2))
 
     print('{} XOR {}'.format(w1, w2), end='\t')
     print(logicalxor(word_vecs, w1, w2))

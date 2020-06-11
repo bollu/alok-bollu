@@ -1,5 +1,6 @@
 import os
 import gensim
+import re
 from tqdm import tqdm
 import numpy as np
 from sklearn import preprocessing
@@ -14,8 +15,12 @@ def load_embedding(fpath, VOCAB):
     wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
     for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
         coefs = np.asarray(vector, dtype='float32')
-        if word not in emb:
-            emb[word] = coefs
+        if not re.match(r'\w+', word):
+            continue
+        elif word.lower() not in emb:
+            emb[word.lower()] = coefs
+        else:
+            emb[word.lower()] = np.mean([emb[word.lower()], coefs], axis=0)
     return emb
 
 def normalize(word_vecs, axis, NDIMS):
@@ -27,9 +32,7 @@ def normalize(word_vecs, axis, NDIMS):
     vec_mat = np.exp(vec_mat)                       # e^x for x in all vectors
     vec_mat = preprocessing.normalize(vec_mat, norm='l1', axis=axis)
     vecs = np.vsplit(vec_mat, len(word_vecs.keys()))
-    word_vecs = dict(zip(list(word_vecs.keys()), vecs))
-    for w in word_vecs:
-        word_vecs[w] = np.reshape(word_vecs[w], NDIMS)
+    word_vecs = dict(zip(list(word_vecs.keys()), [v[0] for v in vecs]))
     return word_vecs
         
 
@@ -44,9 +47,7 @@ def discretize(word_vecs, axis, NDIMS):
     threshold = np.mean(vec_mat, axis=axis)
     vec_mat = (vec_mat >= threshold) * 1
     vecs = np.vsplit(vec_mat, len(word_vecs.keys()))
-    word_vecs = dict(zip(list(word_vecs.keys()), vecs))
-    for w in word_vecs:
-        word_vecs[w] = np.reshape(word_vecs[w], NDIMS)
+    word_vecs = dict(zip(list(word_vecs.keys()), [v[0] for v in vecs]))
     word_vecs['<TOP>'] = np.ones(NDIMS, dtype=int)
     word_vecs['<BOT>'] = np.zeros(NDIMS, dtype=int)
     return word_vecs
@@ -58,9 +59,9 @@ def decode(word_vecs, vec):
     sim = -1000
     word = str()
     for w in word_vecs:
-        if np.reshape(np.dot(vec, np.transpose(word_vecs[w])), 1)[0] > sim and w != '<TOP>' and w != '<BOT>':
+        if np.dot(vec, np.transpose(word_vecs[w])) > sim and w != '<TOP>' and w != '<BOT>':
             word = w
-            sim = int(np.reshape(np.dot(vec, np.transpose(word_vecs[w])), 1)[0])
+            sim = np.dot(vec, np.transpose(word_vecs[w]))
     return word
 
 
@@ -74,9 +75,9 @@ def topn_similarity(word_vecs, word, n):
     sim = dict()
     for w in word_vecs:
         if w != '<TOP>' and w != '<BOT>':
-            sim[w] = np.reshape(np.dot(vec, np.transpose(word_vecs[w])), 1)[0]
+            sim[w] = np.dot(vec, np.transpose(word_vecs[w]))
     dd = OrderedDict(sorted(sim.items(), key=lambda x: x[1], reverse=True))
-    return list(dd.items())[:n]
+    return list(dd.items())[1:n+1]
 
 def union(emb, w1, w2):
     return decode(emb, np.absolute(emb[w1] + emb[w2]  - emb[w1] * emb[w2]))

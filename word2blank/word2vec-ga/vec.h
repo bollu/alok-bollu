@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cmath>
-#include <cblas.h>
-
 typedef float real;  // Precision of float numbers
 
 template <typename T>
@@ -71,129 +69,6 @@ __attribute__((constructor)) void initCTable() {
       }
    }
 }
-// reference implementation
-inline real dotContainmentReference(int len, const real *vthis, const real
-        *vother, float *gbufthis, float *gbufother)  {
-	real dot = 0;
-	for (unsigned int i = 0; i < len; i++) {
-		for (unsigned int j = 0; j < len; j++) {
-			// check if I is a subset of J
-			const bool subset = (i & j) == i;
-			if (!subset) continue;
-
-			dot += vthis[i] * vother[j];
-			if (gbufthis) gbufthis[i] += vother[j];
-			if (gbufother) gbufother[j] += vthis[i];
-		}
-	}
-	return dot;
-}
-
-
-// r = n * n * sizeof(real)
-// n = log2 d
-void setupDotContainmentMat(int n, real *r) {
-    // int d = log2(n);
-    // assert (1 << d == n);
-    for(int i = 0; i < n; ++i) {
-        for(int j = 0; j < n; ++j) {
-
-            // whether i is a subset of j.
-            const bool subset = (i & j) == i;
-            // const bool subset = i == j;
-            if (subset) {
-                    r[i*n+j] = 1.0;
-            } else { 
-                r[i*n+j] = 0;
-            }
-        }
-    }
-}
-
-// compute X^T A Y with BLAS
-// X: Nx1
-// A: NxN
-// Y: Nx1
-// gx: Nx1
-// gy: Nx1
-// Note that xTA is OPTIONAL, but Ay is _definitely not_.
-float mulQuadForm(int dim, const float *x, const float *A, const float *y, float *Ay, float *xTA) {
-    float xAy = 0;
-    // A = DIM x DIM
-    // y = DIM x 1
-    // Ay = DIM x DIM x DIM x 1 = DIM x 1
-     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,                      
-            dim, 1, dim,                                                        
-            1, // alpha                                                         
-            A, dim,                                                             
-            y, 1,                                                             
-            0,  // beta                                                                 
-            Ay, 1);                                                           
-                                                                                
-    // xT Ay
-    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
-            1, 1, dim,
-            1, // alpha
-            x, 1,
-            Ay, 1,
-            0,  // beta
-            &xAy, 1); 
-
-
-    if (xTA) {
-                                                                                
-        // X = DIM x 1
-        // xT = 1 x DIM
-        // A = DIM x DIM
-        // xTA = 1 x DIM x DIM x DIM = 1 x DIM
-        cblas_sgemv(CblasRowMajor, CblasTrans,
-                dim, dim, 
-                1, //alpha
-                A, dim,
-                x, 1,
-                0, // beta
-                xTA, 1);
-    }
-
-
-    
-#ifdef DEBUG
-    printf("debugging...\n");
-    float xgrad[dim];
-    float ygrad[dim];
-    for(int i = 0; i < dim; ++i) {
-        xgrad[i] = ygrad[i] = 0;
-    }
-
-    const float dotref = dotContainmentReference(dim, x, y, xgrad, ygrad);
-    if (!(fabs(dotref - xAy) < 1e-2)) {
-        printf("\ndot blas: %4.2f | real: %4.2f\n", xAy, dotref);
-        assert(false && "failed reference check");
-    }
-
-     for(int i = 0; i < dim; ++i) {
-        if (!(fabs(Ay[i] - xgrad[i]) < 1e-2))  {
-            printf("\nxgrad[%d] blas: %4.2f | real: %4.2f\n", i, Ay[i], xgrad[i]);
-            assert(false && "failed reference check");
-        }
-    }
-
-     for(int i = 0; i < dim; ++i) {
-        if (!(fabs(xTA[i] - ygrad[i]) < 1e-2))  {
-            printf("\nygrad[%d] blas: %4.2f | real: %4.2f\n", i, xTA[i], ygrad[i]);
-            assert(false && "failed reference check");
-        }
-    }
-
-
-    assert(fabs(dotref - xAy) < 1e-2);
-#endif
-
-
-    return xAy;
-
-}
-
 
 // dumb encoding of GA. uses log2(n)elements.
 struct Vec {
@@ -203,8 +78,6 @@ struct Vec {
 
   public:
    inline void freemem() { free(v); }
-   Vec() : len(0), ndims(0), v(nullptr){}
-   Vec(const Vec &other) : len(other.len), ndims(other.ndims), v(other.v) {};
 
 
    // return the allocation size needed for a vector of dimension len
@@ -220,6 +93,13 @@ struct Vec {
       (void)a;
    }
 
+   // fills the other vector with the hodge dual of the current vector
+   inline void hodgedual(Vec &other) {
+     for(int i = 0; i < len; ++i) {
+       const int dual = i ^ ((1 << ndims) - 1);
+       other.v[dual] = v[i];
+     }
+   }
 
    inline int getlen() const { return len; }
    inline void alloczero(int len) {
@@ -242,6 +122,16 @@ struct Vec {
       }
    }
 
+   inline real lensq() const {
+       return dotContainment(*this, nullptr, nullptr);
+   }
+
+   inline void normalize() {
+     const float l = sqrt(lensq());
+     if (fabs(l) < 1e-4) return;
+
+     scale(1.0 / l, nullptr);
+   }
 
    inline void scale(real f, real *gbuf) {
       for (int i = 0; i < len; ++i) v[i] *= f;
@@ -253,6 +143,177 @@ struct Vec {
 
    inline void accumscaleadd(real f, const Vec &other) {
       for (int i = 0; i < len; ++i) v[i] += f * other.v[i];
+   }
+
+   // Take the left projection of this vector with the other vector
+   inline void leftproject(const Vec &right, Vec &out) {
+      out.fillzero();
+
+      for (unsigned int s = 0; s <= ndims; s++) {
+         for (unsigned int r = 0; r <= s; r++) {
+            // base index of values that survive the grade projection to
+            // <s - r>
+            int outbase = pow2(s - r);
+            // maximum index that can be grade projected to <s - r>
+            int outmaxix = outbase + C[ndims][s - r];
+
+            // Calculate Ar Bs
+            const int rbase = pow2(r) - 1;
+            const int sbase = pow2(s) - 1;
+            for (int ro = 0; ro < C[ndims][r]; ro++) {
+               for (int so = 0; so < C[ndims][s]; so++) {
+                  const int ri = rbase + ro;
+                  const int si = sbase + so;
+
+                  // fast way to calculate r . s?
+                  // note that  ii = i.i +  (i /\ (i) = 1+0 = 1
+                  // ij = (i.j) + (i /\ j) = (i /\ j)
+                  // ji = (j /\ i) = - (i /\ j)
+                  //
+                  //
+                  // (ij)(ijk)
+                  // = i(ji)jk
+                  // = i(-ij)jk
+                  // -1.k
+                  //
+                  // -> repeated indeces disappear, and add a sign.
+                  // -> sign is based on distance between
+                  const int sign = -42;
+                  // index = all indeces that only occur once.
+                  // holy shit, this may have something deep to do with
+                  // XOR convolution???
+                  const int ix = ri ^ si;
+
+                  if (ix < outbase || ix > outmaxix) continue;
+                  out.v[ix] = sign * this->v[ri] * right.v[si];
+               }
+            }
+         }
+      }
+   }
+
+   // scalar product is useless!
+   // https://arxiv.org/pdf/1205.5935.pdf (Geometric Algebra: Eric Chisolm)
+   // Start with (Eqn 156)
+   // A * B = sum_r Ar * Br where Ar, Br are multivectors
+   // Notice Ar * Br =  < Ar^dagger leftdot Br>
+   // For multivectors:
+   //     Ar^dagger = (e0e1e2...er)^\dagger =
+   //          (-1)^{r(r-1)/2} (e0e1e2...er) (Eqn 128)
+   //
+   //  Plugging back in:
+   //  Ar * Br = (-1)^{r(r-1)/2} (Ar leftdot Br)
+   //
+   //  Now note that Ar, Br have the same grade, so they have the same
+   //  number of dimensions.
+   //
+   // We now proceed to show how to evaluate Ar^dagger leftdot Br
+   // - Ar^dagger leftdot Br = (-1)^{r(r-1)/2} (Ar leftdot Br)
+   //   if Ar has a vector that is orthogonal to Br, then Ar leftdot Br = 0.
+   //   Notice that they are both of the same grade. So, if they do not
+   //   have the *same* basis vectors, then Ar *will* contain a vector
+   //   orthogonal to Br. This means that Ar and Br must share the same basis
+   //   vectors.
+   //
+   //- Now, let us consider Ar and Br have the same basis. So,
+   //  Ar = a e0 e1 ... en
+   //  Ar^dagger = a en e_n-1 ... e0
+   //  Br = b e0 e1 .. en
+   //
+   //  Ar^dagger Br = (a en en-1 ... e1 e0) (b e0 e1 ... en)
+   //               = a b(en en-1 ... e1 e0) (e0 e1 ... en)
+   //               = a b e0^2(en en-1 ... e1  e1 ... en) = ...
+   //               = a b
+   //
+   // So, the scalar product is _literally_ a fucking dot product? what a
+   // joke. I need a different type of product.
+   //
+   //
+   // Fuck this, I'm going to perform the equivalent of "roll my own crypto".
+   // If a  multivector A  is a subset of a multivector B, then we compute
+   // coeff(a) * coeff(b). This will probably make the multiplication
+   // __non symmetric__. For example,
+   // 1. scalar * space = scalar (since the space contains the scalar)
+   // 2. space * scalar = 0 (since the scalar does NOT contain the space)
+   // so, for this, we will walk along the tree, and take the dot product
+   // of an element of A with the _partial sum of B_ upto that point.
+   // eg.
+   // A = p + qe_1 + r e_2 + s re_1e_2
+   // B = w + xe_1 + ye_2 + ze_1e_2
+   // A.b == p (w + x + y + z) + q (x + z) + r (y + z) + s z
+   // <scalar> . <anything other than scalar> = 0
+   // <full space>  . <anything> = dot product
+   // x dotContainment  y == degree of x ∈ y
+   inline real dotContainment(const Vec &other, float *gbufthis,
+                              float *gbufother) const {
+      real dot = 0;
+      for (unsigned int i = 0; i < len; i++) {
+         for (unsigned int j = 0; j < len; j++) {
+            // check if I is a subset of J
+            const bool subset = (i & j) == i;
+            if (!subset) continue;
+
+            // provide larger dot products for more dimensions they
+            // share accurately in common
+            const real weight = [&]() {
+               return 1.0;
+
+               const int delta = __builtin_popcount(j) - __builtin_popcount(i);
+               assert(delta >= 0);
+
+               return 1.0 / pow2(delta);
+            }();
+
+            dot += weight * v[i] * other.v[j];
+            // make the gradients of larger dimensions expoentnially
+            // much larger, thereby forcing them to only be used
+            // if they truly exist. Otherwise, they will be squashed towards
+            // 0
+            if (gbufthis) gbufthis[i] += other.v[j] * weight;
+            if (gbufother) gbufother[j] += this->v[i] * weight;
+         }
+      }
+
+      return dot;
+   }
+
+   // pick dimensions to take dot product with, and only the projection
+   // of the GA object onto those subdimensions is taken when dotting.
+   inline real dotContainmentConstrained(const Vec &other, int thisdimbegin,
+                                         int thisdimend, int otherdimbegin,
+                                         int otherdimend, float *gbufthis,
+                                         float *gbufother) const {
+      real dot = 0;
+      for (unsigned int i = pow2(thisdimbegin) - 1;
+           i < min(len, pow2(thisdimend)); i++) {
+         for (unsigned int j = pow2(otherdimbegin) - 1;
+              j < min(len, pow2(otherdimend)); j++) {
+            // check if I is a subset of J
+            const bool subset = (i & j) == i;
+            if (!subset) continue;
+
+            // provide larger dot products for more dimensions they
+            // share accurately in common
+            const real weight = [&]() {
+               return 1.0;
+
+               const int delta = __builtin_popcount(i) - __builtin_popcount(j);
+               assert(delta >= 0);
+
+               return 1.0 / pow2(delta);
+            }();
+
+            dot += weight * v[i] * other.v[j];
+            // make the gradients of larger dimensions expoentnially
+            // much larger, thereby forcing them to only be used
+            // if they truly exist. Otherwise, they will be squashed towards
+            // 0
+            if (gbufthis) gbufthis[i] += other.v[j] * weight;
+            if (gbufother) gbufother[j] += this->v[i] * weight;
+         }
+      }
+
+      return dot;
    }
 };
 

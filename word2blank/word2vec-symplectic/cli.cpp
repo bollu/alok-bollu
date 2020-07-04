@@ -7,34 +7,63 @@
 #include <tuple>
 #include <vector>
 #include "linenoise.h"
-#include "vec.h"
 #include <algorithm>
+#include <assert.h>
+#include <map>
+#include <iomanip>
+#include<algorithm>
+
 
 #define max_size 2000
 #define N 40
 #define max_w 50
 #define max(x, y) ((x) > (y) ? (x) : (y))
 
+
+// and(x, y) = xy
+// or(x, y) = x + y - xy
+// not(x, y) = 1 - x
+// x y = 0
+// y = 0/x
+
+
+// and(x, y) = min x y
+// or(x, y) = max x y
+// not(x, y) = 1 - x
+// and x (not x) = min x (1 - x) = 0.5
+
+
+using namespace std;
+using Vec = float*;
+
+std::map<std::string, Vec> word2vec;
+
 Vec *M;
 char *vocab;
 long long words, size;
-char *bestw[N];
-real *quadform;
-real *Ay;
-real *normalizationFactorR;
-real *normalizationFactorL;
 
-void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
+float mk01(float r) {
+    return powf(2, r);
+}
+
+void normalizeVec(Vec v) {
+    float totalsize = 0;
+    for(int i = 0; i < size; ++i) totalsize += v[i];
+    for(int i = 0; i < size; ++i) v[i] /= totalsize;
+}
+
+
+void plotHistogram(const char *name, float *vals, int n, int nbuckets) {
     // number of values in each bucket.
     int buckets[nbuckets];
     for(int i = 0; i < nbuckets; ++i) buckets[i] = 0;
 
-    real vmax = vals[0];
-    real vmin = vals[0];
+    float vmax = vals[0];
+    float vmin = vals[0];
     for(int i = 0; i < n; ++i) vmax = vals[i] > vmax ? vals[i] : vmax;
     for(int i = 0; i < n; ++i) vmin = vals[i] < vmin ? vals[i] : vmin;
 
-    real multiple = (vmax - vmin) / nbuckets;
+    float multiple = (vmax - vmin) / nbuckets;
 
     for(int i = 0; i < n; ++i) {
         int b = floor((vals[i] - vmin) / multiple);
@@ -47,172 +76,12 @@ void plotHistogram(const char *name, real *vals, int n, int nbuckets) {
 
     printf("%s: |", name);
     for(int i = 0; i < nbuckets; ++i) {
-        printf(" %f ", ((buckets[i] / (real)total)) * 100.0);
+        printf(" %f ", ((buckets[i] / (float)total)) * 100.0);
     }
     printf("|");
 
 }
 
-
-real getNormalizationFactorL(Vec &v) {
-    // this . dot(other)
-    float maxdot = 0;
-    for(int i = 0; i < N; ++i) {
-        const float dist = mulQuadForm(size, v.v, quadform, M[i].v,  Ay, nullptr);
-        maxdot = std::max<float>(maxdot, fabs(dist));
-    }
-    return maxdot;
-}
-void buildNormalizationFactorLCache() {
-    printf("building L cache...\n");
-    normalizationFactorL = (real *)malloc(sizeof(real) * words);
-    for(int i = 0; i < words; ++ i) {
-        printf("\r%20d / %d", i, words);
-        fflush(stdout);
-        normalizationFactorL[i] = getNormalizationFactorL(M[i]);
-    }
-    printf("\n");
-}
-
-real getNormalizationFactorR(Vec &v) {
-    // others . dot (this)
-    float maxdot = 0;
-    for (int i = 0; i < words; ++i) {
-        const float dist = mulQuadForm(size, M[i].v, quadform, v.v,  Ay, nullptr);
-        maxdot = max(maxdot, fabs(dist));
-    }
-    return maxdot;
-}
-
-real getNormalizationFactorR(int w) {
-    // others . dot (this)
-    float maxdot = 0;
-    for(int i = 0; i < N; ++i) {
-
-        const float dist = mulQuadForm(size, M[i].v, quadform, M[w].v,  Ay, nullptr);
-        maxdot = max(maxdot, fabs(dist));
-    }
-    return maxdot;
-}
-
-
-void buildNormalizationFactorRCache() {
-    printf("building R cache...\n");
-    normalizationFactorR = (real *)malloc(sizeof(real) * words);
-    printf("\rallocated R cache...\n");
-    for(int i = 0; i < words; ++i) {
-        printf("\r%d / %d", i, words);
-        fflush(stdout);
-        // normalizationFactorR[i] = getNormalizationFactorR(M[i]);
-        normalizationFactorR[i] = getNormalizationFactorR(i);
-    }
-    printf("\n");
-}
-
-void cosine(Vec vec) {
-    real vals[words];
-    float dist, len, bestd[N];
-
-    
-    {
-        printf(
-                "\n                                              Word       "
-                "Cosine "
-                "distance\n----------------------------------------------------"
-                "----"
-                "----------------\n");
-        // for (a = 0; a < size; a++) vec[a] = 0;
-
-        // for (b = 0; b < cn; b++) {
-        //     if (bi[b] == -1) continue;
-        //     vec.accumscaleadd(1.0, M[bi[b]]);
-        //     // for (a = 0; a < size; a++) vec[a] += M[a + bi[b] * size];
-        // }
-        for (int i = 0; i < std::min<int>(size, 10); i++) {
-            printf("%3.2f  ", vec.ix(i));
-        }
-        printf("\n");
-        real len = 0;
-
-        // get the length of largest dot with bi.
-        const float vecnorm = getNormalizationFactorL(vec);
-        printf("%s:%d\n", __FILE__, __LINE__);
-
-        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
-        // len = sqrt(len);
-        // for (a = 0; a < size; a++) vec[a] /= len;
-        // vec.normalize();
-        for (int a = 0; a < N; a++) bestd[a] = -1;
-        for (int a = 0; a < N; a++) bestw[a][0] = 0;
-        for (int c = 0; c < words; c++) {
-            // dist = 0;
-            // for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
-            // dist = vec.dotContainmentConstrained(M[c],  0, 2, 0, 2, nullptr, nullptr);
-            const float curnorm = normalizationFactorR[c];
-            dist = mulQuadForm(size, vec.v, quadform, M[c].v,   Ay, nullptr);
-            dist /= vecnorm; 
-            dist /= curnorm;
-            vals[c] = dist;
-
-            for (int a = 0; a < N; a++) {
-                if (dist > bestd[a]) {
-                    for (int d = N - 1; d > a; d--) {
-                        bestd[d] = bestd[d - 1];
-                        strcpy(bestw[d], bestw[d - 1]);
-                    }
-                    bestd[a] = dist;
-                    strcpy(bestw[a], &vocab[c * max_w]);
-                    break;
-                }
-            }
-        }
-        printf("%s:%d\n", __FILE__, __LINE__);
-        for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
-        plotHistogram("distances", vals, words, 10);
-    }
-
-
-    {
-        printf(
-                "\n                                              Word       "
-                "Cosine "
-                "distance\n----------------------------------------------------"
-                "----"
-                "----------------\n");
-
-        // get the length of largest dot with bi.
-        const float vecnorm = getNormalizationFactorR(vec);
-        len = 0;
-        // for (a = 0; a < size; a++) len += vec[a] * vec[a];
-        // len = sqrt(len);
-        // for (a = 0; a < size; a++) vec[a] /= len;
-        // vec.normalize();
-        for (int a = 0; a < N; a++) bestd[a] = -1;
-        for (int a = 0; a < N; a++) bestw[a][0] = 0;
-        for (int c = 0; c < words; c++) {
-            const float curnorm = normalizationFactorL[c];
-            dist = mulQuadForm(size, M[c].v, quadform, vec.v,   Ay, nullptr);
-            dist /= curnorm;
-            dist /= vecnorm;
-            vals[c] = dist;
-
-            for (int a = 0; a < N; a++) {
-                if (dist > bestd[a]) {
-                    for (int d = N - 1; d > a; d--) {
-                        bestd[d] = bestd[d - 1];
-                        strcpy(bestw[d], bestw[d - 1]);
-                    }
-                    bestd[a] = dist;
-                    strcpy(bestw[a], &vocab[c * max_w]);
-                    break;
-                }
-            }
-        }
-        for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
-
-        plotHistogram("distances", vals, words, 10);
-    }
-}
 
 enum class ASTTy { List, AtomString, Null };
 
@@ -234,14 +103,15 @@ struct AST {
             case ASTTy::AtomString:
                 std::cout << s_;
                 return;
-            case ASTTy::List:
-                std::cout << '(';
-                for (auto it : list_) {
-                    it.print();
-                    std::cout << ' ';
+            case ASTTy::List: {
+                std::cout << '('; 
+                for(int i = 0; i < list_.size(); ++i) {
+                    list_[i].print();
+                    if (i < list_.size() - 1) std::cout << ' ';
                 }
                 std::cout << ')';
                 return;
+            }
             case ASTTy::Null:
                 std::cout << "null";
         }
@@ -262,6 +132,7 @@ struct AST {
 };
 
 std::tuple<AST, char *> parse_(char *str) {
+    assert(str != nullptr);
 
     // consume whitespace after word
     while (str[0] == ' ' && str[0] != 0) str++;
@@ -307,127 +178,270 @@ std::tuple<AST, char *> parse_(char *str) {
     return std::make_tuple(AST(list), str);
 };
 
-Vec clone(Vec v) {
-    Vec w;
-    w.alloc(v.len);
-    for (int i = 0; i < v.len; ++i) w.v[i] = v.v[i];
-    return w;
-}
 
 AST parse(char *str) { return std::get<0>(parse_(str)); }
 
-std::pair<Vec, bool> interpret(AST ast) {
+float entropylog(float x) {
+    if (x < 1e-4) {
+        return 0;
+    }
+    return log(x);
+}
+
+float entropy(Vec v) {
+
+    float totalsize = 0;
+    for(int i = 0; i < size; ++i) totalsize += v[i];
+    for(int i = 0; i < size; ++i) v[i] /= totalsize;
+
+    float H = 0;
+    for(int i = 0; i < size; ++i) 
+        H += -v[i] * entropylog(v[i]) - (1 - v[i]) * entropylog(1 - v[i]);
+    return H;
+}
+
+
+
+Vec interpret(AST ast) {
+
+    const float STRONG_THRESHOLD = 0.5 / size;
     std::cout << "interpreting: ";
     ast.print();
     std::cout << std::endl;
 
-    bool b;
-
     switch (ast.ty()) {
         case ASTTy::AtomString: {
-            const std::string s = ast.s();
-            for (int i = 0; i < words; i++) {
-                if (!strcmp(&vocab[i * max_w], s.c_str()))
-                    return std::make_pair(clone(M[i]), true);
+            auto it = word2vec.find(ast.s());
+            if (it == word2vec.end()) {
+                cout << "unable to find word: |" << ast.s() << "|\n";
+                goto INTERPRET_ERROR;
+            } else {
+                cout << ast.s() << " : ";
+                Vec out = new float[size];
+                for(int i = 0; i < size; ++i) out[i] = it->second[i];
+
+                for(int i = 0; i < std::min<int>(3, size); i++) {
+                    cout << setprecision(1) << out[i] << " ";
+                }
+                cout << "\n";
+                return out;
             }
-            std::cout << "|" << s << "|  unknown.\n";
-            return std::make_pair(Vec(), false);
+            assert(false && "unreachable");
         }
 
         case ASTTy::List: {
-            if (ast.at(0).ty() != ASTTy::AtomString) {
-                std::cout << "incorrect command -  head should be command: ";
-                ast.print();
-                return std::make_pair(Vec(), false);
-            }
+          if (ast.size() == 0) goto INTERPRET_ERROR;
 
-            const std::string s = ast.at(0).s();
-            if (s == "+") {
-                Vec v;
-                std::tie(v, b) = interpret(ast.at(1));
-                if (!b) return std::make_pair(Vec(), b);
+          if (ast.at(0).ty() != ASTTy::AtomString) {
+              cout << "head of AST must be command";
+              cout << "\n\t"; ast.print();
+              goto INTERPRET_ERROR;
+          }
+
+          const std::string command = ast.at(0).s();
+
+          if (command == "and") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] *= w[j];
+                  }
+              }
+
+              return out;
+          } 
+          else if (command == "or") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = out[j] +  w[j] - out[j] * w[j];
+                  }
+              }
+
+              return out;
+          } 
+          else if (command == "min") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = min(out[j], w[j]);
+                  }
+              }
+
+              return out;
+          }
+          else if (command == "max") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = max(out[j], w[j]);
+                  }
+              }
+
+              return out;
+          }
+          // https://en.wikipedia.org/wiki/Fuzzy_set#Fuzzy_set_operations
+          else if (command == "difference" || command == "diff") {
+              if (ast.size() != 3) {
+                  cout << "usage: difference <w1> <w2>\n";
+                  goto INTERPRET_ERROR;
+              }
+
+              Vec l = interpret(ast.at(1));
+              Vec r = interpret(ast.at(2));
+
+              Vec out = new float[size];
+              for(int i = 0; i < size; ++i) {
+                  out[i] = l[i] - min(l[i], r[i]);
+              }
+              normalizeVec(out);
+              return out;
+          }
+
+          else if (command == "analogy") {
+              if (ast.size() != 4) {
+                  cout << "usage: analogy <w1> <w2> <w3?\n";
+                  goto INTERPRET_ERROR;
+              }
+
+              // a : b :: x : ?
+              Vec a = interpret(ast.at(1));
+              Vec b = interpret(ast.at(2));
+              Vec x = interpret(ast.at(3));
+              normalizeVec(a);
+              normalizeVec(b);
+              normalizeVec(x);
+
+              Vec out = new float[size];
+              for(int i = 0; i < size; ++i) {
+                  // a : b :: x : ?
+                  // (A U X) / B
+                  float delta = b[i] + x[i] - min(b[i] + x[i], a[i]);
+                  out[i] = delta;
+              }
+              normalizeVec(out);
+              return out;
+          }
+
+         // https://en.wikipedia.org/wiki/%C5%81ukasiewicz_logic
+          else if (command == "strongmax") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  normalizeVec(out);
+                  normalizeVec(w);
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = max<float>(0.0, out[j] + w[j] - 1.0 / size);
+                  }
+              }
+
+              return out;
+          }
+         // https://en.wikipedia.org/wiki/%C5%81ukasiewicz_logic
+          else if (command == "strongmin") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int i = 2; i < ast.size(); ++i) {
+                  Vec w = interpret(ast.at(i));
+                  if (!w) goto INTERPRET_ERROR;
+
+                  normalizeVec(out);
+                  normalizeVec(w);
+
+                  for(int j = 0; j < size; ++j) {
+                      out[j] = min<float>(0, out[j] + w[j]);
+                  }
+              }
+
+              return out;
+          }
+          else if (command == "not") {
+              Vec out = interpret(ast.at(1));
+              if (!out) goto INTERPRET_ERROR;
+
+              for(int j = 0; j < size; ++j) {
+                  out[j] = 1 - out[j];
+              }
+
+              return out;
 
 
-                for (int i = 2; i < ast.size(); ++i) {
-                    Vec w;
-                    std::tie(w, b) = interpret(ast.at(i));
-                    if (!b) return std::make_pair(Vec(), b);
-                    v.accumscaleadd(1.0, w);
-                }
-                return std::make_pair(v, true);
-            }
-            if (s == "-") {
-                Vec v;
-                std::tie(v, b) = interpret(ast.at(1));
-                if (!b) return std::make_pair(Vec(), b);
+          } else if (command == "entropy") {
+              float H = 0;
+              Vec out = interpret(ast.at(1));
+              H += entropy(out);
 
-                if (ast.size() == 2) {
-                    v.scale(-1, /*gradient=*/nullptr);
-                    return std::make_pair(v, true);
-                }
+              cout << "entropy: " << setprecision(5) <<  H << "\n";
+              return nullptr;
 
-                assert(ast.size() == 3);
-                Vec w;
-                std::tie(w, b) = interpret(ast.at(2));
-                if (!b) return std::make_pair(Vec(), b);
+          } else {
+              cout << "unknown command: " << command;
+              cout << "\n\t"; ast.print();
+              goto INTERPRET_ERROR;
+          }
 
-                v.accumscaleadd(-1, w);
-                return std::make_pair(v, true);
-            }
-
-            if (s == "." || s == "dot") {
-                if (ast.size() != 3) {
-                    std::cout << "Dot needs 2 arguments\n";
-                }
-
-                Vec v, w;
-                std::tie(v, b) = interpret(ast.at(1));
-                if (!b) return std::make_pair(Vec(), b);
-                std::tie(w, b) = interpret(ast.at(2));
-                if (!b) return std::make_pair(Vec(), b);
-
-                const float d = mulQuadForm(size, v.v, quadform, w.v,  Ay, nullptr);
-                std::cout << "rawdot: " << d
-                    << "\ndotnorm: " << d / (getNormalizationFactorL(v) * getNormalizationFactorR(w))
-                    << "\n";
-                return std::make_pair(Vec(), false);
-            }
-
-            // left projection.
-            if (s == "<." || s == ".<" || s == "lproject" || s == "projectl") {
-                if (ast.size() != 4) {
-                    std::cout << "left projection needs 3 arguments\n";
-                    // p : q :: x : y?
-                    // q - p = y - x
-                    // y = b - a + x
-                    Vec p, q, x;
-                    std::tie(p, b) = interpret(ast.at(1));
-                    if (!b) return std::make_pair(Vec(), b);
-                    std::tie(q, b) = interpret(ast.at(2));
-                    if (!b) return std::make_pair(Vec(), b);
-                    std::tie(x, b) = interpret(ast.at(3));
-                    if (!b) return std::make_pair(Vec(), b);
-                }
-
-                
-            }
-
-            return interpret(ast.at(0));
+          assert(false && "unreachable");
         }
 
         case ASTTy::Null:
-            // assert(false && "cannot interpret null ast");
-            return std::make_pair(Vec(), false);
+        default:
+            goto INTERPRET_ERROR;
+
     }
+
+INTERPRET_ERROR:
+    return nullptr;
 }
 
 // completions for linenoise
 void completion(const char *buf, linenoiseCompletions *lc) {
-    for (int i = 0; i < words; ++i) {
-        // TODO: change it so it works when typing stuff. That is,
-        // tokenize the string and the decide what completion to add...
-        if (strstr(&vocab[i * max_w], buf) == &vocab[i * max_w]) {
-            linenoiseAddCompletion(lc, &vocab[i * max_w]);
+    int ix = strlen(buf) - 1;
+    for(; ix >= 0; ix--) {
+        if (buf[ix] == ' ' || buf[ix] == '(' || buf[ix] == ')') {
+            break;
+        }
+    }
+
+    ix++;
+    if (ix == strlen(buf)) { return; }
+
+    for (int i = words - 1; i >= 0; i--)  {
+        char *w = vocab + i * max_w;
+        if (strstr(w, buf + ix) == w) {
+            // take buf till ix
+            std::string completion(buf, ix);
+            completion += std::string(w);
+
+            char *ccompletion = new char[completion.size()+2];
+            strcpy(ccompletion, completion.c_str());
+
+            linenoiseAddCompletion(lc, ccompletion);
         }
     }
 }
@@ -443,7 +457,7 @@ void dimension_usage() {
     }
     for (int w = 0; w < words; w++) {
         for (int i = 0; i < size; i++) {
-            const float cur =  M[w].ix(i);
+            const float cur =  M[w][i];
             f[i] += fabs(cur);
         }
     }
@@ -457,6 +471,126 @@ void dimension_usage() {
     printf("dimension weights as percentage [0..n]:\n");
     for (int i = 0; i < size; ++i) printf("%d: %5.8f\n", i, fnorm[i]);
     printf("\n");
+}
+
+void printCloseWords(Vec vec) {
+    float vecsize = 0;
+    for (int a = 0; a < size; a++) vecsize += vec[a];
+    for (int a = 0; a < size; a++) vec[a] /= vecsize;
+
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    for (int a = 0; a < N; a++) bestd[a] = 0;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      float intersectsize = 0;
+      for (int a = 0; a < size; a++) {
+          intersectsize += vec[a] * M[c][a];
+      }
+      const float dist  = intersectsize / vecsize;
+      vals[c] = dist;
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("distances", vals, words, 10);
+    printf("\n");
+}
+
+void printAscByEntropy() {
+    printf("Words sorted by entropy (lowest):\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = 100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = entropy(M[c]);
+
+      for (int a = 0; a < N; a++) {
+        if (dist < bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
+    printf("\n");
+}
+
+
+void printDescByEntropy() {
+    printf("Words sorted by entropy (highest):\n");
+    float vals[words];
+    float bestd[words];
+    char bestw[N][max_size];
+
+    float minentropy = -1;
+    for (int a = 0; a < N; a++) bestd[a] = -100;
+    for (int a = 0; a < N; a++) bestw[a][0] = 0;
+    for (int c = 0; c < words; c++) {
+      const float dist = entropy(M[c]);
+
+      for (int a = 0; a < N; a++) {
+        if (dist > bestd[a]) {
+          for (int d = N - 1; d > a; d--) {
+            bestd[d] = bestd[d - 1];
+            strcpy(bestw[d], bestw[d - 1]);
+          }
+          bestd[a] = dist;
+          strcpy(bestw[a], &vocab[c * max_w]);
+          break;
+        }
+      }
+    }
+    for (int a = 0; a < N; a++) printf("%50s\t\t%f\n", bestw[a], bestd[a]);
+    plotHistogram("entropies", vals, words, 10);
+    printf("\n");
+}
+
+void printDistributionOfProbs() {
+    static const int NPROBS = 100;
+    int probs[NPROBS];
+    for(int i = 0; i < NPROBS; ++i) probs[i] = 0;
+
+    // focus on the probability range from 0 to 0.2
+    // 0 -> 0
+    // 0.2 -> NPROBS
+    for(int i = 0; i < words; ++i) {
+        for(int j = 0; j < size; ++j) {
+            const float f = M[i][j];
+            probs[int(floor(f * (NPROBS+1) / 0.2))]++;
+        }
+    }
+
+    int total = 0;
+    for(int i = 0; i < NPROBS; ++i) total += probs[i];
+
+    cout << "probability distribution across all vectors:\n";
+    for(int i = 0; i < NPROBS; ++i) {
+        cout << setprecision(2) << float(i) * 0.2 / (NPROBS) << " : " << probs[i]  << "\n";
+    }
+    cout << "----\n";
 }
 
 int main(int argc, char **argv) {
@@ -477,19 +611,9 @@ int main(int argc, char **argv) {
     fscanf(f, "%lld", &words);
     fscanf(f, "%lld", &size);
     vocab = (char *)malloc((long long)words * max_w * sizeof(char));
-    for (int a = 0; a < N; a++)
-        bestw[a] = (char *)malloc(max_size * sizeof(char));
 
     M = (Vec *)malloc((long long)words * sizeof(Vec));
-    printf("setting up quadform...\n");
-    quadform = (float*)malloc(sizeof(float) * size * size);
-    setupDotContainmentMat(size, quadform);
-    printf("setting up Ay...\n");
-    Ay = (float *)malloc(sizeof(float) * size * size);
 
-    Vec vec;
-    vec.alloc(size);
-    // (long long)size * sizeof(float));
     if (M == NULL) {
         printf("Cannot allocate memory: %lld MB    %lld  %lld\n",
                (long long)words * size * sizeof(float) / 1048576, words, size);
@@ -503,31 +627,33 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        M[b].alloc(size);
-        readvec(f, M[b]);
-        printf("%s:", vocab + b * max_w);
-        for (int i = 0; i < std::min<int>(size, 10); i++) {
-            printf("%3.4f ", M[b].ix(i));
+        M[b] = new float[size];
+        printf("%s\n", vocab + b * max_w);
+
+        float setsize = 0;
+        for(int i = 0; i < size; ++i) {
+            float fl;
+            fread(&M[b][i], sizeof(float), 1, f);
+            M[b][i] = mk01(M[b][i]);
+            setsize += M[b][i];
         }
-        printf("\n");
-        // for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1,
-        // f); len = 0; for (a = 0; a < size; a++) len += M[a + b * size] * M[a
-        // + b * size]; len = sqrt(len); for (a = 0; a < size; a++) M[a + b *
-        // size] /= len;
+        
+        for(int i = 0; i < size; ++i) {
+            M[b][i] /= setsize;
+        }
+
+        word2vec[std::string(vocab+b*max_w)] = M[b];
+
+
     }
 
 
     fclose(f);
 
-    buildNormalizationFactorLCache();
-    buildNormalizationFactorRCache();
+    printAscByEntropy();
+    printDescByEntropy();
+    printDistributionOfProbs();
 
-    // printf("HACK: CLEARNING 0th and LAST DIMENSION\n");
-    // for(int i = 0; i < words; i++) {
-    //     M[i].v[0] = M[i].v[size - 1] = 0;
-    // }
-
-    dimension_usage();
 
     linenoiseHistorySetMaxLen(10000);
     linenoiseSetCompletionCallback(completion);
@@ -541,12 +667,9 @@ int main(int argc, char **argv) {
 
         if (ast.ty() == ASTTy::Null) continue;
 
-        Vec v; bool success;
-        std::tie(v, success) = interpret(ast);
-        if (!success) continue;
+        const Vec v = interpret(ast);
+        if (!v) continue;
 
-        printvec(v, "vector: ", nullptr);
-        cosine(v);
-        v.freemem();
+        printCloseWords(v);
     }
 }

@@ -11,11 +11,15 @@ set -o xtrace
 
 mkdir -p models/
 mkdir -p slurm/
-rm word2vec
+rm word2vec || true
 gcc -lm -pthread  -march=native -Wall \
     -funroll-loops -Wno-unused-result -O3 -fuse-ld=gold \
     word2vec.c -o word2vec
 
-time ./word2vec -train text8 -output models/size=50.bin \
-    -alpha 0.025 -cbow 0 -size 50 -window 8 -negative 25 \
+time ./word2vec -train text8 -output models/size=200.bin \
+    -alpha 0.025 -cbow 0 -size 200 -window 8 -negative 25 \
     -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
+
+#time ./word2vec -train text0 -output models/size=50.bin \
+#    -alpha 0.025 -cbow 0 -size 50 -window 8 -negative 25 \
+#    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 

@@ -4,7 +4,7 @@ import tensorflow.random
 import numpy as np
 import numpy.linalg
 from tensorflow import keras
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 import os
 import random
 import numba
@@ -12,9 +12,11 @@ import numba
 # TODO: make data loading from corpus faster (Siddharth)
 # TODO: run on text8 and generate a vector.bin file according to word2vec
 #       convention so we can run compute-accuracy and repl (Siddharth)
-# TODO: include all poplar tricks such as frequency based discarding (Souvik)
+# TODO: include all poplar tricks such as frequency based discarding (Souvik)(Done)
 # TODO: adapt the code to GA (Souvik)
 
+# Features not added - Binary Huffman tree(If we use hierarchial softmax) and vocab hashing
+# Need help with intialisation(Given how they are intialised as random vectors, this would mean the inner product (A,B) will give 0 if they share basis otherwise the magnitude of the vector B)
 
 tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -28,27 +30,50 @@ NEGSAMPLES = 0
 LEARNINGRATE=1e-3
 NEPOCHS=4
 BATCHSIZE=100
+READ_VOCAB_FILE = 0
+SAVE_VOCAB_FILE = 1
+MIN_COUNT = 1
+VOCAB_HASH_SIZE = 3000000
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
   corpus = [w for w in corpus.split() if w]
-  CORPUSLEN = len(corpus)
-  # print("corpus:\n|%s|" % corpus)
-  # stable sort
-  vocab = list(OrderedDict.fromkeys(corpus))
-  print("vocab:\n|%s|" % vocab[:5])
   
+  # Count of each word in the corpus 
+  VOCABCOUNT = Counter(corpus)
+  # print("Count of each word:\n|%s|" % VOCABCOUNT)
+  
+  VOCABSIZE = len(list(set(corpus)))
+  
+  #Infrequent words are removed from corpus in case vocab is too big
+  min_reduce = 1
+  while VOCABSIZE > VOCAB_HASH_SIZE*0.7:
+    corpus = [word for word in corpus if VOCABCOUNT[word] > min_reduce]
+    VOCABSIZE = len(list(set(corpus)))
+    min_reduce += 1
+
+  #Sorting the vocab in ascending order
+  sorted_corpus = sorted(corpus, key=Counter(corpus).get, reverse=False)
+  vocab = list(OrderedDict.fromkeys(sorted_corpus))
+  print("vocab:\n|%s|" % vocab)
+  VOCABSIZE = len(vocab)
+
+  #Freq based discarding
+  for word in vocab:
+    if VOCABCOUNT[word] < MIN_COUNT:
+      vocab.remove(word)
+
   # map words to their index in the embedding array
   VOCAB2IX = {w: i for (i, w) in enumerate(vocab)}
   # print("VOCAB2IX:\n%s" % VOCAB2IX)
-  VOCABSIZE = len(vocab)
 
-
+  CORPUSLEN = len(corpus)
   # corpus: location -> str
   # corpusixed: location -> int (ix = index)
   corpusixed = np.empty(CORPUSLEN, dtype=np.int32)
   for i in range(CORPUSLEN):
       corpusixed[i] = VOCAB2IX[corpus[i]]
+
 
 assert VOCABSIZE is not None
 assert CORPUSLEN is not None
@@ -61,13 +86,9 @@ assert CORPUSLEN is not None
 #                                    shape=(VOCABSIZE, EMBEDSIZE)), name="syn0")
 
 VAL = 1.0 / EMBEDSIZE
-var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
-                                         minval=-VAL,
-                                         maxval=VAL), name="syn0")
+var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE], minval=-VAL, maxval=VAL), name="syn0")
 
-var_syn1neg = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE],
-                                            minval=-VAL,
-                                            maxval=VAL), name="syn1neg")
+var_syn1neg = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE], minval=-VAL, maxval=VAL), name="syn1neg")
 # var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), name="syn1neg")
 
 ph_fixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_fixs")
@@ -93,7 +114,6 @@ print("***END NETWORK:***\n")
 # Step 1: _build the program_ you want to run
 # Step 2: ask TF To kindly compile this program
 # Step 3: push data through this program
-
 
 @numba.jit(nopython=True, parallel=True)
 def mkdata():
@@ -139,7 +159,6 @@ def shuffledata(fixs, cixs, labels):
 
   return fixs, cixs, labels
 
-
 def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
     i = 0
     while (i + 1) * BATCHSIZE < n:
@@ -157,6 +176,7 @@ def epoch(curepoch, sess, n, data_fixs, data_cixs, data_labels, data_lr):
             end="")
 
 def train():
+
   saver = tf.train.Saver()
   with tf.Session() as sess:
     global_init = tf.global_variables_initializer()
@@ -167,10 +187,10 @@ def train():
     fixs, cixs, labels, n = mkdata()
     print("done. n: %10s" % (n, ))
 
-    print("\n***LLVM of mkdata:***")
-    for v, k in mkdata.inspect_llvm().items():
-        print(v, k)
-    print("***end LLVM of mkdata:***\n")
+    # print("\n***LLVM of mkdata:***")
+    # for v, k in mkdata.inspect_llvm().items():
+    #     print(v, k)
+    # print("***end LLVM of mkdata:***\n")
 
     for i in range(NEPOCHS):
       print("\n===epoch: %s===" % i)
@@ -195,7 +215,7 @@ def repl():
   with tf.Session() as sess:
     saver.restore(sess, SAVEPATH)
     [syn0] = sess.run([var_syn0])
-    print("syn0 shape: %s" % (syn0.shape, ))
+    print("\nsyn0 shape: %s" % (syn0.shape, ))
     print(type(syn0))
 
     for i in range(VOCABSIZE):

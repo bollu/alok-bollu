@@ -1,3 +1,4 @@
+%tensorflow_version 1.x
 import tensorflow as tf
 import tensorflow.logging
 import tensorflow.random
@@ -6,6 +7,7 @@ import numpy.linalg
 from tensorflow import keras
 from collections import OrderedDict, Counter
 import os
+import sys
 import random
 import numba
 
@@ -15,15 +17,16 @@ import numba
 # TODO: include all poplar tricks such as frequency based discarding (Souvik)(Done)
 # TODO: adapt the code to GA (Souvik)
 
-# Features not added - Binary Huffman tree(If we use hierarchial softmax) and vocab hashing
-# Need help with intialisation(Given how they are intialised as random vectors, this would mean the inner product (A,B) will give 0 if they share basis otherwise the magnitude of the vector B)
+# Features not added - Binary Huffman tree(If we use hierarchial softmax) and hash
+# Need help with intialisation(Given how they are intialised as random vectors, this would mean the inner product (A,B) will only give
+# 0 if they share basis otherwise the magnitude of the vector B)
 
 tf.logging.set_verbosity(tf.logging.WARN)
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 SAVEFOLDER='models'
 SAVEPATH='text0.bin'
-INPUTPATH='text0'
+INPUTPATH='/content/drive/My Drive/text0'
 EMBEDSIZE = 10
 WINDOWSIZE = 4
 NEGSAMPLES = 0
@@ -34,6 +37,7 @@ READ_VOCAB_FILE = 0
 SAVE_VOCAB_FILE = 1
 MIN_COUNT = 1
 VOCAB_HASH_SIZE = 3000000
+BINARY = False 
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -88,8 +92,8 @@ assert CORPUSLEN is not None
 VAL = 1.0 / EMBEDSIZE
 var_syn0 = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE], minval=-VAL, maxval=VAL), name="syn0")
 
-var_syn1neg = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE], minval=-VAL, maxval=VAL), name="syn1neg")
-# var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), name="syn1neg")
+#var_syn1neg = tf.Variable(tf.random.uniform([VOCABSIZE, EMBEDSIZE], minval=-VAL, maxval=VAL), name="syn1neg")
+var_syn1neg = tf.Variable(tf.zeros([VOCABSIZE, EMBEDSIZE]), name="syn1neg")
 
 ph_fixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_fixs")
 ph_cixs = tf.placeholder(tf.int32, (BATCHSIZE, ), name="ph_cixs")
@@ -201,9 +205,20 @@ def train():
         os.makedirs(SAVEFOLDER)
       saver.save(sess, SAVEPATH)
   
-    data_syn0 = sess.run([var_syn0])
-    data_syn1neg = sess.run([var_syn1neg])
-  
+    [data_syn0] = sess.run([var_syn0])
+    [data_syn1neg] = sess.run([var_syn1neg])
+    f = open("vector"+str(EMBEDSIZE)+".bin", "wb+")
+    for word in vocab:
+      text = word+str(data_syn0[VOCAB2IX[word],:]) +'\n'
+      f.write(text.encode('utf-8'))
+    f.close()
+    
+    f = open("negvector"+str(EMBEDSIZE)+".bin", "wb+")
+    for word in vocab:
+      text = word+str(data_syn1neg[VOCAB2IX[word],:]) +'\n'
+      f.write(text.encode('utf-8'))
+    f.close()
+
     if not os.path.exists(SAVEFOLDER):
       os.makedirs(SAVEFOLDER)
   
@@ -259,5 +274,5 @@ def repl():
             print("%20s %10.5f" % (IX2VOCAB[ix], dots[ix]))
 
 if __name__ == "__main__":
-    train()
-    repl()
+  train()
+  repl()

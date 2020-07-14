@@ -37,7 +37,7 @@ READ_VOCAB_FILE = 0
 SAVE_VOCAB_FILE = 1
 MIN_COUNT = 1
 VOCAB_HASH_SIZE = 3000000
-BINARY = False 
+BINARY = True 
 
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
@@ -208,15 +208,36 @@ def train():
     [data_syn0] = sess.run([var_syn0])
     [data_syn1neg] = sess.run([var_syn1neg])
     f = open("vector"+str(EMBEDSIZE)+".bin", "wb+")
-    for word in vocab:
-      text = word+str(data_syn0[VOCAB2IX[word],:]) +'\n'
-      f.write(text.encode('utf-8'))
+    info_text = "{0} {1}\n".format(VOCABSIZE, EMBEDSIZE)
+    f.write(info_text.encode('utf-8'))
+    if BINARY:
+      for word in vocab:
+        text = word+" "
+        f.write(text.encode('utf-8'))
+        for x in data_syn0[VOCAB2IX[word],:]:
+          f.write(bytes(x))
+        f.write("\n".encode('utf-8'))
+    else:
+      for word in vocab:
+        text = word + " " + " ".join(str(x) for x in data_syn0[VOCAB2IX[word],:]) +"\n"
+        f.write(text.encode('utf-8'))
     f.close()
     
     f = open("negvector"+str(EMBEDSIZE)+".bin", "wb+")
-    for word in vocab:
-      text = word+str(data_syn1neg[VOCAB2IX[word],:]) +'\n'
-      f.write(text.encode('utf-8'))
+    info_text = "{0} {1}\n".format(VOCABSIZE, EMBEDSIZE)
+    f.write(info_text.encode('utf-8'))
+    if BINARY:
+      for word in vocab:
+        text = word+" "
+        f.write(text.encode('utf-8'))
+        for x in data_syn0[VOCAB2IX[word],:]:
+          f.write(bytes(x))
+        f.write("\n".encode('utf-8'))
+    else:
+      for word in vocab:
+        text = word + " " + " ".join(str(x) for x in data_syn1neg[VOCAB2IX[word],:]) +"\n"
+        f.write(text.encode('utf-8'))
+    
     f.close()
 
     if not os.path.exists(SAVEFOLDER):

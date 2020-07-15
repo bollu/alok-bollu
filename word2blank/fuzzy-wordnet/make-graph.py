@@ -1,10 +1,11 @@
 import preprocess as ps
-import os
+from os import path
 from tqdm import tqdm
 import numpy as np
 import sys
-import pickle
+import pickle as pkl
 from collections import OrderedDict
+import plotter as pltr
 
 sys.setrecursionlimit(10**7) 
 
@@ -154,21 +155,63 @@ def pathLenIndex(graph, indistance=False):
 
     return pli
 
+def calc_dist(g2):
+    dist = dict.fromkeys(g2, dict.fromkeys(g2, -1))
+    for w1 in g2:
+        for w2, d in g2[w1]:
+            if(w1 is not w2) and (dist[w1][w2]<0):
+                dist[w1][w2] = d
+                dist[w2][w1] = d
+    return dist
+
+def inequality_satisfied(dlist):
+    result = True
+    for i in range(3):
+        d1, d2, d3 = dlist[i], dlist[(i+1)%3], dlist[(i+2)%3]
+        if(d1>d2+d3 or d1<abs(d2-d3)):
+            result = False
+            break 
+    return result
+
+def check_traingles(dist):
+    record = []
+    visited = dict.fromkeys(dist, dict.fromkeys(dist, dict.fromkeys(dist, False)))
+    for w1 in tqdm(dist):
+        for w2 in dist:
+            if(w1==w2):
+                continue
+            for w3 in dist:
+                if(w1==w3 or w2==w3):
+                    continue
+                if(visited[w1][w2][w3]):
+                    continue
+                if( not inequality_satisfied([dist[w1][w2],dist[w2][w3],dist[w3][w1]])):
+                    print(w1,w2,w3)
+                record.append([w1,dist[w1][w2],w2,dist[w2][w3],w3,dist[w3][w1],w1])
+    return record
+
 
 if __name__ == '__main__':
-    dirname = '../../..'
+    dirname = ''#'../../..'
     # dirname = '../MODELS/'
     fname = 'wiki-news-300d-1M.vec'
     # fname = 'wiki-news-300d-1M.bin'
     NDIMS = 300
-    VOCAB = 1000
+    VOCAB = 500
     nsim = 10
-    word_vecs = ps.load_embedding(os.path.join(dirname, fname), VOCAB)
+    word_vecs = ps.load_embedding(path.join(dirname, fname), VOCAB)
     word_vecs = ps.normalize(word_vecs, 0, NDIMS)
     word_vecs = ps.discretize(word_vecs, 0, NDIMS)
     g = Graph(word_vecs, nsim)
-    graph = g.makeGraph()
-    g2 = g.removeWts()
-    scc = SCC(g2)
-    print(scc.compList)
+    g2 = g.makeGraph()
+    # g2 = g.removeWts()
+    # scc = SCC(g2)
+    # scc.getSCC()
+    # print(scc.compList)
+    dist = calc_dist(g2)
+    # print(dist)
+    record = check_traingles(dist)
+    print(record)
+    # with open("inequality_record.pkl",'wb') as outfile:
+    #     pkl.dump(record,outfile)
 

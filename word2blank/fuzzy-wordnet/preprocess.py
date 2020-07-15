@@ -6,6 +6,7 @@ import numpy as np
 from sklearn import preprocessing
 from gensim.models.keyedvectors import KeyedVectors
 from collections import OrderedDict
+# from numba import jit, cuda
 
 def load_embedding(fpath, VOCAB):
     """
@@ -48,8 +49,8 @@ def discretize(word_vecs, axis, NDIMS):
     vec_mat = (vec_mat >= threshold) * 1
     vecs = np.vsplit(vec_mat, len(word_vecs.keys()))
     word_vecs = dict(zip(list(word_vecs.keys()), [v[0] for v in vecs]))
-    word_vecs['<TOP>'] = np.ones(NDIMS, dtype=int)
-    word_vecs['<BOT>'] = np.zeros(NDIMS, dtype=int)
+    # word_vecs['<TOP>'] = np.ones(NDIMS, dtype=int)
+    # word_vecs['<BOT>'] = np.zeros(NDIMS, dtype=int)
     return word_vecs
 
 def decode(word_vecs, vec):
@@ -64,6 +65,8 @@ def decode(word_vecs, vec):
             sim = np.dot(vec, np.transpose(word_vecs[w]))
     return word
 
+def mod(vec):
+    return np.sqrt(np.sum(np.square(vec)))
 
 def topn_similarity(word_vecs, word, n):
     """
@@ -75,9 +78,11 @@ def topn_similarity(word_vecs, word, n):
     sim = dict()
     for w in word_vecs:
         if w != '<TOP>' and w != '<BOT>':
-            sim[w] = np.dot(vec, np.transpose(word_vecs[w]))
-    dd = OrderedDict(sorted(sim.items(), key=lambda x: x[1], reverse=True))
-    return list(dd.items())[1:n+1]
+            # sim[w] = np.dot(vec, np.transpose(word_vecs[w]))
+            sim[w] = 1/(np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w]))))
+    dd = OrderedDict(sorted(sim.items(), key=lambda x: x[1], reverse=False))
+    # return list(dd.items())[1:n+1]
+    return list(dd.items())[1:]
 
 def union(emb, w1, w2):
     return decode(emb, np.absolute(emb[w1] + emb[w2]  - emb[w1] * emb[w2]))

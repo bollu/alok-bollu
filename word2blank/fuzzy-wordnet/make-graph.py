@@ -5,20 +5,22 @@ import numpy as np
 import sys
 import pickle as pkl
 from collections import OrderedDict
-import plotter as pltr
+#from numba import jit, cuda
 
 sys.setrecursionlimit(10**7) 
 
 class Graph:
-    def __init__(self, emb, nsim):
+    def __init__(self, emb, nsim, thresh):
         self.emb = emb
         self.V = len(emb)
         self.nsim = nsim
+        self.thresh = thresh
         self.NDIMS = len(list(emb.values())[0])
         self.graph = dict()
 
     def addEdge(self, word):
-        self.graph[word] = ps.topn_similarity(self.emb, word, self.nsim)
+        self.graph[word] = ps.thresh_similarity(self.emb, word, self.thresh)
+        #self.graph[word] = ps.topn_similarity(self.emb, word, self.nsim)
         return self.graph[word]
 
     def makeGraph(self):
@@ -173,6 +175,7 @@ def inequality_satisfied(dlist):
             break 
     return result
 
+
 def check_traingles(dist):
     record = []
     visited = dict.fromkeys(dist, dict.fromkeys(dist, dict.fromkeys(dist, False)))
@@ -187,7 +190,7 @@ def check_traingles(dist):
                     continue
                 if( not inequality_satisfied([dist[w1][w2],dist[w2][w3],dist[w3][w1]])):
                     print(w1,w2,w3)
-                record.append([w1,dist[w1][w2],w2,dist[w2][w3],w3,dist[w3][w1],w1])
+                    record.append([w1,dist[w1][w2],w2,dist[w2][w3],w3,dist[w3][w1],w1])
     return record
 
 
@@ -197,21 +200,40 @@ if __name__ == '__main__':
     fname = 'wiki-news-300d-1M.vec'
     # fname = 'wiki-news-300d-1M.bin'
     NDIMS = 300
-    VOCAB = 500
+    VOCAB = 1000
     nsim = 10
+    thresh = 0.65
     word_vecs = ps.load_embedding(path.join(dirname, fname), VOCAB)
     word_vecs = ps.normalize(word_vecs, 0, NDIMS)
     word_vecs = ps.discretize(word_vecs, 0, NDIMS)
-    g = Graph(word_vecs, nsim)
+    g = Graph(word_vecs, nsim, thresh)
     g2 = g.makeGraph()
+    print("graph made")
     # g2 = g.removeWts()
-    # scc = SCC(g2)
-    # scc.getSCC()
-    # print(scc.compList)
-    dist = calc_dist(g2)
-    # print(dist)
-    record = check_traingles(dist)
-    print(record)
-    # with open("inequality_record.pkl",'wb') as outfile:
-    #     pkl.dump(record,outfile)
 
+    mode = 2
+
+    #null mode
+    if(mode==0):
+        mode=input("Enter mode: 1.Prt Grph  2.Prt SCC  3.Chck Tri Ineq") 
+
+    #Print Graph
+    if(mode==1):
+        print(g2)
+
+    #Print SCC
+    if(mode==2):
+        scc = SCC(g2)
+        scc.getSCC()
+        scc.compList.sort(key=len)
+        for comp in scc.compList:
+            print(comp)
+
+    #Confirm triangle inequality
+    if(mode==3):
+        dist = calc_dist(g2)
+        record = check_traingles(dist)	#stores non-conformant triplets  
+        print("dist calced")
+        print(record)
+        print("end")
+       

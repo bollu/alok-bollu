@@ -6,7 +6,7 @@ import numpy as np
 from sklearn import preprocessing
 from gensim.models.keyedvectors import KeyedVectors
 from collections import OrderedDict
-# from numba import jit, cuda
+#from numba import jit, cuda
 
 def load_embedding(fpath, VOCAB):
     """
@@ -68,6 +68,7 @@ def decode(word_vecs, vec):
 def mod(vec):
     return np.sqrt(np.sum(np.square(vec)))
 
+
 def topn_similarity(word_vecs, word, n):
     """
         Given embedding dictionary and word
@@ -79,10 +80,25 @@ def topn_similarity(word_vecs, word, n):
     for w in word_vecs:
         if w != '<TOP>' and w != '<BOT>':
             # sim[w] = np.dot(vec, np.transpose(word_vecs[w]))
-            sim[w] = 1/(np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w]))))
+            sim[w] = np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w])))
     dd = OrderedDict(sorted(sim.items(), key=lambda x: x[1], reverse=False))
-    # return list(dd.items())[1:n+1]
-    return list(dd.items())[1:]
+    return list(dd.items())[1:n+1]
+
+
+def thresh_similarity(word_vecs, word, thresh):
+    """
+        Given embedding dictionary and word
+        find words having similarity to this word above thresh level
+        weight of the similarity determined by dot product
+    """
+    vec = word_vecs[word]
+    sim = dict()
+    for w in word_vecs:
+        if w != '<TOP>' and w != '<BOT>':
+            sim_val = np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w])))
+            if sim_val > thresh:
+                sim[w] = sim_val
+    return list(sim.keys())
 
 def union(emb, w1, w2):
     return decode(emb, np.absolute(emb[w1] + emb[w2]  - emb[w1] * emb[w2]))

@@ -39,6 +39,15 @@ MIN_COUNT = 1
 VOCAB_HASH_SIZE = 3000000
 BINARY = True 
 
+#Aim to create a array of instances of vocab class, should make handling of vocab removal easier
+class VOCAB(self, cn, word, code, codelen):
+  def __init__():
+    self.cn = cn
+    self.word = word
+    self.code = code
+    self.codelen = codelen
+
+
 with open(INPUTPATH, "r") as f:
   corpus = f.read()
   corpus = [w for w in corpus.split() if w]

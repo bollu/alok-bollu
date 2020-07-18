@@ -5,6 +5,7 @@ from tqdm import tqdm
 import numpy as np
 from sklearn import preprocessing
 from gensim.models.keyedvectors import KeyedVectors
+from scipy import spatial
 from collections import OrderedDict
 #from numba import jit, cuda
 
@@ -60,9 +61,9 @@ def decode(word_vecs, vec):
     sim = -1000
     word = str()
     for w in word_vecs:
-        if np.dot(vec, np.transpose(word_vecs[w])) > sim and w != '<TOP>' and w != '<BOT>':
+        if 1 - spatial.distance.cosine(vec, word_vecs[w]) > sim and w != '<TOP>' and w != '<BOT>':
             word = w
-            sim = np.dot(vec, np.transpose(word_vecs[w]))
+            sim = 1 - spatial.distance.cosine(vec, word_vecs[w]) 
     return word
 
 def mod(vec):
@@ -80,8 +81,9 @@ def topn_similarity(word_vecs, word, n):
     for w in word_vecs:
         if w != '<TOP>' and w != '<BOT>':
             # sim[w] = np.dot(vec, np.transpose(word_vecs[w]))
-            sim[w] = np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w])))
-    dd = OrderedDict(sorted(sim.items(), key=lambda x: x[1], reverse=False))
+            sim[w] = 1 - spatial.distance.cosine(vec, word_vecs[w])
+            #  sim[w] = np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w])))
+    dd = OrderedDict(sorted(sim.items(), key=lambda x: x[1], reverse=True))
     return list(dd.items())[1:n+1]
 
 
@@ -95,28 +97,28 @@ def thresh_similarity(word_vecs, word, thresh):
     sim = dict()
     for w in word_vecs:
         if w != '<TOP>' and w != '<BOT>':
-            sim_val = np.dot(vec, np.transpose(word_vecs[w]))/(mod(vec)*mod(np.transpose(word_vecs[w])))
+            sim_val = 1 - spatial.distance.cosine(vec, word_vecs[w])
             if sim_val > thresh:
                 sim[w] = sim_val
     return list(sim.keys())
 
 def union(emb, w1, w2):
-    return decode(emb, np.absolute(emb[w1] + emb[w2]  - emb[w1] * emb[w2]))
+    return np.absolute(emb[w1] + emb[w2]  - emb[w1] * emb[w2])
 
 def intersection(emb, w1, w2):
-    return decode(emb, (emb[w1] * emb[w2]))
+    return emb[w1] * emb[w2]
 
 def difference(emb, w1, w2):
-    return decode(emb, np.absolute(emb[w1] - emb[w2]))
+    return np.absolute(emb[w1] - emb[w2])
 
 def logicaland(emb, w1, w2):
-    return decode(emb, np.logical_and(emb[w1], emb[w2]))
+    return np.logical_and(emb[w1], emb[w2])
 
 def logicalor(emb, w1, w2):
-    return decode(emb, np.logical_or(emb[w1], emb[w2]))
+    return np.logical_or(emb[w1], emb[w2])
 
 def logicalxor(emb, w1, w2):
-    return decode(emb, np.logical_xor(emb[w1], emb[w2]))
+    return np.logical_xor(emb[w1], emb[w2])
 
 if __name__ == '__main__':
     dirname = '../MODELS/'
@@ -138,19 +140,19 @@ if __name__ == '__main__':
     print(topn_similarity(word_vecs, w2, nsim))
     
     print('{} u {}'.format(w1, w2), end='\t')
-    print(union(word_vecs, w1, w2))
+    print(decode(word_vecs, union(word_vecs, w1, w2)))
     
     print('{} n {}'.format(w1, w2), end='\t')
-    print(intersection(word_vecs, w1, w2))
+    print(decode(word_vecs, intersection(word_vecs, w1, w2)))
 
     print('{} - {}'.format(w1, w2), end='\t')
-    print(difference(word_vecs, w1, w2))
+    print(decode(word_vecs, difference(word_vecs, w1, w2)))
 
     print('{} OR {}'.format(w1, w2), end='\t')
-    print(logicalor(word_vecs, w1, w2))
+    print(decode(word_vecs, logicalor(word_vecs, w1, w2)))
     
     print('{} AND {}'.format(w1, w2), end='\t')
-    print(logicaland(word_vecs, w1, w2))
+    print(decode(word_vecs, logicaland(word_vecs, w1, w2)))
 
     print('{} XOR {}'.format(w1, w2), end='\t')
-    print(logicalxor(word_vecs, w1, w2))
+    print(decode(word_vecs, logicalxor(word_vecs, w1, w2)))

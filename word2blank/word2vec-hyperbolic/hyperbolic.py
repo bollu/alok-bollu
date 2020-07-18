@@ -51,6 +51,6 @@ for i in range(80000):
     # -2d' * (4 - d)
     d = dist_eq2(x, y, N) 
     print ("%epoch: s | dist: %4.2f | x: %s --> y:%s" % (i, d, x, y))
-    htangent = ambient2tangent_eq5(x, scale((4 - d), der_dist_eq4(x, y, N), N), N)
+    htangent = ambient2tangent_eq5(x, scale((1 - d), der_dist_eq4(x, y, N), N), N)
     x = exp_eq3(x, scale(-LEARNINGRATE, htangent, N), N)
 

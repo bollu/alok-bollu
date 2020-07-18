@@ -365,9 +365,9 @@ void InitNet() {
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
     // ZERO INITIALIZATION OF SYN1NEG
     for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++)
-     syn1neg[(a* P) + (b * layer1_size) + c] = 0;
+     syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = 0;
   }
-  // random initialize syn0 (this is esentially a 3D matrix with shape (vocab_size,p,n))
+  // random initialize syn0 (this is esentially a 3D matrix with shape (vocab_size,P,layer1_size))
   for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) {
     // rnext = r * CONST + CONST2
     // 0... 2^32 - 1
@@ -377,7 +377,7 @@ void InitNet() {
     // 0 .. 1
     // -0.5 .. 0.5
     // -0.5 / layer1_size ... 0.5 / layer1_size
-    syn0[(a * P) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+    syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
   }
   CreateBinaryTree();
 }

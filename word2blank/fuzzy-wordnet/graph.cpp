@@ -9,7 +9,7 @@ static const long long MAX_WORDLEN = 200;
 long long VOCABSIZE, DIMSIZE;
 real *vecs[MAX_VOCAB_SIZE];
 char words[MAX_VOCAB_SIZE][MAX_WORDLEN];
-static const long long TOPK = 5;
+static const long long TOPK = 50;
 static const real INFTY = 1e9;
 
 
@@ -47,6 +47,30 @@ int main(int argc, char **argv) {
         cerr << "\n";
     }
 
+    // normalize the vectors
+    for(int i = 0; i < VOCABSIZE; ++i) {
+        real len = 0;
+        for (int j = 0; j < DIMSIZE; ++j) { len += vecs[i][j] * vecs[i][j]; }
+        len = sqrt(len);
+        for (int j = 0; j < DIMSIZE; j++) { vecs[i][j] /= len; }
+    }
+
+    // 0 // take exponent
+    // 0 for(int i = 0; i < VOCABSIZE; ++i) {
+    // 0     for (int j = 0; j < DIMSIZE; ++j) { vecs[i][j] = pow(M_E, vecs[i][j]); }
+    // 0 }
+
+
+    // 0 // normalize each feature of all words
+    // 0 for(int i = 0; i < DIMSIZE; ++i) {
+    // 0     real total = 0;
+    // 0     for(int j = 0; j < VOCABSIZE; ++j) { total += vecs[i][j]; }
+    // 0     for(int j = 0; j < VOCABSIZE; ++j) { vecs[i][j] /= total; }
+    // 0 }
+
+
+
+
     // make the graph
     // https://igraph.org/c/doc/igraph-Tutorial.html
     igraph_t g;
@@ -62,9 +86,9 @@ int main(int argc, char **argv) {
     // initialize
     for(int i = 0; i < VOCABSIZE*TOPK; ++i) { topk_wixs[i] = -INFTY; topk_bestds[i] = -1; }
 
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for(int w = 0; w < VOCABSIZE; ++w) { // w for word
-        cerr << "w = " << w << " | " << words[w] << "\n";
+        // cerr << "w = " << w << " | " << words[w] << "\n";
         real *bestd = topk_bestds + TOPK*w; // best distance, sorted highest to lowest.
         int *wixs = topk_wixs + TOPK*w; // indexes of the words
 
@@ -110,6 +134,14 @@ int main(int argc, char **argv) {
     }
     igraph_add_edges(&g, &es, /*attr=*/0);
 
+    // edges.
+    // for(int w = 0; w < VOCABSIZE; ++w) {
+    //     for(int i = 0; i < TOPK; ++i) {
+    //         assert(wixs[i] >= 0);
+    //         igraph_get_eid
+    //     }
+    // }
+
     cerr << "created graph.\n";
     igraph_integer_t nclusters;
     igraph_vector_t membership, csize;
@@ -132,6 +164,7 @@ int main(int argc, char **argv) {
             cout << "|\n";
         }
     }
+
     cerr << "destroyed graph.\n";
     igraph_destroy(&g);
 

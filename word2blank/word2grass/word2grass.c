@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <math.h>
 #include <assert.h>
+#include <stddef.h>
+#include <lapacke.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -27,7 +29,7 @@ struct vocab_word {
 char train_file[MAX_STRING], output_file[MAX_STRING];
 char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
-int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
+int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1, geodesic = 0;
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
@@ -382,6 +384,8 @@ void InitNet() {
   CreateBinaryTree();
 }
 
+
+
 // LOSS FUNCTION SHOULD BE KEPT SAME??
 // STILL CONFUSED BY THE METRIC - TWO OPTIONS
 void *TrainModelThread(void *id) {
@@ -392,8 +396,8 @@ void *TrainModelThread(void *id) {
   char eof = 0;
   real f, g;
   clock_t now;
-  real *neu1 = (real *)calloc(layer1_size, sizeof(real));
-  real *neu1e = (real *)calloc(layer1_size, sizeof(real));
+  real *neu1 = (real *)calloc(P*layer1_size, sizeof(real));
+  real *neu1e = (real *)calloc(P*layer1_size, sizeof(real));
 
   // open the train file
   FILE *fi = fopen(train_file, "rb");
@@ -447,8 +451,8 @@ void *TrainModelThread(void *id) {
     }
     word = sen[sentence_position];
     if (word == -1) continue;
-    for (c = 0; c < layer1_size; c++) neu1[c] = 0;
-    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+    for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1[b*layer1_size + c] = 0;
+    for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = 0;
     next_random = next_random * (unsigned long long)25214903917 + 11;
     b = next_random % window;
     if (cbow) {  //train the cbow architecture
@@ -519,9 +523,9 @@ void *TrainModelThread(void *id) {
         last_word = sen[c];
         if (last_word == -1) continue;
         // l1 is the offset of the "current focus word" into the array
-        l1 = last_word * layer1_size;
+        l1 = last_word * P * layer1_size;
 
-        for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = 0;
         // HIERARCHICAL SOFTMAX
         if (hs) for (d = 0; d < vocab[word].codelen; d++) {
           f = 0;
@@ -562,47 +566,63 @@ void *TrainModelThread(void *id) {
 
           // target: integer index of the word
           // l2: offset into the arrays
-          // weights[word][embedix]
-          // weights[word * EMBEDSIZE + embedix]
+          // weights[word][subspce_dim][embedix]
+          // weights[word * P * EMBEDSIZE + subspace_dim * EMBED_SIZE + embedix]
 
-          // target * EMBEDSIZE
-          l2 = target * layer1_size;
-          // f := dot product syn0[l1] . syn1neg[l2]
+          // target * P * EMBEDSIZE
+          l2 = target * P * layer1_size;
+          // f := geodesic(X,Y) = 
           f = 0;
-          for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1neg[c + l2];
-
+          if (geodesic == 1)
+          {
+            for (b = 0; b < P; b++) 
+            { 
+                // for (c = 0; c < layer1_size; c++) 
+                //     f += syn0[l1 + b*layer1_size + c] * syn1neg[l2 + b*layer1_size + c];
+                // use BLAS/LAPACK to do the inversion 
+            }
+          }
+          else
+          {
+            real Denom[P][P] = {0}; // Y^T.Y
+            real elem_sum = 0.0 ;
+            for (b = 0; b < P; b++)
+            {
+                for (c = 0; c < P; c++)
+                {
+                    for ( int k = 0; k < layer1_size; k++)
+                        elem_sum += syn0[ l1 + b*layer1_size + k]*syn0[l1 + c*layer1_size + k];
+                }
+                Denom[b][c] = elem_sum;
+                elem_sum = 0.0 ;
+            } 
+            //Calculate the inverse
+            //dgetrf_(P,P,Denom[P][])
+          }
           // ---------
-          // 1?: WTF is this "gradient"?
-          // 3?: WTF is this loss function?
-          // loss := (label - sigmoid(f=x.y))^2
-          // dloss/dxj := (label - sigmoid(Σi xi yi))^2
-          // dloss/dxj := 2 (label - sigmoid(Σi xi yi)) * (sigmoid (f)* (1 - sigmoid(f)) * yj
-          // g := gradient = 2 * (label - sigmoid(f)) * alpha 
+          // Regular f = trace [(syn0.T syn0)^-1 (syn0.T syn1neg)]
+          // geodesics f = 
+          // loss := (label - f))^2
+          // dloss/dx_i_j := 2 (label - f) * () 
+          // g := gradient * alpha = 2 * (label - sigmoid(f)) * alpha 
           // g = (label - sigmoid(f)) * alpha
+        
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
           else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          
           // ------
-
-          // x . y = \sum_i xi * yi 
-          // d/dx (x.y) 
-          // = d/d xj (x . y) 
-          // = d/d xj (\sum_i xi * yi)
-          // = (\sum_i yi * d/dxj xi)
-          // = (\sum_i yi * (1 if i = j, 0 otherwise))
-          // = (\sum_i yi * δij)
-          // = yj
+          //UPDATE RULE :: X_i_j = Span(X_i_j + grad*alpha) = (X_i_j + grad*alpha)M   
+          
           // STORE GRADIENT OF SYN0 (FOCUS) in NEU1E
-          // WTF 5: we have no locks. We are _inducing_ race conditions on
-          // purpose. HOGWILD!
-          // race aware programming.
-          for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
+          for (b = 0; b < P; b++)  for (c = 0; c < layer1_size; c++) neu1e[c + b*layer1_size] += g * syn1neg[c + b*layer1_size + l2];
+          
           // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
-          for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * syn0[c + l1];
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[c + b*layer1_size + l2] += g * syn0[c + b*layer1_size + l1];
         }
         // Learn weights input -> hidden
         // BACKPROP ON FOCUS WORD FROM NEU1E
-        for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn0[c + b*layer1_size + l1] += neu1e[c + b*layer1_size];
       }
     }
     sentence_position++;

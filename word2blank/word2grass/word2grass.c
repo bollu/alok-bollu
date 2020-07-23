@@ -385,9 +385,10 @@ void InitNet() {
 }
 
 
-
-// LOSS FUNCTION SHOULD BE KEPT SAME??
-// STILL CONFUSED BY THE METRIC - TWO OPTIONS
+// THEORIES I AM NOT SURE ABOUT::
+// 1) LOSS FUNCTION SHOULD BE KEPT SAME??
+// 2) STILL CONFUSED ABOUT THE CHOICE OF METRIC OF SIMILARITY - TWO OPTIONS (RIEMMANIAN METRIC OR GEODESICS)
+// 3) SIGMOID BULLSHIT(EASY TO FIGURE OUT I GUESS)
 void *TrainModelThread(void *id) {
   long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
@@ -398,7 +399,7 @@ void *TrainModelThread(void *id) {
   clock_t now;
   real *neu1 = (real *)calloc(P*layer1_size, sizeof(real));
   real *neu1e = (real *)calloc(P*layer1_size, sizeof(real));
-
+  real *neu2e = (real *)calloc(P*layer1_size, sizeof(real));
   // open the train file
   FILE *fi = fopen(train_file, "rb");
 
@@ -453,6 +454,7 @@ void *TrainModelThread(void *id) {
     if (word == -1) continue;
     for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1[b*layer1_size + c] = 0;
     for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = 0;
+    for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = 0;
     next_random = next_random * (unsigned long long)25214903917 + 11;
     b = next_random % window;
     if (cbow) {  //train the cbow architecture
@@ -526,6 +528,7 @@ void *TrainModelThread(void *id) {
         l1 = last_word * P * layer1_size;
 
         for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = 0;
+        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = 0;
         // HIERARCHICAL SOFTMAX
         if (hs) for (d = 0; d < vocab[word].codelen; d++) {
           f = 0;
@@ -547,10 +550,10 @@ void *TrainModelThread(void *id) {
         // negative := # of negative samples
         if (negative > 0) for (d = 0; d < negative + 1; d++) {
           // if we are are in the first iteration, the word we are
-          // targeting is 'word', and we want dot product 1
+          // targeting is 'word', and we want trace 1
           if (d == 0) {
-            target = word; // take dot prod w/current word
-            label = 1; // set target dot product 1
+            target = word; // take trace w/current word
+            label = 1; // set target  trace= 1
           } else {
             // pick a random word
             next_random = next_random * (unsigned long long)25214903917 + 11;
@@ -571,20 +574,16 @@ void *TrainModelThread(void *id) {
 
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
-          // f := geodesic(X,Y) = 
+          // f := geodesic(X,Y) = (need to read a bit more)
           f = 0;
           if (geodesic == 1)
           {
-            for (b = 0; b < P; b++) 
-            { 
-                // for (c = 0; c < layer1_size; c++) 
-                //     f += syn0[l1 + b*layer1_size + c] * syn1neg[l2 + b*layer1_size + c];
-                // use BLAS/LAPACK to do the inversion 
-            }
           }
           else
           {
-            real Denom[P][P] = {0}; // Y^T.Y
+            //Calculate syn0.T syn0, store it in Denom
+            real Denom[P][P]; // Y^T.Y
+            memset(Denom, 0, P*P*sizeof(real));
             real elem_sum = 0.0 ;
             for (b = 0; b < P; b++)
             {
@@ -596,28 +595,75 @@ void *TrainModelThread(void *id) {
                 Denom[b][c] = elem_sum;
                 elem_sum = 0.0 ;
             } 
-            //Calculate the inverse
-            //dgetrf_(P,P,Denom[P][])
+            //Calculate the inverse of Denom using lapack
+            int errorHandler, PP = 0, pivotArray[P];
+            PP = P * P;
+            real lapackWorkspace[PP];
+            dgetrf_(&P, &P, Denom[0], &P, pivotArray, &errorHandler);
+            if (errorHandler != 0)
+              exit();
+
+            dgetri_(&P, Denom[0], &P, pivotArray, lapackWorkspace, &PP, &errorHandler);
+            if (errorHandler != 0)
+              exit();
+
+            //Calculate syn0.T syn1neg, store it in Numer
+            real Numer[P][P]; // Y^T.Y
+            memset(Numer, 0, P*P*sizeof(real));
+            real elem_sum = 0.0 ;
+            for (b = 0; b < P; b++)
+            {
+                for (c = 0; c < P; c++)
+                {
+                    for ( int k = 0; k < layer1_size; k++)
+                        elem_sum += syn0[ l1 + b*layer1_size + k]*syn1neg[l1 + c*layer1_size + k];
+                }
+                Numer[b][c] = elem_sum;
+                elem_sum = 0.0 ;
+            }
+
+            //Calculate trace(Denom @ Numer)
+            for ( b = 0; b < P; b++) for ( c = 0; c < P; c++) f += Denom[b][c] * Numer[c][b];
+
           }
           // ---------
           // Regular f = trace [(syn0.T syn0)^-1 (syn0.T syn1neg)]
-          // geodesics f = 
-          // loss := (label - f))^2
-          // dloss/dx_i_j := 2 (label - f) * () 
-          // g := gradient * alpha = 2 * (label - sigmoid(f)) * alpha 
-          // g = (label - sigmoid(f)) * alpha
-        
+          // loss := (label - sigmoid(f))^2 (ignore derivative of sigmoid)
+      
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
           else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
           
           // ------
-          //UPDATE RULE :: X_i_j = Span(X_i_j + grad*alpha) = (X_i_j + grad*alpha)M   
+          // UPDATE RULE :: X_i_j = Span(X_i_j + grad*alpha) = (X_i_j + grad*alpha)*M   , M belongs to invertible R^(pxp)
+          // To preserve good conditions for M, M = Q_factor_of_QR_decomposition(X_i_j + grad*alpha) 
           
-          // STORE GRADIENT OF SYN0 (FOCUS) in NEU1E
-          for (b = 0; b < P; b++)  for (c = 0; c < layer1_size; c++) neu1e[c + b*layer1_size] += g * syn1neg[c + b*layer1_size + l2];
-          
+          // STORE GRADIENT*ALPHA OF SYN0 (FOCUS) in NEU1E
+          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * (\sum_d Denom_b_d * syn0_d_c)
+          // g := gradient * alpha = dloss/dx_i_j * alpha 
+          for (b = 0; b < P; b++)  
+          {  
+            for (c = 0; c < layer1_size; c++)
+            { 
+              for ( int d = 0; d < P; d++) neu1e[b*layer1_size + c] += Denom[b][d] * syn0[l1 + d*layer1_size + c]; 
+              neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] + (g * neu1e[b*layer1_size + c]);
+            }
+
+          }
+          // STORE GRADIENT*ALPHA OF SYN1NEG (CONTEXT) in NEU2E
+          // dloss/dsyn0_i_j := 2 (label - sigmoid(f)) * (???)
+          for (b = 0; b < P; b++)  
+          {  
+            for (c = 0; c < layer1_size; c++)
+            { 
+              for ( int d = 0; d < P; d++) neu2e[b*layer1_size + c] += Denom[b][d] * syn0[l1 + d*layer1_size + c]; 
+              neu2e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] + (g * neu2e[b*layer1_size + c]);
+            }
+
+          }
+
           // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
+
           for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[c + b*layer1_size + l2] += g * syn0[c + b*layer1_size + l1];
         }
         // Learn weights input -> hidden
@@ -634,6 +680,7 @@ void *TrainModelThread(void *id) {
   fclose(fi);
   free(neu1);
   free(neu1e);
+  free(neu2e);
   pthread_exit(NULL);
 }
 
@@ -658,9 +705,9 @@ void TrainModel() {
     // EMBEDSIZE := layer1_size
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
-      fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for (b = 0; b < layer1_size; b++) fwrite(&syn0[a * layer1_size + b], sizeof(real), 1, fo);
-      else for (b = 0; b < layer1_size; b++) fprintf(fo, "%lf ", syn0[a * layer1_size + b]);
+      fprintf(fo, "%s\n", vocab[a].word);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn0[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(real), 1, fo);
+      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn0[(a * P * layer1_size) + (b*layer1_size) + c]);
       fprintf(fo, "\n");
     }
     fclose(fo);
@@ -674,9 +721,9 @@ void TrainModel() {
     assert(fo != NULL);
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
-      fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for (b = 0; b < layer1_size; b++) fwrite(&syn1neg[a * layer1_size + b], sizeof(real), 1, fo);
-      else for (b = 0; b < layer1_size; b++) fprintf(fo, "%lf ", syn1neg[a * layer1_size + b]);
+      fprintf(fo, "%s\n", vocab[a].word);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn1neg[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(real), 1, fo);
+      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn1neg[(a * P * layer1_size) + (b*layer1_size) + c]);
       fprintf(fo, "\n");
     }
     fclose(fo);

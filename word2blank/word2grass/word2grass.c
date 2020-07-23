@@ -636,7 +636,7 @@ void *TrainModelThread(void *id) {
           
           // ------
           // UPDATE RULE :: X_i_j = Span(X_i_j + grad*alpha) = (X_i_j + grad*alpha)*M   , M belongs to invertible R^(pxp)
-          // To preserve good conditions for M, M = Q_factor_of_QR_decomposition(X_i_j + grad*alpha) 
+          // To preserve good conditions for M, Q_factor_of_QR_decomposition(X_i_j + grad*alpha) and then multiply with M 
           
           // STORE GRADIENT*ALPHA OF SYN0 (FOCUS) in NEU1E
           // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * (\sum_d Denom_b_d * syn0_d_c)

@@ -1,0 +1,4 @@
+are you sure you want to run this? You likely wish to run spearman.py.
+[[ 2.97     92.048544]
+ [ 6.08     92.064417]]
+spearman correlation: SpearmanrResult(correlation=0.2775409290735935, pvalue=5.292788287735884e-19)

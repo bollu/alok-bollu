@@ -1,0 +1,44 @@
+TopN: 200
+capital-common-countries:
+ACCURACY TOP1: 8.20 %  (41.49 / 506)
+Total accuracy: 74.70 %   Semantic accuracy: 74.70 %   Syntactic accuracy: -nan % 
+capital-world:
+ACCURACY TOP1: 4.50 %  (160.25 / 3564)
+Total accuracy: 59.80 %   Semantic accuracy: 59.80 %   Syntactic accuracy: -nan % 
+currency:
+ACCURACY TOP1: 8.71 %  (51.90 / 596)
+Total accuracy: 57.99 %   Semantic accuracy: 57.99 %   Syntactic accuracy: -nan % 
+city-in-state:
+ACCURACY TOP1: 8.71 %  (202.94 / 2330)
+Total accuracy: 61.79 %   Semantic accuracy: 61.79 %   Syntactic accuracy: -nan % 
+family:
+ACCURACY TOP1: 14.45 %  (60.69 / 420)
+Total accuracy: 62.66 %   Semantic accuracy: 62.66 %   Syntactic accuracy: -nan % 
+gram1-adjective-to-adverb:
+ACCURACY TOP1: 15.26 %  (151.38 / 992)
+Total accuracy: 63.26 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 67.74 % 
+gram2-opposite:
+ACCURACY TOP1: 9.55 %  (72.22 / 756)
+Total accuracy: 61.86 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 58.47 % 
+gram3-comparative:
+ACCURACY TOP1: 27.58 %  (367.31 / 1332)
+Total accuracy: 64.61 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 69.29 % 
+gram4-superlative:
+ACCURACY TOP1: 2.05 %  (20.35 / 992)
+Total accuracy: 62.41 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 61.96 % 
+gram5-present-participle:
+ACCURACY TOP1: 28.59 %  (301.92 / 1056)
+Total accuracy: 64.26 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 66.58 % 
+gram6-nationality-adjective:
+ACCURACY TOP1: 46.71 %  (710.41 / 1521)
+Total accuracy: 66.93 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 71.69 % 
+gram7-past-tense:
+ACCURACY TOP1: 21.41 %  (334.03 / 1560)
+Total accuracy: 68.00 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 72.82 % 
+gram8-plural:
+ACCURACY TOP1: 22.55 %  (300.36 / 1332)
+Total accuracy: 68.43 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 72.92 % 
+gram9-plural-verbs:
+ACCURACY TOP1: 18.38 %  (159.94 / 870)
+Total accuracy: 68.70 %   Semantic accuracy: 62.66 %   Syntactic accuracy: 73.01 % 
+Questions seen / total: 17827 19544   91.21 % 

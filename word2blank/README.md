@@ -1,3 +1,15 @@
+Directory Structure
+-------------------
+
+`nuke`: past attempts at working on some ideas which have either failed, been paused, or lost our interest over time due to training complexities, unresolved math, or simply unnecessary overhead. One can thank @bollu for these experiments, and may we visit them someday
+
+`ongoing`: all the projects currently underway. Things that have publication potential, research interest, or we are currently working on.
+
+`stuck?`: the projects which can become ongoing save one crucial detail which can be figured out given manpower and time, both of which are very lacking at the moment.
+
+'published`: publications of the word representations group
+
+
 Files
 -----
 

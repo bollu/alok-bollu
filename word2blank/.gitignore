@@ -5,3 +5,4 @@ text0
 jabber
 core
 *.bin
+./utilities/MODEL*

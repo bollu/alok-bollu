@@ -1,2 +1,0 @@
-Usage: ./compute-accuracy <FILE> <usemetric=0, 1> <threshold>
-where FILE contains word projections, and threshold is used to reduce vocabulary of the model for fast approximate evaluation (0 = off, otherwise typical value is 30000)

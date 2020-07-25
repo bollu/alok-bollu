@@ -1,4 +1,0 @@
-TopN: 5
-capital-common-countries:
-ACCURACY TOP1: 97.23 %  (492 / 506)
-Total accuracy: 97.23 %   Semantic accuracy: 97.23 %   Syntactic accuracy: -nan % 

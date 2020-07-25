@@ -1,8 +1,0 @@
-vectors.bin
-same-vector-for-negsamples
-negsampling-random
-original
-distance
-word2vec
-compute-accuracy
-*.bin

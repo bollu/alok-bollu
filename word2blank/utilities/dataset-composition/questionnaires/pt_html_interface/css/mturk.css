@@ -1,0 +1,84 @@
+.opt-comment {
+    color: #888888;
+    font-size: 80%;
+}
+
+.idandprogress {
+    padding-left: 20pt;
+    padding-right: 20pt;
+    padding-top: 10pt;
+}
+
+.indentation {
+    padding-left: 20pt;
+}
+
+.radio-table {
+    margin-left: 10px;
+}
+
+input[type=radio] {
+    appearance: none;
+    -moz-appearance: none;  /* make Firefox respect settings */
+    width   : 20px;
+    height  : 20px;
+    margin  : 5px;
+    padding : 0;
+}
+
+td {
+    line-height: 0;
+}
+
+.bigyes, .bigno {
+    padding: 10px;
+    width: 50px;
+    font-size: 10pt;
+    text-align: center;
+    color: grey;
+}
+.number {
+    color:grey;
+    font-size: 8pt;
+    text-align: center;
+}
+
+.tooltippy {
+    position: relative;
+}
+
+.tooltippy .ttip {
+    display: none;
+    position: absolute;
+    z-index: 1;
+
+    /*
+    width: 50em;
+    */
+    line-height: 0;
+    white-space: nowrap;
+
+    font-size: 12;
+    padding: 20px 20px;
+    border: 1px solid black;
+    background-color: #FFF;
+    box-shadow: 2px 2px 6px #000;
+    top: 2em;
+    left: 50%;
+}
+
+.tooltippy:hover .ttip {
+    display: inline;
+}
+
+
+fieldset {
+    padding: 10px;
+    background: #fbfbfb;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+
+ul.with-inputfields li {
+    margin-top: 3pt;
+}

@@ -1,0 +1,40 @@
+
+Number of compounds in dataset: 90
+
+Analysis of some values in the form avg / max(argmax) / min(argmin)
+-------------------------------------------------------------------
+
+Values of nAnnot: 18.78 / 24(busy_bee) / 15(inner_product)
+
+Values of stdevHeadMod: 1.17 / 2(fish_story) / 0(insurance_company)
+Nb. of stdevHeadMod with stddev > 1.5: 17 (18.89%)
+
+Values of stdevHead: 1.05 / 2(ancient_history) / 0(bad_hat)
+Nb. of stdevHead with stddev > 1.5: 15 (16.67%)
+
+Values of stdevMod: 1.18 / 2(black_cherry) / 0(insurance_company)
+Nb. of stdevMod with stddev > 1.5: 25 (27.78%)
+
+Correlation and goodness of fit of compound vs. mean of components
+------------------------------------------------------------------
+
+Spearman: compound vs. geom. mean: 0.984297892106
+Spearman: compound vs. arith. mean: 0.965944310748
+
+R2: compound vs. geom. mean: 0.959734247878
+R2: compound vs. arith. mean: 0.895184231803
+
+Correlation between compound and head/modifier judgements
+-----------------------------------------------------------
+
+Spearman: compound vs. head: 0.732552922686
+Spearman: compound vs. modifier: 0.73257072868
+
+Pearson: compound vs. head: 0.792283749432
+Pearson: compound vs. modifier: 0.711091624293
+
+Correlation between extremes and stddev (middle is harder?)
+-----------------------------------------------------------
+
+Spearman: stddev compound vs. -(compound - 2.5)^2: 0.858878055483
+R2: stddev compound vs. -(compound - 2.5)^2: 0.797970899455

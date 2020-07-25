@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<title>Les noms composés du français</title>  <!-- XXX don't forget to update this line -->
+
+<link href="https://s3.amazonaws.com/mturk-public/bs30/css/bootstrap.min.css" rel="stylesheet" />
+
+
+<style type="text/css">
+    .opt-comment {
+        color: #888888;
+        font-size: 80%;
+    }
+
+    .indentation {
+        padding-left: 20pt;
+    }
+
+    .radio-table {
+        margin-left: 10px;
+    }
+
+    input[type=radio] {
+        appearance: none;
+        -moz-appearance: none;  /* make Firefox respect settings */
+        width   : 20px;
+        height  : 20px;
+        margin  : 5px;
+        padding : 0;
+    }
+
+    td {
+        line-height: 0;
+    }
+
+    .bigyes, .bigno {
+        padding: 10px;
+        width: 50px;
+        font-size: 10pt;
+        text-align: center;
+        color: grey;
+    }
+    .number {
+        color:grey;
+        font-size: 8pt;
+        text-align: center;
+    }
+
+    .tooltippy {
+        position: relative;
+    }
+
+    .tooltippy .ttip {
+        display: none;
+        position: absolute;
+        z-index: 1;
+
+        /*
+        width: 50em;
+        */
+        line-height: 0;
+        white-space: nowrap;
+
+        font-size: 12;
+        padding: 20px 20px;
+        border: 1px solid black;
+        background-color: #FFF;
+        box-shadow: 2px 2px 6px #000;
+        top: 2em;
+        left: 50%;
+    }
+
+    .tooltippy:hover .ttip {
+        display: inline;
+    }
+
+
+    fieldset {
+        padding: 10px;
+        background: #fbfbfb;
+        border-radius: 5px;
+        margin-bottom: 5px;
+    }
+
+    ul.with-inputfields li {
+        margin-top: 3pt;
+    }
+</style>
+
+</head>
+
+
+<!--=====================================================-->
+<!--=====================================================-->
+<body>
+
+<section class="container" id="Survey" style="margin-bottom:15px; padding: 10px 10px; font-family: Verdana, Geneva, sans-serif; color:#333333; font-size:0.9em;">
+
+
+<!--=====================================================-->
+<div class="row col-xs-12 col-md-12"><!-- Instructions -->
+<div class="panel panel-primary">
+<div class="panel-heading"><strong>Instructions</strong></div>
+<div class="panel-body">
+<p>Vous allez lire un nom composé en français. Ensuite, vous allez évaluer quelle est la contribution du sens individuel de chaque mot au sens global du nom composé.</p>
+<!-- Notre objectif est de mieux comprendre comment les noms composés sont interprétés en français par des locuteurs natifs dans le langage courant :</p> -->
+
+<ul>
+
+  <li>Chaque HIT devra prendre 1 à 2 minutes.</li>
+  <li>Si ceci est votre premier HIT, vous devez obligatoirement <a href="http://goo.gl/forms/MPNkftrwUA" target="_blank">remplir le questionnaire de qualification</a> sinon vous ne serez pas payé.</li>
+    
+<!-- Vous ne serez pas payé si votre <em>worker ID</em> n'a pas été renseigné dans le questionnaire de qualification.</li> -->
+    <li>Nous vous demandons de lire 3 phrases dans lesquelles le nom composé apparaît. Si vous ne les comprenez pas, abandonnez le HIT.</li>
+    <li>Si ce nom composé vous semble ambigu, considérez UNIQUEMENT le sens qui apparaît dans les 3 phrases. </li>
+
+<!--  <li>Pour chacune des 3 premières questions, sélectionnez une valeur entre 0 et 5, où 0 signifie <em>pas du tout</em> et 5 signifie <em>tout à fait</em>. Les valeurs intermédiaires servent à nuancer votre réponse.</li>
+  <li>Ensuite, proposez 3 alternatives pour ce nom composé, avec un sens équivalent ou proche. Privilégiez les formulations courtes, avec 1 à 3 mots. Vous devez donner au moins 2 propositions différentes, sinon votre HIT ne sera pas accepté.</li>
+-->
+
+  <li>Ne réfléchissez pas trop pour chaque question, il n'y a pas de mauvaise réponse.</li>
+<!-- <li>Si vous avez des problèmes, remarques ou suggestions, n'hésitez pas à nous en faire part dans le dernier champ.</li> -->
+</ul>
+</div>
+</div>
+</div>
+
+
+<!--=====================================================-->
+<fieldset>
+<label>1. Lisez l'expression ci-dessous :</label><br/>
+<span class="indentation"></span><span style="font-size: 20pt"><em>${compound}</em></span>
+</fieldset>
+
+
+<!--=====================================================-->
+<fieldset>
+<label>2. Lisez les phrases ci-dessous, contenant l'expression <em>${compound}</em> :</label><br/>
+<!-- <span class="opt-comment">Certaines phrases peuvent contenir des coquilles.</span> -->
+<ul>
+<li><em>${examplesent1}</em></li>
+<li><em>${examplesent2}</em></li>
+<li><em>${examplesent3}</em></li>
+</ul>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<!--<hr/><li>Comprenez vous le <u>sens</u> de <em>{compound}</em> dans les phrases ci-dessus ? <br/>
+<small>Si vous avez un doute, vous pouvez consulter le <a target="_blank" href="{link-wiktionnary}">dictionnaire</a> avant de répondre</small> <br/>
+
+<input required type="radio" name="known" value="YES"/> OUI <br/>
+<input required type="radio" name="known" value="NO"/> NON
+</li>
+-->
+
+
+<!--=====================================================-->
+<fieldset>
+<label>3. Donnez 2 à 3 mots ou expressions équivalentes à <em>${compound}</em> :</label><br/>
+
+<ul class="with-inputfields">
+<li><span class="tooltippy"><input type="text" name="paraphrase1" placeholder="Obligatoire"/><span class="ttip">Privilégiez les formulations courtes, avec 1 à 3 mots, si possible en utilisant les mots <em>${noun}</em> et/ou <em>${modifier}</em></span></span></li>
+<li><span class="tooltippy"><input type="text" name="paraphrase2" placeholder="Obligatoire"/><span class="ttip">Privilégiez les formulations courtes, avec 1 à 3 mots, si possible en utilisant les mots <em>${noun}</em> et/ou <em>${modifier}</em></span></span></li>
+<li><span class="tooltippy"><input type="text" name="paraphrase3"/><span class="ttip">Privilégiez les formulations courtes, avec 1 à 3 mots, si possible en utilisant les mots <em>${noun}</em> et/ou <em>${modifier}</em></span></span></li>
+</ul>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>4. À votre avis, ${undefdet} <em>${compound}</em> ${etre} forcément/littéralement ${undefdet} <em>${noun}</em> ? </label><br/>
+
+<br/>
+<table class="radio-table">
+    <tbody>
+    <tr>
+        <td class="bigno" rowspan="2">NON</td> <td class="number">0</td> <td class="number">1</td> <td class="number">2</td> <td class="number">3</td> <td class="number">4</td> <td class="number">5</td> <td class="bigyes" rowspan="2">OUI</td>
+    </tr>
+    <tr>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="0"/><div class="ttip">Pas du tout &mdash; ${undefdet} <em>${compound}</em> n'${avoir} <u>rien à voir</u> avec ${undefdet} <em>${noun}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="1"/><div class="ttip">Non &mdash; je peux imaginer un <u>lien très vague</u> entre ${undefdet} <em>${compound}</em> et ${undefdet} <em>${noun}</em><!---, mais c'est tiré par les cheveux--></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="2"/><div class="ttip">Plutôt non &mdash; le sens de <em>${compound}</em> est <u>lié</u> à ${undefdet} <em>${noun}</em>, mais <u>pas directement</u></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="3"/><div class="ttip">Plutôt oui &mdash; le sens de <em>${compound}</em> est <u>directement lié</u> à ${undefdet} <em>${noun}</em>, même s'ils ne sont pas équivalents</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="4"/><div class="ttip">Ouais &mdash; ${undefdet} <em>${compound}</em> ${etre}, <u>vraiment</u>, ${undefdet} <em>${noun}</em>, dans un sens peu usuel du mot <em>${noun}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qhead" value="5"/><div class="ttip">Tout à fait &mdash; ${undefdet} <em>${compound}</em> ${etre} <u>forcément/littéralement</u> ${undefdet} <em>${noun}</em></div></td>
+    </tr>
+    </tbody>
+</table>
+</fieldset>
+
+
+<!--=====================================================-->
+<fieldset>
+<label>5. À votre avis, ${undefdet} <em>${compound}</em> ${etre} forcément/littéralement <em>${modifier}</em> ? </label><br/>
+
+<br/>
+<table class="radio-table">
+    <tbody>
+    <tr>
+        <td class="bigno" rowspan="2">NON</td> <td class="number">0</td> <td class="number">1</td> <td class="number">2</td> <td class="number">3</td> <td class="number">4</td> <td class="number">5</td> <td class="bigyes" rowspan="2">OUI</td>
+    </tr>
+    <tr>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="0"/><div class="ttip">Pas du tout &mdash; ${undefdet} <em>${compound}</em> n&apos;${avoir} <u>rien à voir</u> avec quelque chose de <em>${modifierlemma}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="1"/><div class="ttip">Non &mdash; je peux imaginer un <u>lien très vague</u> entre ${undefdet} <em>${compound}</em> et quelque chose de <em>${modifierlemma}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="2"/><div class="ttip">Plutôt non &mdash; le sens de <em>${compound}</em> est <u>lié</u> à quelque chose de <em>${modifierlemma}</em>, mais <u>pas directement</u></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="3"/><div class="ttip">Plutôt oui &mdash; le sens de <em>${compound}</em> est <u>directement lié</u> à quelque chose de <em>${modifierlemma}</em>, même s&apos;ils ne sont pas équivalents</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="4"/><div class="ttip">Ouais &mdash; ${undefdet} <em>${compound}</em> ${etre}, <u>vraiment</u>, <em>${modifier}</em>, dans un sens peu usuel du mot <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qmodifier" value="5"/><div class="ttip">Tout à fait &mdash; ${undefdet} <em>${compound}</em> ${etre} <u>forcément/littéralement</u> <em>${modifier}</em></div></td>
+    </tr>
+    </tbody>
+</table>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>6. Étant donné ces réponses, peut-on dire ${quedet}${undefdet} <em>${compound}</em> ${etre} forcément/littéralement ${undefdet} <em>${noun}</em> qui ${etre} <em>${modifier}</em> ? </label><br/>
+
+<br/>
+<table class="radio-table">
+    <tbody>
+    <tr>
+        <td class="bigno" rowspan="2">NON</td> <td class="number">0</td> <td class="number">1</td> <td class="number">2</td> <td class="number">3</td> <td class="number">4</td> <td class="number">5</td> <td class="bigyes" rowspan="2">OUI</td>
+    </tr>
+    <tr>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="0"/><div class="ttip">Pas du tout &mdash; cela n'a <u>pas de sens</u> d'imaginer ${undefdet} <em>${noun}</em> qui ${etre} <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="1"/><div class="ttip">Non &mdash; c'est <u>bizarre</u> d'imaginer ${undefdet} <em>${noun}</em> qui ${etre} <em>${modifier}</em>, même si ça reste compréhensible</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="2"/><div class="ttip">Plutôt non &mdash; le sens de <em>${compound}</em> est <u>lié</u> à ${undefdet} <em>${noun}</em> et à quelque chose de <em>${modifierlemma}</em>, mais le lien n'est pas direct</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="3"/><div class="ttip">Plutôt oui &mdash; le sens de <em>${compound}</em> est <u>directement lié</u> à ${undefdet} <em>${noun}</em> et à quelque chose de <em>${modifierlemma}</em>, même s'ils ne sont pas équivalents</div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="4"/><div class="ttip">Ouais &mdash; ${undefdet} <em>${compound}</em> ${etre}, <u>vraiment</u>, ${undefdet} <em>${noun}</em> qui ${etre} <em>${modifier}</em></div></td>
+        <td class="tooltippy"><input required type="radio" name="Qheadmodifier" value="5"/><div class="ttip">Tout à fait &mdash; ${undefdet} <em>${compound}</em> ${etre} <u>forcément/littéralement</u> ${undefdet} <em>${noun}</em> qui ${etre} <em>${modifier}</em></div></td>
+    </tr>
+    </tbody>
+</table>
+</fieldset>
+
+
+
+<!--=====================================================-->
+<fieldset>
+<label>7. Entrez ici des commentaires libres sur cette tâche :</label><br/>
+<span class="tooltippy"><span class="indentation"></span><textarea cols="40" rows="5" name="comments"></textarea><span class="ttip">Remplissez ce champ uniquement si vous avez des problèmes, des questions ou des suggestions</span></span>
+</fieldset>
+
+<br/>
+<input type="submit" value="ENVOYER"/>
+
+</section>
+</body>
+</html>

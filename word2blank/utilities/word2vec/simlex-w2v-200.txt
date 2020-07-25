@@ -1,0 +1,12 @@
+are you sure you want to run this? You likely wish to run spearman.py[[0.98     0.322958]
+ [0.68     0.18954 ]
+ [0.78     0.184222]
+ [0.4      0.316576]
+ [5.       0.300368]
+ [2.85     0.283296]
+ [1.67     0.355345]
+ [4.8      0.355497]
+ [2.97     0.232958]
+ [6.08     0.313781]]
+[1.58     0.356248]
+spearman correlation: SpearmanrResult(correlation=0.32595276452728883, pvalue=5.499847807223557e-26)

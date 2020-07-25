@@ -7,7 +7,7 @@ Directory Structure
 
 `stuck?`: the projects which can become ongoing save one crucial detail which can be figured out given manpower and time, both of which are very lacking at the moment.
 
-'published`: publications of the word representations group
+`published`: publications of the word representations group
 
 
 Files

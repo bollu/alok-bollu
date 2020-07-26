@@ -21,8 +21,8 @@ const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vo
 typedef float real;                    // Precision of float numbers
 
 // //for inverse
-void dgetrf_(long long int *rows, long long int *cols, real *matA, int *LDA, int *IPIV, int *INFO);
-void dgetri_(long long int *N, real *matA, int *LDA, int *IPIV, real *WORK, int *LWORK, int *INFO);
+void dgetrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, int *IPIV, int *INFO);
+void dgetri_(long long int *N, real *matA, long long int *LDA, int *IPIV, real *WORK, int *LWORK, int *INFO);
 
 //for Q calculation 
 void dgeqrf_(long long int *rows, long long int *cols, real *matA, int *LDA, real *TAU, real *WORK, int *LWORK, int *INFO);
@@ -42,7 +42,7 @@ int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
 real alpha = 0.025, starting_alpha, sample = 1e-3;
-real *syn0, *syn1, *syn1neg, *expTable;
+real *syn0, *syn1, *syn1neg, *expTable, *M;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -361,6 +361,10 @@ void ReadVocab() {
 
 void InitNet() {
   long long a, b;
+  a = posix_memalign((void **)&M, 128, (long long)vocab_size * P * P * sizeof(real));
+  if (M == NULL) {printf("Memory allocation failed\n"); exit(1);}
+  for (a=0; a<P; a++) { for (b=0; b<P; b++) { M[a*P +b] =  rand()%40 + 1; printf("%f ",M[a*P+b]);} printf("\n");}
+  
   unsigned long long next_random = 1;
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
@@ -407,10 +411,7 @@ void *TrainModelThread(void *id) {
   real *neu1 = (real *)calloc(P*layer1_size, sizeof(real));
   real *neu1e = (real *)calloc(P*layer1_size, sizeof(real));
   real *neu2e = (real *)calloc(P*layer1_size, sizeof(real));
-
-  //Intialise the very essential M
-  real *M = (real *)calloc(P*P, sizeof(real));
-  for (b=0; b<P; b++) for (c=0; c<P; c++) M[b*P +c] =  rand()%100 + 1;
+  
   // open the train file
   FILE *fi = fopen(train_file, "rb");
 
@@ -585,49 +586,56 @@ void *TrainModelThread(void *id) {
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
           // f := geodesic(X,Y) = (need to read a bit more)
+          
           f = 0;
-            //Calculate M.T M, store it in Denom 
-            real Denom[P][P]; 
-            memset(Denom, 0, P*P*sizeof(real));
-            real elem_sum = 0.0 ;
-            for (b = 0; b < P; b++)
-            {
-                for (c = 0; c < P; c++)
-                {
-                    for ( int k = 0; k < P; k++)
-                        elem_sum += M[b*P + k]*M[k*P + c];
-                }
-                Denom[b][c] = elem_sum;
-                elem_sum = 0.0 ;
-            } 
-            //Calculate the inverse of Denom using lapack
-            int errorHandler, PP = 0, pivotArray[P];
-            PP = P * P;
-            real lapackWorkspace[PP];
-            dgetrf_(&P, &P, Denom[0], &P, pivotArray, &errorHandler);
-            if(errorHandler !=0){fprintf(stderr,"Inverse calculation failed, error code %d\n",errorHandler);exit(1);}
+          //Calculate M.T M, store it in Denom 
+          real Denom[P][P]; 
+          memset(Denom, 0, P*P*sizeof(real));
+          real elem_sum = 0.0 ;
+          for (b = 0; b < P; b++)
+          {
+              for (c = 0; c < P; c++)
+              {
+                  elem_sum = 0.0 ;
+                  for ( int k = 0; k < P; k++)
+                      elem_sum += M[b*P + k]*M[k*P + c];
+                  Denom[b][c] = elem_sum;
+              }      
+          }
 
-            dgetri_(&P, Denom[0], &P, pivotArray, lapackWorkspace, &PP, &errorHandler);
-            if(errorHandler !=0){fprintf(stderr,"Inverse calculation failed, error code %d\n",errorHandler);exit(1);}
+          for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");} 
+          //Calculate the inverse of Denom using lapack
+          int errorHandler, PP = 0, pivotArray[P];
+          PP = P * P;
+          real lapackWorkspace[PP];
+          dgetrf_(&P, &P, Denom[0], &P, pivotArray, &errorHandler);
+          if(errorHandler !=0){fprintf(stderr,"dgetrf calculation failed, error code %d\n",errorHandler);exit(1);}
 
-            //Calculate syn0.T syn1neg, store it in Numer
-            real Numer[P][P]; // Y^T.Y
-            memset(Numer, 0, P*P*sizeof(real));
-            elem_sum = 0.0 ;
-            for (b = 0; b < P; b++)
-            {
-                for (c = 0; c < P; c++)
-                {
-                    for ( int k = 0; k < layer1_size; k++)
-                        elem_sum += syn0[ l1 + b*layer1_size + k]*syn1neg[l1 + c*layer1_size + k];
-                }
-                Numer[b][c] = elem_sum;
-                elem_sum = 0.0 ;
-            }
+          dgetri_(&P, Denom[0], &P, pivotArray, lapackWorkspace, &PP, &errorHandler);
+          if(errorHandler !=0){fprintf(stderr,"dgetri calculation failed, error code %d\n",errorHandler);exit(1);}
+          
+          printf("AFTER INVERSE:\n");
+          for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");}
+          
+          //Calculate syn0.T syn1neg, store it in Numer
+          real Numer[P][P]; // Y^T.Y
+          memset(Numer, 0, P*P*sizeof(real));
+          elem_sum = 0.0 ;
+          for (b = 0; b < P; b++)
+          {
+              for (c = 0; c < P; c++)
+              {
+                  elem_sum = 0.0 ;
+                  for ( int k = 0; k < layer1_size; k++)
+                      elem_sum += syn0[ l1 + b*layer1_size + k]*syn1neg[l1 + c*layer1_size + k];
+                  Numer[b][c] = elem_sum;
+              }
+              
+          } 
 
-            //Calculate trace(Denom @ Numer)
-            for ( b = 0; b < P; b++) for ( c = 0; c < P; c++) f += Denom[b][c] * Numer[c][b];
-
+          //Calculate trace(Denom @ Numer)
+          for ( b = 0; b < P; b++) for ( c = 0; c < P; c++) f += Denom[b][c] * Numer[c][b];
+          printf("%f\n",f);
           // ---------
           // Regular f = trace [(syn0.T syn0)^-1 (syn0.T syn1neg)]
           // loss := (label - sigmoid(f))^2 (ignore derivative of sigmoid)
@@ -642,6 +650,7 @@ void *TrainModelThread(void *id) {
           
           // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
           // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * (\sum_d Denom_b_d * syn0_d_c)
+          
           for (b = 0; b < P; b++)  
           {  
             for (c = 0; c < layer1_size; c++)

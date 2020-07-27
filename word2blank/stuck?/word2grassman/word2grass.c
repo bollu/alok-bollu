@@ -21,8 +21,8 @@ const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vo
 typedef float real;                    // Precision of float numbers
 
 // //for inverse
-void dgetrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, int *IPIV, int *INFO);
-void dgetri_(long long int *N, real *matA, long long int *LDA, int *IPIV, real *WORK, int *LWORK, int *INFO);
+void dgetrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, long long int *IPIV, int *INFO);
+void dgetri_(long long int *N, real *matA, long long int *LDA, long long int *IPIV, real *WORK, long long int *LWORK, int *INFO);
 
 //for Q calculation 
 void dgeqrf_(long long int *rows, long long int *cols, real *matA, int *LDA, real *TAU, real *WORK, int *LWORK, int *INFO);
@@ -361,9 +361,9 @@ void ReadVocab() {
 
 void InitNet() {
   long long a, b;
-  a = posix_memalign((void **)&M, 128, (long long)vocab_size * P * P * sizeof(real));
+  a = posix_memalign((void **)&M, 128, (long long)P * P * sizeof(real));
   if (M == NULL) {printf("Memory allocation failed\n"); exit(1);}
-  for (a=0; a<P; a++) { for (b=0; b<P; b++) { M[a*P +b] =  rand()%40 + 1; printf("%f ",M[a*P+b]);} printf("\n");}
+  for (a=0; a<P; a++) { for (b=0; b<P; b++) { M[a*P +b] =  rand()%10 + 1; printf("%f ",M[a*P+b]);} printf("\n");}
   
   unsigned long long next_random = 1;
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
@@ -598,27 +598,29 @@ void *TrainModelThread(void *id) {
               {
                   elem_sum = 0.0 ;
                   for ( int k = 0; k < P; k++)
-                      elem_sum += M[b*P + k]*M[k*P + c];
+                      elem_sum += M[k*P + b]*M[k*P + c];
                   Denom[b][c] = elem_sum;
               }      
           }
 
           for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");} 
           //Calculate the inverse of Denom using lapack
-          int errorHandler, PP = 0, pivotArray[P];
+          int errorHandler;
+          long long int PP;
           PP = P * P;
-          real lapackWorkspace[PP];
-          dgetrf_(&P, &P, Denom[0], &P, pivotArray, &errorHandler);
-          if(errorHandler !=0){fprintf(stderr,"dgetrf calculation failed, error code %d\n",errorHandler);exit(1);}
+          long long int *pivotArray = malloc(sizeof(long long int)*P);
+          real *lapackWorkspace = malloc(sizeof(real)*PP);
+          // dgetrf_(&P, &P, Denom[0], &P, pivotArray, &errorHandler);
+          // if(errorHandler !=0){fprintf(stderr,"dgetrf calculation failed, error code %d\n",errorHandler);exit(1);}
 
-          dgetri_(&P, Denom[0], &P, pivotArray, lapackWorkspace, &PP, &errorHandler);
-          if(errorHandler !=0){fprintf(stderr,"dgetri calculation failed, error code %d\n",errorHandler);exit(1);}
+          // dgetri_(&P, Denom[0], &P, pivotArray, lapackWorkspace, &PP, &errorHandler);
+          // if(errorHandler !=0){fprintf(stderr,"dgetri calculation failed, error code %d\n",errorHandler);exit(1);}
           
-          printf("AFTER INVERSE:\n");
-          for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");}
+          // printf("AFTER INVERSE:\n");
+          // for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");}
           
           //Calculate syn0.T syn1neg, store it in Numer
-          real Numer[P][P]; // Y^T.Y
+          real Numer[P][P]; 
           memset(Numer, 0, P*P*sizeof(real));
           elem_sum = 0.0 ;
           for (b = 0; b < P; b++)
@@ -627,7 +629,7 @@ void *TrainModelThread(void *id) {
               {
                   elem_sum = 0.0 ;
                   for ( int k = 0; k < layer1_size; k++)
-                      elem_sum += syn0[ l1 + b*layer1_size + k]*syn1neg[l1 + c*layer1_size + k];
+                      elem_sum += syn0[ l1 + b*layer1_size + k]*syn1neg[l2 + c*layer1_size + k];
                   Numer[b][c] = elem_sum;
               }
               
@@ -677,8 +679,8 @@ void *TrainModelThread(void *id) {
           {  
             for (c = 0; c < layer1_size; c++)
             { 
-              for ( int d = 0; d < P; d++) neu2e[b*layer1_size + c] += Denom[d][b] * syn1neg[l1 + d*layer1_size + c]; 
-              neu2e[b*layer1_size + c] = syn0[l2 + b*layer1_size +c] + (g * neu2e[b*layer1_size + c]);
+              for ( int d = 0; d < P; d++) neu2e[b*layer1_size + c] += Denom[d][b] * syn1neg[l2 + d*layer1_size + c]; 
+              neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (g * neu2e[b*layer1_size + c]);
             }
           }
           // Get Q factor from QR factorization of NEU2E

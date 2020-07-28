@@ -396,6 +396,11 @@ void InitNet() {
   CreateBinaryTree();
 }
 
+float sigmoid(float f) {
+    float e = exp(f);
+    return e/(1+e);
+}
+
 void *TrainModelThread(void *id) {
   long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
@@ -600,7 +605,10 @@ void *TrainModelThread(void *id) {
           // g = (label - sigmoid(f)) * alpha
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          else {
+	      // g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+	      g = (label - sigmoid(f)) * alpha;
+	  }
           // ------
 
           // x . y = \sum_i xi * yi 

@@ -10,6 +10,9 @@ set -e
 set -o xtrace
 
 mkdir -p models/
+mkdir -p models/standard
+mkdir -p models/iters
+mkdir -p models/windowsize
 mkdir -p slurm/
 rm word2vec || true
 gcc -lm -pthread  -march=native -Wall \

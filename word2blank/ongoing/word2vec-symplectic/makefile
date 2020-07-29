@@ -4,7 +4,7 @@ CXX = g++
 DEBUG=-fsanitize=address -fsanitize=undefined -g -O2
 RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall \
-		 -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
+		 -funroll-loops -Wno-unused-result ${DEBUG} -fuse-ld=gold
 
 all: word2vec word2phrase distance word-analogy compute-accuracy
 
@@ -64,7 +64,7 @@ dump-accuracy-simlex : dump-accuracy-simlex.c
 compute-composition: compute-composition.cpp
 	$(CC) -O2 compute-composition.cpp -o compute-composition -lm  -Wno-unused-result
 
-cli: cli.cpp  linenoise.c
+cli: makefile cli.cpp  linenoise.c
 	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS)
 	$(CXX) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS)
 	$(CXX)  linenoise.o cli.o -o cli $(CFLAGS)

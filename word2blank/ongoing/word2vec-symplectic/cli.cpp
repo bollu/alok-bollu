@@ -34,7 +34,17 @@
 
 
 using namespace std;
-using Vec = float*;
+struct Vec {
+  int size;
+  float *v;
+  Vec(int size, float *v) : size(size), v(v) {};
+  Vec() : size(0), v(nullptr) {};
+  static Vec alloc(int size) {
+    return Vec(size, new float[size]);
+  }
+
+  float &operator [](size_t ix) { return v[ix]; }
+};
 
 std::map<std::string, Vec> word2vec;
 
@@ -191,7 +201,7 @@ Vec interpret(AST ast) {
                 goto INTERPRET_ERROR;
             }
             cout << ast.s() << " : ";
-            Vec out = new float[size];
+            Vec out = Vec::alloc(size);
             for(int i = 0; i < size; ++i) out[i] = it->second[i];
 
             for(int i = 0; i < std::min<int>(3, size); i++) {
@@ -222,7 +232,7 @@ Vec interpret(AST ast) {
     }
 
 INTERPRET_ERROR:
-    return nullptr;
+    return Vec();
 }
 
 
@@ -324,12 +334,11 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
-        M[b] = new float[size];
+        M[b] = Vec::alloc(size);
         printf("%s\n", vocab + b * max_w);
 
         float setsize = 0;
         for(int i = 0; i < size; ++i) {
-            float fl;
             fread(&M[b][i], sizeof(float), 1, f);
         }
         

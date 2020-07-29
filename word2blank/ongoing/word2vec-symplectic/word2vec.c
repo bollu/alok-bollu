@@ -638,11 +638,11 @@ void *TrainModelThread(void *id) {
           // ---neu1e---
           // p[i] q'[i] -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + half + l2]);
           // p[i] q[i]  -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + l2]);
-          for (c = 0; c < half; c++) neu1e[c] += g * syn1neg[c + l2];
+          for (c = 0; c < half; c++) neu1e[c] += g * syn1neg[c + half + l2];
           
           // p'[i] q[i]  -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
           // p'[i] q'[i] -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + half + l2]);
-          for (c = 0; c < half; c++) neu1e[c + half] += g * -1 * syn1neg[c + half + l2];
+          for (c = 0; c < half; c++) neu1e[c + half] += g * -1 * syn1neg[c + l2];
 
           // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
           // p[i] q'[i] -> grad for syn1neg in: (syn0[c + l1] * syn1neg[c + half + l2]);

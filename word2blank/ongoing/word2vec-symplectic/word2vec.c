@@ -591,7 +591,18 @@ void *TrainModelThread(void *id) {
           assert(layer1_size % 2 == 0);
           const int half = layer1_size/2;
           // for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1neg[c + l2];
-          // pi qi - qi pi
+          // @bollu: p[i] q'[i] - p'[i] q[i] <-- REIMPLEMENTING
+          // TODO:
+          // // p[i] q[i] - p'[i] q'[i]
+          // // p[i] q[i] + p'[i] q'[i]
+          // // p[i] p'[i] - q[i] q'[i]
+          // // p[i] p'[i] + qi[i] q[i]
+          // // p[i] q'[i] + p'[i] q[i]
+          // // p[i] p'[i]
+          // // q[i] q'[i]
+          // // p[i] q'[i]
+          // // q[i] p'[i]
+          
           for (c = 0; c < half; c++) f += (syn0[c + l1] * syn1neg[c + half + l2]);
           for (c = 0; c < half; c++) f += -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
 
@@ -625,15 +636,21 @@ void *TrainModelThread(void *id) {
           // race aware programming.
 
           // ---neu1e---
-          // grad for syn0 in: (syn0[c + l1] * syn1neg[c + half + l2]);
-          for (c = 0; c < half; c++) neu1e[c] += g * syn1neg[c + half + l2];
-          // grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
-          for (c = 0; c < half; c++) neu1e[c + half] += g * -1 * syn0[c + l2];
+          // p[i] q'[i] -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q[i]  -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + l2]);
+          for (c = 0; c < half; c++) neu1e[c] += g * syn1neg[c + l2];
+          
+          // p'[i] q[i]  -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
+          // p'[i] q'[i] -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + half + l2]);
+          for (c = 0; c < half; c++) neu1e[c + half] += g * -1 * syn1neg[c + half + l2];
 
           // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
-          // grad for syn1neg in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q'[i] -> grad for syn1neg in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q[i]  -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + l2]);
           for (c = 0; c < half; c++) syn1neg[c + half + l2] += g * syn0[c + l1];
-          // grad for syn1neg in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
+
+          // p'[i] q[i]  -> grad for syn1neg in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
+          // p'[i] q'[i] -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + half + l2]);
           for (c = 0; c < half; c++) syn1neg[c + l2] += g * -1 *  syn0[c + half + l1];
         }
         // Learn weights input -> hidden

@@ -9,7 +9,11 @@ import re
 
 def load_embedding(fpath, VOCAB):
     emb = dict()
-    wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
+    try:
+        wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB, binary=True)
+    except EOFError:
+        # fucking fasttext fuck you
+        wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB, binary=False)
     for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
         coefs = np.asarray(vector, dtype='float32')
         # if not re.match(r'\w+', word):

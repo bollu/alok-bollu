@@ -19,18 +19,10 @@ gcc -lm -pthread  -march=native -Wall \
     -funroll-loops -Wno-unused-result -O3 -fuse-ld=gold \
     word2vec.c -o word2vec
 
-time ./word2vec -train ../../utilities/text8 -output models/standard/symp-size=200.bin \
-    -alpha 0.025 -cbow 0 -size 200 -window 8 -negative 25 \
-    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
+# time ./word2vec -train ../../utilities/text8 -output models/symp-size=200-initrandom.bin \
+#    -alpha 0.025 -cbow 0 -size 200 -window 8 -negative 25 \
+#    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
 
-time ./word2vec -train ../../utilities/text8 -output models/iters/symp-size=200iters40.bin \
-    -alpha 0.025 -cbow 0 -size 200 -window 8 -negative 25 \
-    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 40 
-
-time ./word2vec -train ../../utilities/text8 -output models/windowsize/symp-size=200window6.bin \
-    -alpha 0.025 -cbow 0 -size 200 -window 6 -negative 25 \
-    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
-
-time ./word2vec -train ../../utilities/text8 -output models/windowsize/symp-size=200negative10.bin \
-    -alpha 0.025 -cbow 0 -size 200 -window 8 -negative 10 \
-    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
+time ./word2vec -train ../../utilities/text8 -output models/symp-size=400-init0-iters30.bin \
+    -alpha 0.025 -cbow 0 -size 400 -window 8 -negative 25 \
+    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 30 

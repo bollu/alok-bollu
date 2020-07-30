@@ -153,6 +153,6 @@ int main(int argc, char **argv) {
 
 float func(float a, float b)
 {
-  float c = (a + b);
+  float c = a * b
   return c;
 }

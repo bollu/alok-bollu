@@ -373,24 +373,31 @@ void InitNet() {
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
      syn1[a * layer1_size + b] = 0;
   }
-  if (negative>0) {
+  if (negative > 0) {
     a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * layer1_size * sizeof(real));
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
     // 2? WTF is this initialization?
     // ZERO INITIALIZATION OF SYN1NEG
-    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
-     syn1neg[a * layer1_size + b] = 0;
+    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) {
+      // What if we randomly initialize both? 
+      syn1neg[a * layer1_size + b] = 0;
+      
+      // next_random = next_random * (unsigned long long)25214903917 + 11;
+      // syn1neg[a * layer1_size + b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+    }
   }
+  // next_random = 1;
   // random initialize syn0
   for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) {
     // rnext = r * CONST + CONST2
     // 0... 2^32 - 1
-    next_random = next_random * (unsigned long long)25214903917 + 11;
     // RANDOM INITIALIZATION OF SYN0
     // 0 ... 2^16 - 1
     // 0 .. 1
     // -0.5 .. 0.5
     // -0.5 / layer1_size ... 0.5 / layer1_size
+    
+    next_random = next_random * (unsigned long long)25214903917 + 11;
     syn0[a * layer1_size + b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
   }
   CreateBinaryTree();

@@ -20,14 +20,14 @@ int main(int argc, char **argv) {
     cin.tie(NULL);
 
     if (argc != 3) {
-        cerr << "usage: " << argv[0] << "<model-path> <to-read>\n";
+        cerr << "usage: " << argv[0] << "<model-path> <num-words-to-read>\n";
         return 1;
     }
     FILE *f = fopen(argv[1], "r");
     const long TOREAD = atoll(argv[2]);
 
     if (!f) {
-        cerr << "unable to open file: |"  << argv[1] << "|\n";
+        cerr << "unable to open model file: |"  << argv[1] << "|\n";
         return 1;
     }
     fscanf(f, "%lld %lld", &VOCABSIZE, &DIMSIZE);
@@ -115,6 +115,46 @@ int main(int argc, char **argv) {
 
     }
 
+
+    cout << "\n====Tris:===\n\n";
+    for(int u = 0; u < VOCABSIZE; ++u) {
+        for(int i = 0; i < TOPK; ++i) {
+            const int v = topk_wixs[TOPK*u+i];
+            if (v == u) continue; 
+            const real uv = topk_bestds[u*TOPK+i];
+
+            for(int j = 0; j < TOPK; ++j) {
+                const int w = topk_wixs[TOPK*v+j];
+                if (w == v || w == u) continue;
+                const real vw = topk_bestds[v*TOPK+j];
+
+                for(int k = 0; k < TOPK; ++k) {
+                    const int z = topk_wixs[TOPK*w+k];
+                    if (z != u) continue;
+
+                    const real wu = topk_bestds[w*TOPK+k];
+                    // check triangle inequality.
+                    if ((uv + vw < wu) ||
+                            (vw + wu < uv) ||
+                            (wu + uv < vw)) {
+                        cout << "FAILURE " 
+                            << "u:|" << words[u] << "|  " 
+                            << "v:|" << words[v] << "|  " 
+                            << "w:|" << words[w] << "| "
+                            << "uv:|" << uv << "| " 
+                            << "vw:|" << vw << "| " 
+                            << "wu:|" << wu << "| " 
+                            << "\n" << std::flush;
+                        // assert(0 && "triangle inequality failed");
+                    }
+                }
+            }
+        }
+    }
+
+    cout << "\n======\n";
+
+    /*
     // create graph
     cerr << "creating graph...";
     
@@ -132,7 +172,8 @@ int main(int argc, char **argv) {
             // igraph_add_edge(&g, w, wixs[i]);
         }
     }
-    igraph_add_edges(&g, &es, /*attr=*/0);
+    static const int ATTR = 0;
+    igraph_add_edges(&g, &es, ATTR);
 
     // edges.
     // for(int w = 0; w < VOCABSIZE; ++w) {
@@ -167,6 +208,7 @@ int main(int argc, char **argv) {
 
     cerr << "destroyed graph.\n";
     igraph_destroy(&g);
+    */
 
     return 0;
 }

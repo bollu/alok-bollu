@@ -19,11 +19,13 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <assert.h>
-typedef float real;
+// #define EXPENSIVE_CHECKS
+#define max(a, b) ((a) > (b) ? (a) : (b))
+typedef double real;
 
-const long long max_size = 2000;         // max length of strings
-const long long N = 1;                   // number of closest words
-const long long max_w = 50;              // max length of vocabulary entries
+#define max_size 3000L         // max length of vector
+#define N 1L                   // number of closest words
+#define max_w 50L              // max length of vocabulary entries
 
 
 // given angles, precompute sin(theta_i), cos(theta_i) and 
@@ -34,7 +36,7 @@ void angleprecompute(const int n, const real theta[n-1], real coss[n-1],
         coss[i] = cos(theta[i]);
         sins[i] = sin(theta[i]);
         // cos^2 x + sin^2 x = 1
-        int safe =  fabs(1.0 - (coss[i] * coss[i] + sins[i] * sins[i])) < 1e-2;
+        int safe =  fabs(1.0 - (coss[i] * coss[i] + sins[i] * sins[i])) < 1e-6;
         if (!safe) {
             printf("theta: %f | real:%f / coss: %f | real: %f / sins: %f\n", theta[i], 
                     cos(theta[i]), coss[i], sin(theta[i]), sins[i]);
@@ -57,7 +59,7 @@ void angleprecompute(const int n, const real theta[n-1], real coss[n-1],
 
 // convert angles to vectors for a given index
 void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], const real sinaccum[n-1][n-1],
-        real out[n]) {
+        float out[n]) {
 
     // reference
     // x1          = c1
@@ -75,7 +77,7 @@ void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], cons
     for(int i = 0; i < n; i++) {
         lensq += out[i] * out[i];
     }
-    if(fabs(lensq - 1) >= 1e-2) { 
+    if(fabs(lensq - 1) >= 1e-4) { 
         printf("lensq: %f\n", lensq);
         printf("  cos: ["); 
         for(int i = 0; i < n; ++i) {
@@ -93,24 +95,19 @@ void angle2vec(const int n, const real coss[n - 1], const real sins[n - 1], cons
         }
         printf("]\n"); 
     }
-    assert(fabs(lensq - 1) < 1e-2);
+    assert(fabs(lensq - 1) < 1e-4);
     #endif
 }
 
-real lensq(const int n, const real v[n]) {
+real lensq(const int n, const float v[n]) {
     real tot = 0;
     for (int i = 0; i < n; ++i ) tot += v[i] * v[i];
     return tot;
 }
 
-void normalize(const int n, real v[n]) {
-    const real len = sqrt(lensq(n, v));
-    for (int i = 0; i < n; ++i ) v[i] /= len;
-}
-
-void vec2angle(const int n, const real v[n], real angles[n-1]) {
+void vec2angle(const int n, const float v[n], real angles[n-1]) {
     // printf("lensq: %4.2f\n", lensq(n, v));
-    assert(fabs(1.0 - lensq(n, v)) < 1e-2);
+    // assert(fabs(1.0 - lensq(n, v)) < 1e-2);
 
     // convert vector to angle
     real sinprod = 1;
@@ -132,13 +129,13 @@ void vec2angle(const int n, const real v[n], real angles[n-1]) {
     // printf("angles[n-2]: %5.2f\n", angles[n-2]);
     
     #ifdef EXPENSIVE_CHECKS
-    real vcheck[n];
+    float vcheck[n];
     real coss[n-1], sins[n-1], sinaccum[n-1][n-1];
     angleprecompute(n, angles, coss, sins, sinaccum);
     angle2vec(n, coss, sins, sinaccum, vcheck);
     for(int i = 0; i < n; ++i) {
-        if (fabs(vcheck[i] - v[i]) > 1e-3) {
-            printf("error: n: %d | i: %d | ours: %3.2f | truth: %3.2f\n" , n, i, vcheck[i], v[i]);
+        if (fabs(vcheck[i] - v[i]) > 1e-4) {
+            printf("error: n: %d | i: %d | ours: %3.5f | truth: %3.5f\n" , n, i, vcheck[i], v[i]);
             assert(0);
         }
     }
@@ -146,8 +143,8 @@ void vec2angle(const int n, const real v[n], real angles[n-1]) {
 
 }
 
-void analogyVec(const int n, const real v1[n], const real v2[n], const real v3[n],
-        real vout[n]) {
+void analogyVec(const int n, const float v1[n], const float v2[n], const float v3[n],
+        float vout[n]) {
     real a1[n-1], a2[n-1], a3[n-1], aout[n-1];
     vec2angle(n, v1, a1);
     vec2angle(n, v2, a2);
@@ -159,13 +156,20 @@ void analogyVec(const int n, const real v1[n], const real v2[n], const real v3[n
     angle2vec(n, coss, sins, sinaccum, vout);
 }
 
+
+
+char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
+float bestd[N]; float vec[max_size];
+real vec_angle[max_size];
+real vec_coss[max_size-1], vec_sins[max_size-1], vec_sinaccum[max_size-1][max_size-1];
+
 int main(int argc, char **argv)
 {
+    // fprintf(stderr, "not normalizing\n");
   FILE *f;
-  char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  float dist, len, bestd[N], vec[max_size];
   long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
   float *M;
+  real *Mangle, *Mlen, dist, len; 
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
   if (argc < 2) {
@@ -184,6 +188,8 @@ int main(int argc, char **argv)
   fscanf(f, "%lld", &size);
   vocab = (char *)malloc(words * max_w * sizeof(char));
   M = (float *)malloc(words * size * sizeof(float));
+  Mangle = (real *)malloc(words * (size - 1) * sizeof(real));
+  Mlen = (real *)malloc(words * sizeof(real));
   if (M == NULL) {
     printf("Cannot allocate memory: %lld MB\n", words * size * sizeof(float) / 1048576);
     return -1;
@@ -200,8 +206,15 @@ int main(int argc, char **argv)
     for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
     len = 0;
     for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
-    len = sqrt(len);
+    Mlen[a] = len = sqrt(len);
     for (a = 0; a < size; a++) M[a + b * size] /= len;
+
+    fprintf(stderr, "converting: |%20s| len: |%4.2f| \n", &vocab[b*max_w], len);
+    if (len == 0) {
+        for(int i = 0; i < size -1; ++i) { Mangle[b*(size-1) +i] = 0; }
+    } else { 
+        vec2angle(size, &M[b*size], &Mangle[b*(size-1)]);
+    }
   }
   fclose(f);
   TCN = 0;
@@ -210,11 +223,10 @@ int main(int argc, char **argv)
       progress++;
       if (progress % 1000 == 0) {
           progress = 1;
-          fprintf(stderr, ".");
-          fflush(stderr);
+          // fprintf(stderr, "."); fflush(stderr);
       }
 
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    for (a = 0; a < N; a++) bestd[a] = -9999;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     scanf("%s", st1);
     for (a = 0; a < strlen(st1); a++) st1[a] = toupper(st1[a]);
@@ -245,7 +257,7 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    for (a = 0; a < N; a++) bestd[a] = -9999;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -254,14 +266,35 @@ int main(int argc, char **argv)
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
     // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
-    analogyVec(size, &M[b1 * size], &M[b2 * size], &M[b3 * size], vec);
+    // analogyVec(size, &M[b1 * size], &M[b2 * size], &M[b3 * size], vec);
+    for (a = 0; a < size-1; a++) {
+        vec_angle[a] = (Mangle[a + b2 * size] - Mangle[a + b1 * size]) + Mangle[a + b3 * size];
+        // vec_angle[a] = M_PI - fabs(fabs(vec_angle[a]) - M_PI);
+    }
+    angleprecompute(size, vec_angle, vec_coss, vec_sins, vec_sinaccum);
+    angle2vec(size, vec_coss, vec_sins, vec_sinaccum, vec);
+
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = 0;
-      for (a = 0; a < size; a++) dist += vec[a] * M[a + c * size];
+      // vector based
+      const int VECTOR_BASED_DIFF = 0;
+      if (VECTOR_BASED_DIFF) {
+          dist = 0;
+          for(a = 0; a < size; ++a) { dist += vec[a] * M[a+c*size]; }
+      } else {
+          dist = 0;
+          for(a = 0; a < size-1; ++a) {
+              real angle = (Mangle[a+b2*(size-1)] - Mangle[a+b1*(size-1)]) - (Mangle[a+c*(size-1)] - Mangle[a+b3*(size-1)]);
+              // real angle = baseangle[a] - Mangle[a + c*size];
+              angle = M_PI - fabs(fabs(angle) - M_PI);
+              // we want "large" distances to win. large distances are better?
+              dist += cos(angle);
+          }
+      }
+
       for (a = 0; a < N; a++) {
         if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {

@@ -1,12 +1,9 @@
 # Download Pretrained Word Embeddings:
 
-FastText: "wiki-news-300d-1M": `wget -c "https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip"`
-
-GloVe 6B: wget -c `"http://nlp.stanford.edu/data/glove.6B.zip"`
-
-GoogleNews-vectors-negative300: wget -c `"https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"`
-
-Or, for all three models, simply run: `bash ./get_embeddings.sh`
+- FastText: "wiki-news-300d-1M": `wget -c "https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip"`
+- GloVe 6B: `wget -c "http://nlp.stanford.edu/data/glove.6B.zip"`
+- GoogleNews-vectors-negative300: `wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"`
+- Or, for all three models, simply run: `bash ./get_embeddings.sh`
 
 We use Gensim in this project, and Gensim only deals with Word2Vec files. Therefore, we need to convert the file format using gensim libraries.
 
@@ -57,3 +54,33 @@ Note: Thresh similarity shows a upper & lower limit of usability. ie. for VOCAB=
  
 __nsim__ similarity mode
  
+
+# What the layered SCC graph /singleton analysis means
+- [Link to last graph version (Update periodically)](https://github.com/bollu/alok-bollu/blob/666fabcaf31ac5a89095a89b1ae4101a43cebe96/word2blank/ongoing/fuzzy-wordnet/optim/tree_outputs/png/custom6k.png)
+- singleton analysis: (recursively increasing threshold on SCC gives a tree
+  representation)
+- what do the interior nodes with numbers mean, what do the leaf word nodes
+  mean, and what do edges between these mean? 
+- There are edges of the form `number → number`, `number → word`.
+- In the original graph `word → word`, an edge was added to the adjList iff
+  `similarity(w1,w2) >= threshold`. This was then followed by finding their
+  strongly connected components.
+#### (Singleton Analysis)
+1. Set initial thresh. Create the graph(ie. the adjList), Find SCCs
+2. For each SCC component:
+    - If it contains a single word: then add the word as a leaf node to its
+      parent (A dummy root node for the first layer). Gives rise to the `Number -> Word` edge
+    - Otherwise: create a dummy node (Number node), connect it to the current
+      parent (another Number node) and run (Singleton Analysis on only the
+      words in the comp, but with a higher threshold ie. `thresh += rate`)
+      [Gives rise to the `Number -> Number` edge]
+- tl;dr : build a separate graph on the words inside an scc component with a
+  higher threshold to cause the comp to break further
+- So the threshold starts from some really low value, and is increased inside
+  the recursive call into non-singleton SCC's, correct?
+- how did we choose: a) the initial threshold b) the rate/delta ?
+- was mostly trial and error, but I zeroed in on the initial thresh by lookinf
+  for the highest value for which the graph produces a single component in the
+  SCC. And the rate is more or less flexible in a range (~ 0.01 - 0.001) for
+  increasing resolution with a still respectable enough compute time.
+- 

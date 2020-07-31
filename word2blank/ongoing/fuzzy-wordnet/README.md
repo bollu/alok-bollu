@@ -1,3 +1,15 @@
+# Download Pretrained Word Embeddings:
+
+FastText: "wiki-news-300d-1M": `wget -c "https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip"`
+
+GloVe 6B: wget -c `"http://nlp.stanford.edu/data/glove.6B.zip"`
+
+GoogleNews-vectors-negative300: wget -c `"https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"`
+
+Or, for all three models, simply run: `bash ./get_embeddings.sh`
+
+We use Gensim in this project, and Gensim only deals with Word2Vec files. Therefore, we need to convert the file format using gensim libraries.
+
 # Building and running `graph.out`:
 
 - We first need a compiled version of `igraph`: follow the following steps, **starting from the current folder**:

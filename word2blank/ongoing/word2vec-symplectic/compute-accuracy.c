@@ -23,11 +23,13 @@ const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
 
+float func(float a, float b);           // f(distance, momentum)
+
 int main(int argc, char **argv)
 {
   FILE *f;
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  float dist, len, bestd[N], vec[max_size];
+  float dist, mom, deldist, delmom, disp, bestd[N], vec[max_size];
   long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
   float *M;
   char *vocab;
@@ -46,7 +48,6 @@ int main(int argc, char **argv)
   fscanf(f, "%lld", &words);
   if (threshold) if (words > threshold) words = threshold;
   fscanf(f, "%lld", &size);
-  const int half = size / 2;
   assert(size % 2 == 0);
   vocab = (char *)malloc(words * max_w * sizeof(char));
   M = (float *)malloc(words * size * sizeof(float));
@@ -64,11 +65,14 @@ int main(int argc, char **argv)
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
     for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-    len = 0;
-    for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
-    printf("lensq: %4.2f | no normalization.\n", len);
-    // len = sqrt(len);
-    // for (a = 0; a < size; a++) M[a + b * size] /= len;
+    dist = 0, mom = 0;
+    for (a = 0; a < size/2; a++) dist += M[a + b * size] * M[a + b * size];
+    for (a = size/2; a < size; a++) mom += M[a + b * size] * M[a + b * size];
+    printf("lensq: %4.2f : %4.2f | normalized.\n", dist, mom);
+    dist = sqrt(dist);
+    mom = sqrt(mom);
+    for (a = 0; a < size/2; a++) M[a + b * size] /= dist;
+    for (a = size/2; a < size; a++) M[a + b * size] /= mom;
   }
   fclose(f);
   TCN = 0;
@@ -118,17 +122,19 @@ int main(int argc, char **argv)
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = 0;
-      for (a = 0; a < half; a++) dist += vec[a] * M[a + half +  c * size];
-      for (a = 0; a < half; a++) dist += -1 * vec[a+half] * M[a +  c * size];
-
+      
+      deldist = 0, delmom = 0;
+      for (a = 0; a < size/2; a++) deldist += vec[a] * M[a + c * size];
+      for (a = size/2; a < size; a++) delmom += vec[a] * M[a +  c * size];
+      disp = func(deldist, delmom);
+      
       for (a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
+        if (disp > bestd[a]) {
           for (d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
           }
-          bestd[a] = dist;
+          bestd[a] = disp;
           strcpy(bestw[a], &vocab[c * max_w]);
           break;
         }
@@ -145,4 +151,10 @@ int main(int argc, char **argv)
   }
   printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
   return 0;
+}
+
+float func(float a, float b)
+{
+  float c = a + b; // replace with function
+  return c;
 }

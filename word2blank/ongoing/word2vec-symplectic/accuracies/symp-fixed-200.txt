@@ -1,0 +1,43 @@
+capital-common-countries:
+ACCURACY TOP1: 86.17 %  (436 / 506)
+Total accuracy: 86.17 %   Semantic accuracy: 86.17 %   Syntactic accuracy: -nan % 
+capital-world:
+ACCURACY TOP1: 50.93 %  (1815 / 3564)
+Total accuracy: 55.31 %   Semantic accuracy: 55.31 %   Syntactic accuracy: -nan % 
+currency:
+ACCURACY TOP1: 10.07 %  (60 / 596)
+Total accuracy: 49.53 %   Semantic accuracy: 49.53 %   Syntactic accuracy: -nan % 
+city-in-state:
+ACCURACY TOP1: 46.52 %  (1084 / 2330)
+Total accuracy: 48.53 %   Semantic accuracy: 48.53 %   Syntactic accuracy: -nan % 
+family:
+ACCURACY TOP1: 41.67 %  (175 / 420)
+Total accuracy: 48.14 %   Semantic accuracy: 48.14 %   Syntactic accuracy: -nan % 
+gram1-adjective-to-adverb:
+ACCURACY TOP1: 11.69 %  (116 / 992)
+Total accuracy: 43.84 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 11.69 % 
+gram2-opposite:
+ACCURACY TOP1: 7.54 %  (57 / 756)
+Total accuracy: 40.84 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 9.90 % 
+gram3-comparative:
+ACCURACY TOP1: 38.44 %  (512 / 1332)
+Total accuracy: 40.54 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 22.24 % 
+gram4-superlative:
+ACCURACY TOP1: 13.71 %  (136 / 992)
+Total accuracy: 38.22 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 20.16 % 
+gram5-present-participle:
+ACCURACY TOP1: 18.47 %  (195 / 1056)
+Total accuracy: 36.56 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 19.81 % 
+gram6-nationality-adjective:
+ACCURACY TOP1: 80.93 %  (1231 / 1521)
+Total accuracy: 41.36 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 33.79 % 
+gram7-past-tense:
+ACCURACY TOP1: 27.95 %  (436 / 1560)
+Total accuracy: 40.02 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 32.68 % 
+gram8-plural:
+ACCURACY TOP1: 49.85 %  (664 / 1332)
+Total accuracy: 40.79 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 35.08 % 
+gram9-plural-verbs:
+ACCURACY TOP1: 18.97 %  (165 / 870)
+Total accuracy: 39.73 %   Semantic accuracy: 48.14 %   Syntactic accuracy: 33.73 % 
+Questions seen / total: 17827 19544   91.21 %

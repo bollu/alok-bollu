@@ -1,8 +1,9 @@
-glove
 text1
 text8
 text0
 jabber
 core
+models
 *.bin
-./utilities/MODEL*
+./utilities/MODELS
+./utilities/MODELS.zip

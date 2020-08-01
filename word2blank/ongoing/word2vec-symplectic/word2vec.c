@@ -373,27 +373,39 @@ void InitNet() {
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
      syn1[a * layer1_size + b] = 0;
   }
-  if (negative>0) {
+  if (negative > 0) {
     a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * layer1_size * sizeof(real));
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
     // 2? WTF is this initialization?
     // ZERO INITIALIZATION OF SYN1NEG
-    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
-     syn1neg[a * layer1_size + b] = 0;
+    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) {
+      // What if we randomly initialize both? 
+      syn1neg[a * layer1_size + b] = 0;
+      
+      // next_random = next_random * (unsigned long long)25214903917 + 11;
+      // syn1neg[a * layer1_size + b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+    }
   }
+  // next_random = 1;
   // random initialize syn0
   for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) {
     // rnext = r * CONST + CONST2
     // 0... 2^32 - 1
-    next_random = next_random * (unsigned long long)25214903917 + 11;
     // RANDOM INITIALIZATION OF SYN0
     // 0 ... 2^16 - 1
     // 0 .. 1
     // -0.5 .. 0.5
     // -0.5 / layer1_size ... 0.5 / layer1_size
+    
+    next_random = next_random * (unsigned long long)25214903917 + 11;
     syn0[a * layer1_size + b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
   }
   CreateBinaryTree();
+}
+
+float sigmoid(float f) {
+    float e = exp(f);
+    return e/(1+e);
 }
 
 void *TrainModelThread(void *id) {
@@ -586,7 +598,18 @@ void *TrainModelThread(void *id) {
           assert(layer1_size % 2 == 0);
           const int half = layer1_size/2;
           // for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1neg[c + l2];
-          // pi qi - qi pi
+          // @bollu: p[i] q'[i] - p'[i] q[i] <-- REIMPLEMENTING
+          // TODO:
+          // // p[i] q[i] - p'[i] q'[i]
+          // // p[i] q[i] + p'[i] q'[i]
+          // // p[i] p'[i] - q[i] q'[i]
+          // // p[i] p'[i] + qi[i] q[i]
+          // // p[i] q'[i] + p'[i] q[i]
+          // // p[i] p'[i]
+          // // q[i] q'[i]
+          // // p[i] q'[i]
+          // // q[i] p'[i]
+          
           for (c = 0; c < half; c++) f += (syn0[c + l1] * syn1neg[c + half + l2]);
           for (c = 0; c < half; c++) f += -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
 
@@ -600,7 +623,10 @@ void *TrainModelThread(void *id) {
           // g = (label - sigmoid(f)) * alpha
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          else {
+	      // g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+	      g = (label - sigmoid(f)) * alpha;
+	  }
           // ------
 
           // x . y = \sum_i xi * yi 
@@ -617,15 +643,21 @@ void *TrainModelThread(void *id) {
           // race aware programming.
 
           // ---neu1e---
-          // grad for syn0 in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q'[i] -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q[i]  -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + l2]);
           for (c = 0; c < half; c++) neu1e[c] += g * syn1neg[c + half + l2];
-          // grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
-          for (c = 0; c < half; c++) neu1e[c + half] += g * -1 * syn0[c + l2];
+          
+          // p'[i] q[i]  -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
+          // p'[i] q'[i] -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + half + l2]);
+          for (c = 0; c < half; c++) neu1e[c + half] += g * -1 * syn1neg[c + l2];
 
           // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
-          // grad for syn1neg in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q'[i] -> grad for syn1neg in: (syn0[c + l1] * syn1neg[c + half + l2]);
+          // p[i] q[i]  -> grad for syn0 in: (syn0[c + l1] * syn1neg[c + l2]);
           for (c = 0; c < half; c++) syn1neg[c + half + l2] += g * syn0[c + l1];
-          // grad for syn1neg in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
+
+          // p'[i] q[i]  -> grad for syn1neg in: -1 * (syn0[c + half + l1] * syn1neg[c + l2]);
+          // p'[i] q'[i] -> grad for syn0 in: -1 * (syn0[c + half + l1] * syn1neg[c + half + l2]);
           for (c = 0; c < half; c++) syn1neg[c + l2] += g * -1 *  syn0[c + half + l1];
         }
         // Learn weights input -> hidden

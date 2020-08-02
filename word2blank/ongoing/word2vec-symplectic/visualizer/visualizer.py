@@ -22,10 +22,10 @@ def get_embs(emb, wordlist):
     return mat
 
 def plot(mat, fname):
-    U, V, X, Y = zip(*mat)
+    X, Y, U, V= zip(*mat)
     plt.figure()
     ax = plt.gca()
-    ax.quiver(U, V, X, Y, angles='xy', scale_units='xy', scale=0.1)
+    ax.quiver(X, Y, U, V, angles='uv', scale_units='xy', scale=0.1, edgecolor=['red', 'blue', 'green', 'yellow'])
     ax.set_xlim([-3, 3])
     ax.set_ylim([-3, 3])
     plt.draw()

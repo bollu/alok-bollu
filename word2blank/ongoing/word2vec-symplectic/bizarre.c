@@ -93,6 +93,7 @@ int main(int argc, char **argv) {
     }
     fclose(f);
     long long nzero = 0, total = 0;
+    // skip </s>
     for (c = 1; c < words; c++) {
         for (int c2 = c+1; c2 < words; c2++) {
 
@@ -118,6 +119,9 @@ int main(int argc, char **argv) {
             const float delta = fabs(dot[0] - dot[1]);
             if (delta < 1e-3) {
                 nzero++;
+                printf("\rZero pecentage: %4.2f Progress: %4.2f", 
+                        100.0 * (float)nzero/total,
+                        (100.0) * ((float) c *words + c2)/(words*(words-1)*0.5));
             } else {
                 printf("====\n");
                 printf("||%20s | %20s||\n-- δ: %20.4f \n-- dot0: %20.4f\n-- dot1: %20.4f \n", 

@@ -3,6 +3,7 @@ from gensim.models.keyedvectors import KeyedVectors
 import numpy as np
 import gensim
 from tqdm import tqdm
+from mpl_toolkits.mplot3d import Axes3D
 
 def load_embedding(fpath, x):
     print("Loading embeddings...")
@@ -23,9 +24,9 @@ def get_embs(emb, wordlist):
 
 def plot(mat, fname):
     X, Y, Z, U, V, W = zip(*mat)
-    plt.figure()
-    ax = plt.gca()
-    ax.quiver(X, Y, Z, U, V, W, angles='xy', scale_units='xy', scale=0.1, edgecolor=['red', 'blue', 'green', 'yellow'])
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.quiver(X, Y, Z, U, V, W)
     ax.set_xlim([-3, 3])
     ax.set_ylim([-3, 3])
     plt.draw()

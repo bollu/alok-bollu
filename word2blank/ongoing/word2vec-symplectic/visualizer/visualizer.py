@@ -25,7 +25,7 @@ def get_embs(emb, wordlist):
 def plot(mat, fname):
     X, Y, Z, U, V, W = zip(*mat)
     fig = plt.figure()
-    ax = fig.gca(projection='3d')
+    ax = fig.add_subplot(111, projection='3d')
     ax.quiver(X, Y, Z, U, V, W)
     ax.set_xlim([-3, 3])
     ax.set_ylim([-3, 3])
@@ -36,7 +36,7 @@ def plot(mat, fname):
 if __name__ == '__main__':
     emb1 = load_embedding('posvel_models/symp-size4-dim6-text8.bin', True)
     emb2 = load_embedding('posvel_models/syn1neg-symp-size4-dim6-text8.bin', True)
-    wordlist = ['king', 'man', 'queen', 'woman']
+    wordlist = ['good', 'better', 'best', 'bad', 'worse', 'worst']
     mat1 = get_embs(emb1, wordlist)
     mat2 = get_embs(emb2, wordlist)
     print(mat1)

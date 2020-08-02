@@ -27,3 +27,4 @@ dump-accuracy-simlex.temp.txt
 compute-accuracy-ranked
 compute-composition
 dump-composition.temp.txt
+visualizer/posvel_models/

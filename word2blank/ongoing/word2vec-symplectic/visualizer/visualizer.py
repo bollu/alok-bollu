@@ -25,7 +25,7 @@ def plot(mat, fname):
     X, Y, U, V= zip(*mat)
     plt.figure()
     ax = plt.gca()
-    ax.quiver(X, Y, U, V, angles='uv', scale_units='xy', scale=0.1, edgecolor=['red', 'blue', 'green', 'yellow'])
+    ax.quiver(X, Y, U, V, angles='xy', scale_units='xy', scale=0.1, edgecolor=['red', 'blue', 'green', 'yellow'])
     ax.set_xlim([-3, 3])
     ax.set_ylim([-3, 3])
     plt.draw()

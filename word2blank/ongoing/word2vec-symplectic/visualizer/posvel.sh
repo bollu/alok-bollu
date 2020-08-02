@@ -7,5 +7,5 @@ gcc -lm -pthread  -march=native -Wall \
 
 time ./word2vec -train ~/alok-bollu/word2blank/utilities/text8 \
      -output symp-size4-text8.bin     \
-     -alpha 0.001 -cbow 0 -size 4 -window 8 -negative 25    \
+     -alpha 0.0001 -cbow 0 -size 4 -window 8 -negative 1    \
       -hs 0 -sample 1e-4 -threads 24 -binary 1 -iter 15

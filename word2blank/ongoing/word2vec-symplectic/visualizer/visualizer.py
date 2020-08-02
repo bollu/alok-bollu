@@ -33,10 +33,10 @@ def plot(mat):
     ax.set_ylim([-3, 3])
     plt.draw()
     plt.show()
-    plt.savefig('rays.png')
+    plt.savefig('rays-syn1neg.png')
 
 if __name__ == '__main__':
-    emb = load_embedding('./symp-size4-text8.bin', True)
+    emb = load_embedding('posvel_models/syn1neg-symp-size4-text8.bin', True)
     wordlist = ['good', 'better', 'best', 'bad', 'worse', 'worst']
     mat = get_embs(emb, wordlist)
     print(mat)

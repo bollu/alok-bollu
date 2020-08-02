@@ -5,9 +5,6 @@ import gensim
 from tqdm import tqdm
 
 def load_embedding(fpath, x):
-    """
-        Using Gensim to load FastText embeddings
-    """
     print("Loading embeddings...")
     emb = dict()
     wv_from_bin = KeyedVectors.load_word2vec_format(fpath, binary=x, limit=1000000)
@@ -25,7 +22,7 @@ def get_embs(emb, wordlist):
     return mat
 
 def plot(mat):
-    X, Y, U, V = zip(*mat)
+    U, V, X, Y = zip(*mat)
     plt.figure()
     ax = plt.gca()
     ax.quiver(X, Y, U, V, angles='xy', scale_units='xy', scale=0.1)
@@ -33,10 +30,10 @@ def plot(mat):
     ax.set_ylim([-3, 3])
     plt.draw()
     plt.show()
-    plt.savefig('rays-syn1neg.png')
+    plt.savefig('rays.png')
 
 if __name__ == '__main__':
-    emb = load_embedding('posvel_models/syn1neg-symp-size4-text8.bin', True)
+    emb = load_embedding('posvel_models/symp-size4-text8.bin', True)
     wordlist = ['good', 'better', 'best', 'bad', 'worse', 'worst']
     mat = get_embs(emb, wordlist)
     print(mat)

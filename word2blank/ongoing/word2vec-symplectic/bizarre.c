@@ -28,6 +28,7 @@ const long long max_w = 50;              // max length of vocabulary entries
 
 
 int main(int argc, char **argv) {
+    srand(0);
     // feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW ); 
     // fesetexceptflag(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW ); 
     FILE *f;
@@ -92,46 +93,37 @@ int main(int argc, char **argv) {
         }
     }
     fclose(f);
-    long long nzero = 0, total = 0;
-    // skip </s>
-    for (c = 1; c < words; c++) {
-        for (int c2 = c+1; c2 < words; c2++) {
+    long long nzero = 0;
+    static const int NTESTS = 1e7;
+    for (int i = 1; i < NTESTS; ++i) {
+        // skip </s>, so start from (1)
+        int c = 1 + rand() % (words-1);
+        int c2 = 1 + rand() % (words - 1);
 
-            float deltas[2][max_size];
-            /*
-            for(int i = 0; i < 2; ++i) {
-                const int OFFSET = i*size/2;
-                for(a = 0; a < size/2; a++) {
-                    deltas[i][a] = M[OFFSET + c2*size] - M[OFFSET + a+c*size];
-                    printf("deltas[%3d][%3d] = %5.4d\n", i, a, deltas[i][a]);
-                }
-            }
-            */
+        float deltas[2][max_size];
 
-            float dot[2];
-            dot[0] = dot[1] = 0;
-            for(a = 0; a < size/2; a++) {
-                dot[0] += deltas[0][a] * deltas[1][a+size/2];
-                // printf("dot[0]: %20.4d\n", dot[0]);
-                dot[1] += deltas[0][a+size/2]* deltas[1][a];
-            }
+        float dot[2];
+        dot[0] = dot[1] = 0;
+        for(a = 0; a < size/2; a++) {
+            dot[0] += deltas[0][a] * deltas[1][a+size/2];
+            // printf("dot[0]: %20.4d\n", dot[0]);
+            dot[1] += deltas[0][a+size/2]* deltas[1][a];
+        }
 
-            const float delta = fabs(dot[0] - dot[1]);
-            if (delta < 1e-3) {
-                nzero++;
-                printf("\rZero pecentage: %4.2f Progress: %4.2f", 
-                        100.0 * (float)nzero/total,
-                        (100.0) * ((float) c *words + c2)/(words*(words-1)*0.5));
-            } else {
-                printf("====\n");
-                printf("||%20s | %20s||\n-- δ: %20.4f \n-- dot0: %20.4f\n-- dot1: %20.4f \n", 
-                        vocab + max_w*c, 
-                        vocab + max_w*c2,
-                        dot[0] - dot[1], 
-                        dot[0], dot[1]);
-                assert(0);
-            }
-            total++;
+        const float delta = fabs(dot[0] - dot[1]);
+        if (delta < 1e-3) {
+            nzero++;
+            printf("\rZero pecentage: %4.2f Progress: %4.2f", 
+                    100.0 * (float)nzero/i, 
+                    100.0 * (float) i / NTESTS);
+        } else {
+            printf("====\n");
+            printf("||%20s | %20s||\n-- δ: %20.4f \n-- dot0: %20.4f\n-- dot1: %20.4f \n", 
+                    vocab + max_w*c, 
+                    vocab + max_w*c2,
+                    dot[0] - dot[1], 
+                    dot[0], dot[1]);
+            assert(0);
         }
     }
     return 0;

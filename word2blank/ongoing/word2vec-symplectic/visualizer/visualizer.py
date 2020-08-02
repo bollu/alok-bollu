@@ -22,10 +22,10 @@ def get_embs(emb, wordlist):
     return mat
 
 def plot(mat, fname):
-    X, Y, U, V= zip(*mat)
+    X, Y, Z, U, V, W = zip(*mat)
     plt.figure()
     ax = plt.gca()
-    ax.quiver(X, Y, U, V, angles='xy', scale_units='xy', scale=0.1, edgecolor=['red', 'blue', 'green', 'yellow'])
+    ax.quiver(X, Y, Z, U, V, W, angles='xy', scale_units='xy', scale=0.1, edgecolor=['red', 'blue', 'green', 'yellow'])
     ax.set_xlim([-3, 3])
     ax.set_ylim([-3, 3])
     plt.draw()
@@ -33,8 +33,8 @@ def plot(mat, fname):
     plt.savefig(fname)
 
 if __name__ == '__main__':
-    emb1 = load_embedding('posvel_models/symp-size4-text8.bin', True)
-    emb2 = load_embedding('posvel_models/syn1neg-symp-size4-text8.bin', True)
+    emb1 = load_embedding('posvel_models/symp-size4-dim6-text8.bin', True)
+    emb2 = load_embedding('posvel_models/syn1neg-symp-size4-dim6-text8.bin', True)
     wordlist = ['king', 'man', 'queen', 'woman']
     mat1 = get_embs(emb1, wordlist)
     mat2 = get_embs(emb2, wordlist)

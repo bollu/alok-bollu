@@ -4,6 +4,7 @@ import numpy as np
 import gensim
 from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
+import sys
 
 def load_embedding(fpath, x):
     print("Loading embeddings...")
@@ -34,12 +35,14 @@ def plot(mat, fname):
     plt.savefig(fname)
 
 if __name__ == '__main__':
-    emb1 = load_embedding('posvel_models/symp-size4-dim6-text8.bin', True)
-    emb2 = load_embedding('posvel_models/syn1neg-symp-size4-dim6-text8.bin', True)
+    if len(sys.argv) < 2:
+        print("usage: %s <path to embeddings file>" % (sys.argv[1], ))
+    emb1 = load_embedding(sys.argv[1], True)
+    # emb2 = load_embedding('posvel_models/syn1neg-symp-size4-dim6-text8.bin', True)
     wordlist = ['good', 'better', 'best', 'bad', 'worse', 'worst']
     mat1 = get_embs(emb1, wordlist)
-    mat2 = get_embs(emb2, wordlist)
+    # mat2 = get_embs(emb2, wordlist)
     print(mat1)
-    print(mat2)
+    # print(mat2)
     plot(mat1, 'rays.png')
-    plot(mat2, 'syn1neg-rays.png')
+    # plot(mat2, 'syn1neg-rays.png')

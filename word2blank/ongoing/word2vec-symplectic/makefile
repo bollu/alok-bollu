@@ -22,6 +22,9 @@ word2phrase : word2phrase.c
 distance-context : distance-context.c
 	$(CC) distance-context.c -o distance-context $(CFLAGS)
 
+bizarre : bizarre.c
+	$(CC) bizarre.c -o bizarre $(CFLAGS)
+
 distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c

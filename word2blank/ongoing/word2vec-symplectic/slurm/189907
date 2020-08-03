@@ -1,0 +1,18 @@
++ gcc compute-accuracy.c -o compute-accuracy-topn -lm -pthread -march=native -Wall -funroll-loops -Wno-unused-result -O3 -fuse-ld=gold
++ MODELPATH=./models
++ ./compute-accuracy ./models/symp-size=400-init0-iters30.bin
+
+=================================================================
+==2011==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 114065600 byte(s) in 1 object(s) allocated from:
+    #0 0x1521ea0ff662 in malloc (/usr/lib/x86_64-linux-gnu/libasan.so.2+0x98662)
+    #1 0x4013a2 in main /home/alokdebnath5/alok-bollu/word2blank/ongoing/word2vec-symplectic/compute-accuracy.c:53
+    #2 0x1521e8c9283f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+Direct leak of 3564550 byte(s) in 1 object(s) allocated from:
+    #0 0x1521ea0ff662 in malloc (/usr/lib/x86_64-linux-gnu/libasan.so.2+0x98662)
+    #1 0x401385 in main /home/alokdebnath5/alok-bollu/word2blank/ongoing/word2vec-symplectic/compute-accuracy.c:52
+    #2 0x1521e8c9283f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+SUMMARY: AddressSanitizer: 117630150 byte(s) leaked in 2 allocation(s).

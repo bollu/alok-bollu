@@ -13,8 +13,8 @@ FOLDERNAME=$GITNAME
 mkdir -p models/
 mkdir -p slurm/
 
-(cd ../ && make word2vec)
-../word2vec -alpha 0.025 -train concat-kernel.c -cbow 0 \
+# (cd ../ && make word2vec)
+word2vec -alpha 0.025 -train concat-kernel.c -cbow 0 \
         -output models/concat-kernel-size=50 -size 50 \
         -window 8 -negative 25 -hs 0 -sample 1e-4 \
         -threads 40 -binary 1 -iter 15

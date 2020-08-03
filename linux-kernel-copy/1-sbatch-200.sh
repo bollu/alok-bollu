@@ -14,7 +14,7 @@ mkdir -p models/
 mkdir -p slurm/
 
 (cd ../ && make word2vec)
-../word2vec -alpha 0.025 -train concat-kernel.c -cbow 0 \
+./word2vec -alpha 0.025 -train concat-kernel.c -cbow 0 \
         -output models/concat-kernel-size=200 -size 200 \
         -window 8 -negative 25 -hs 0 -sample 1e-4 \
         -threads 40 -binary 1 -iter 15

@@ -6,32 +6,24 @@ import numpy as np
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot, to_pydot
 import sys
-import argparse
 
-sys.setrecursionlimit(10**7) 
+# sys.setrecursionlimit(10**7) 
 
 if __name__ == '__main__':
 
-    print("libs loaded")
-    parser = argparse.ArgumentParser(description='Arguments')
-    parser.add_argument('-e', '--embeddings', type=str, help='Path to embeddings file')
-    parser.add_argument('-L', '--VOCAB', type=int, help='Limit of vocab size')
-    parser.add_argument('-i', '--input', type=str, help='Input File')
-    parser.add_argument('-o', '--output', type=str, help='Output graph path')
-    
-    args = parser.parse_args()
-    # dirname = '../../../utilities/MODELS/'
-    # fname = 'gensim_glove_vectors.txt'
-    # fname = 'wiki-news-300d-1M.bin'
-    # fname = 'GoogleNews-vectors-negative300.bin'
-    fname = args.embeddings
-    VOCAB = args.VOCAB
-    emb = util.load_embedding(fname, VOCAB)
-    ind_keys, word_keys, word_mat = wm.build(emb)
-    word_mat = wm.normalize(word_mat, 0)
-    word_mat = wm.discretize(word_mat, 0)
-    sim_mat = wm.similarity(word_mat)
-    print("similarity matrix made")
+	print("libs loaded")
+
+	dirname = '~/GitHubRepos'
+	fname = 'wiki-news-300d-1M.vec'
+	VOCAB = 10000
+	emb = util.load_embedding(path.join(dirname, fname), VOCAB)
+	ind_keys, word_keys, word_mat = wm.build(emb)
+	word_mat = wm.normalize(word_mat, 0)
+	word_mat = wm.discretize(word_mat, 0)
+	sim_mat = wm.similarity(word_mat)
+	# sim_mat = wm.reform(sim_mat) 
+
+	print("similarity matrix made")
 
 	# SINGLETON ANALYSIS
 	# tree = gi.singleton_analysis(sim_mat,0.5,0.001)
@@ -40,20 +32,17 @@ if __name__ == '__main__':
 	# write_dot(tree,"tree.dot")
 
 	# CUSTOM SINGLETON ANALYSIS
-    with open(args.input, 'r') as f:
-        lines = f.readlines()
-    tree_words = [l.strip('\n').strip() for l in lines]
-    comp = [word_keys[word] for word in tree_words if word in word_keys]
-    tree = gi.custom_tree(comp, sim_mat, 0.5, 0.003)
-    tree = nx.relabel_nodes(tree, ind_keys)
-    write_dot(tree, args.output)
+	# tree_words = ['good','better','best','worst','poor','hot','cold','warm','man','woman','men','women','he','she','it']
+	# tree_words = ['king','queen','man','woman','boy','girl']
+	# comp = [word_keys[word] for word in tree_words if word in word_keys]
+	# tree = gi.custom_tree(comp, sim_mat, 0.2, 0.001)
+	# tree = nx.relabel_nodes(tree,ind_keys)
+	# write_dot(tree,"tree.dot")
 
-	# adj_mat = am.build(sim_mat,seed=0.00,mode='mean')
-	# g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
-
-	# adjList = g.adj
-	# for word in adjList:
-	# 	print(ind_keys[word],':',[ind_keys[i] for i in adjList[word]])
+	temp_mat = sim_mat.copy()
+	adj_mat = am.build(temp_mat,seed=1.2,mode='mean')
+	g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
+	print("Graph made")
 
 	#1 SCC
 	# scc = list(nx.strongly_connected_components(g))
@@ -68,28 +57,62 @@ if __name__ == '__main__':
 	# #2 Planarity
 	# print(nx.check_planarity(g))
 
-	# #3 Centrality
-	# print("BC")
+	#3 Centrality
+	# print("Betweenness Centrality:")
 	# bc = nx.betweenness_centrality(g)
-	# dc = nx.degree_centrality(g)
-	# sorted_keys = list(word_keys.keys())
-	# sorted_keys.sort()
-	# for word in sorted_keys:
-	# 	ind = word_keys[word]
-	# 	print(ind_keys[ind],bc[ind],dc[ind])
-	# 	print("{: >20} {: >20} {: >20}".format(*[ind_keys[word],bc[word],dc[word]]))
+	# bc_sorted = [[bc[ind],ind_keys[ind]] for ind in bc]
+	# bc_sorted.sort(reverse=True)
+	# for word in bc_sorted:
+	# 	print("{: >20} {: >20}".format(*[word[1],word[0]]))
 
 	#4 Is_Connected
 	# wcc = list(nx.weakly_connected_components(g))
 	# print('\n',[[ind_keys[w] for w in comp] for comp in wcc])
 	# print("Is connected:", len(wcc) is 1)
 
-	#5 Print Graph
+	#5 Analogy
+	# a:b::c:d
+	quit = False
+	while(not quit):
+		inp = input("Enter spaced out args a,b,c from a:b::c:? \n").split(' ')
+		analogyList = list()
+		w_a, w_b, w_c = inp[0], inp[1], inp[2]
+		# w_a, w_b, w_c = 'india', 'delhi', 'china'
+		valid = True
+		for w in inp:
+			if w not in word_keys:
+				print(w,'not in vocab')
+				valid = False
+		if not valid:
+			continue
+		a, b, c = word_keys[w_a], word_keys[w_b], word_keys[w_c]
+		# p_ac = nx.shortest_path(g, source=a, target=c)
+		# p_bc = nx.shortest_path(g, source=b, target=c)
+		# print([ind_keys[ind] for ind in p_ac])
+		# print([ind_keys[ind] for ind in p_bc])
+		# junction = None
+		# for i in range(min(len(p_ac), len(p_bc))):
+		# 	pos = -1-i
+		# 	junction = i
+		# 	if(p_ac[pos]!=p_bc[pos]):
+		# 		break
+		# divList_a, divList_b = p_ac[:-junction], p_bc[:-junction] 
+		# print([ind_keys[ind] for ind in divList_a])
+		# print([ind_keys[ind] for ind in divList_b])
+		candidateList = dict(g.adj[b]).keys()
+		for ind in candidateList:
+			if sim_mat[b][ind] > sim_mat[a][ind] and sim_mat[c][ind] > sim_mat[a][ind]:
+				analogyList.append([sim_mat[c][ind],ind_keys[ind]])
+		analogyList.sort(reverse=True)
+		print(analogyList) 
+		quit = ('n'==input("Do you wish to continue? (y/n) "))
+
+	# # 6 Print Graph
 	# sub_g = nx.relabel_nodes(g,ind_keys)
-	# sub_g = nx.subgraph(sub_g,['good','better','best','worst','poor','hot','cold','warm','man','woman','men','women','he','she','education','school','university','angry','fast','blue','green','on','over','below','through','around','never','always','before'])
+	# sub_g = nx.subgraph(sub_g,['king','queen','man','woman','boy','girl'])
 	# write_dot(sub_g,'graph.dot')
 
-	# #6 Similarity Histogram
+	# #7 Similarity Histogram
 	# # wordList = ['at','for','that','it','to']
 	# wordList = emb.keys()
 	# vec = np.zeros(300)

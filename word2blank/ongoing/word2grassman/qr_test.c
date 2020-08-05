@@ -1,9 +1,10 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
+#include<lapacke.h>
 
-void dgeqrf_(long long *rows, long long *cols, double *matA, long long *LDA, double *TAU, double *WORK, long long *LWORK, int *INFO);
-void dorgqr_(long long *rows, long long *cols, long long *K, double *matA, long long *LDA, double *TAU, double *WORK, long long *LWORK, int *INFO);
+//void dgeqrf_(long long *rows, long long *cols, double *matA, long long *LDA, double *TAU, double *WORK, long long *LWORK, int *INFO);
+//void dorgqr_(long long *rows, long long *cols, long long *K, double *matA, long long *LDA, double *TAU, double *WORK, long long *LWORK, int *INFO);
 int main()
 {
     long long i;

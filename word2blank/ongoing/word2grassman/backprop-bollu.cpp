@@ -8,19 +8,20 @@
 #include <assert.h>
 // ARMA_NO_DEBUG
 #include <armadillo>
+#include <vector>
 
 using namespace std;
 
 
 #define ix2(M, i, j) M[i*N+j]
 
-
 // set p = Q of QR(m)
 // void project_q(matrix &m) { };
 // void svd(matrix &u, vector &s, matrix &vt, matrix &in) {}
 
 //X, Y: ndim x pdim
-float train(arma::Mat<float> X, arma::Mat<float> Y) {
+pair<arma::Mat<float>, float>
+train(arma::Mat<float> X, arma::Mat<float> Y) {
     const int ndim = X.n_rows;
     const int pdim = X.n_cols;
 
@@ -30,9 +31,10 @@ float train(arma::Mat<float> X, arma::Mat<float> Y) {
 
     arma::Mat<float> dX(ndim, pdim);
 
-    static const int NITER = 1000;
+    static const int NITER = 10000;
     float L = 0;
     for(int i = 0; i < NITER; ++i) {
+        arma::Mat<float> XQ, XR;
         arma::Mat<float> P = X.t() * Y;
 
         arma::Col<float> S;
@@ -51,12 +53,13 @@ float train(arma::Mat<float> X, arma::Mat<float> Y) {
                 }
             }
         }
-        const float ALPHA = -1e-3;
+        const float ALPHA = 1e-3;
         X += dX *ALPHA;
+        X = arma::orth(X);
 
         if ((i % (NITER/10)) == 0) { printf("  - loss: %4d%% | %4.2f\n", 10*(i / (NITER/10)), L); }
     }
-    return L;
+    return make_pair(X, L);
 
 
 
@@ -140,15 +143,77 @@ float train(arma::Mat<float> X, arma::Mat<float> Y) {
     
 }
 
+
+std::vector<std::vector<bool>> combinations(int N, int P) {
+    std::vector<std::vector<bool>> vs;
+    std::vector<bool> v(N);
+    std::fill(v.begin(), v.begin() + P, true);
+
+    do {
+        vs.push_back(v);
+    } while (std::prev_permutation(v.begin(), v.end()));
+    return vs;
+}
+
+/*
+// ======= Generating combinations ===============
+// let us keep things sane, can't get too large numbers.
+assert(N < 10);
+int comb[N+1][N+1];
+
+for(int n = 0; n <= N; ++n) {
+    comb[n][0] = 1;
+    for (int r = 1; r <= n; ++r) {
+        comb[n][r] = comb[n-1][r-1] + comb[n-1][r];
+    }
+    for(int r = n+1; r < N; ++r) { comb[n][r] = 0; }
+}
+
+for(int n = 0; n <= N; ++n) {
+    for(int r = 0; r <= N; ++r) {
+        printf("%dC%d %d   ", n, r, comb[n][r]);
+    }
+    printf("\n");
+}
+
+// Iterating over all subspaces of nCp
+// https://stackoverflow.com/questions/9430568/generating-combinations-in-c
+*/
+
 int main() {
     arma::arma_rng::set_seed(0);
+    srand(0);
     static const int N = 5;
     static const int P = 2;
-    for(int i = 0; i < 1000; i++) {
-        arma::Mat<float> X(N, P); X.randu();
-        arma::Mat<float> Y(N, P); Y.randu();
-        float L = train(X, Y);
-        printf("final loss of round (%d): %4.2f\n", i+1, L);
+
+    const vector<vector<bool>> combs = combinations(N, P);
+    int i = 0;
+    printf("total size: |%d|\n", int(combs.size()));
+    for(vector<bool> comb : combs) {
+        cout << "====\n";
+        cout << "|";
+        for(int c = 0; c < comb.size(); ++c) { cout << (comb[c] ? "x" : "-"); }
+        cout << "|\n";
+        arma::Mat<float> Y(N, P); Y.zeros();
+        for(int c = 0, ix = 0; c < N; ++c) { if (comb[c]) { Y(c, ix++) = 1; } }
+
+
+        arma::Mat<float> X0(N, P); X0.randu(); X0 = arma::orth(X0);
+        arma::Mat<float> Xn(N, P);
+        cout << "Y:\n" << Y << "\nX0: \n" << X0;
+        float L = 42;
+        tie(Xn, L) = train(X0, Y);
+        Xn = arma::orth(Xn);
+        static const float CLEAN_THRESHOLD=1e-4;
+
+        // TODO: replace with call to clean();
+        for(int n = 0; n < N; ++n) { 
+            for(int p = 0; p < P; ++p) { 
+                if (fabs(Xn(n, p)) < CLEAN_THRESHOLD) { Xn(n, p) = 0; }
+            }
+        }
+        cout << "Xn: \n" << Xn;
+        printf("final loss of round (%d/%d): %4.2f\n", 1+i++, int(combs.size()), L);
     }
     return 0;
 }

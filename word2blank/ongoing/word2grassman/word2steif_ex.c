@@ -7,7 +7,7 @@
 #include <math.h>
 #include <assert.h>
 #include <stddef.h>
-#include <lapacke.h>
+
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
@@ -20,10 +20,13 @@ const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vo
 
 typedef float real;                    // Precision of float numbers
 
+// //for inverse
+void dgetrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, long long int *IPIV, int *INFO);
+void dgetri_(long long int *N, real *matA, long long int *LDA, long long int *IPIV, real *WORK, long long int *LWORK, int *INFO);
 
 //for Q calculation 
-void dgeqrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, real *TAU, real *WORK,long long int *LWORK,int *INFO);
-void dorgqr_(long long int *rows, long long int *cols, long long int *K, real *matA,long long int *LDA, real *TAU, real *WORK,long long int *LWORK,int *INFO);
+void dgeqrf_(long long int *rows, long long int *cols, real *matA, int *LDA, real *TAU, real *WORK, int *LWORK, int *INFO);
+void dorgqr_(long long int *rows, long long int *cols, int *K, real *matA, int *LDA, real *TAU, real *WORK, int *LWORK, int *INFO);
 
 struct vocab_word {
   long long cn;
@@ -34,7 +37,7 @@ struct vocab_word {
 char train_file[MAX_STRING], output_file[MAX_STRING];
 char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
-int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
+int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1, geodesic = 0;
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
@@ -570,7 +573,6 @@ void *TrainModelThread(void *id) {
             // set target dot product 0
             label = 0;
           }
-
           // target: integer index of the word
           // l2: offset into the arrays
           // weights[word][subspce_dim][embedix]
@@ -579,11 +581,14 @@ void *TrainModelThread(void *id) {
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
           
-          f = 0.0; 
-
-          //Calculate tr(syn0.T syn1neg)
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) f += syn0[ l1 + b*layer1_size + c]*syn1neg[l2 + b*layer1_size + c];
-          //printf("%f\n",f);
+          f = 0; 
+         
+          real *Diff = (real *)calloc(P*layer1_size, sizeof(real));
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) Diff[b*layer1_size + c] = 0;
+          //Calculate tr[(syn0 - syn1neg).T (syn0 - syn1neg)]
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) Diff[b*layer1_size + c] = syn0[ l1 + b*layer1_size + c] - syn1neg[l2 + b*layer1_size + c];
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) f += Diff[ b*layer1_size + c]*Diff[b*layer1_size + c];
+          printf("%f\n",f);
           
           // ---------
           // Regular f = trace [(syn0.T syn1neg)]
@@ -591,18 +596,17 @@ void *TrainModelThread(void *id) {
       
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-          
+          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) *alpha;
+          //(1 - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))])*(expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))])
           
           // ------
           // UPDATE RULE :: X_i_j = (X_i_j + grad*alpha)
           
           // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
-          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * syn0_b_c
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] + (g * syn0[l1 + b*layer1_size + c]);
+          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * 2*(syn0_b_c - syn1neg_b_c)
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] - (2*g * (syn0[l1 + b*layer1_size + c]-syn1neg[l2 + b*layer1_size + c]));
           // Get Q factor from QR factorization of NEU1E
-          long long int LWORK=P, K = P, LDA=layer1_size;
-          int INFO;
+          int LWORK=P, K = P, LDA=layer1_size, INFO;
           real *TAU=malloc(sizeof(real)*K);
           real *WORK=malloc(sizeof(real)*LWORK);
           // perform the QR factorization
@@ -615,15 +619,9 @@ void *TrainModelThread(void *id) {
 
           // STORE (SYN0 + GRADIENT*ALPHA) OF SYN0 (FOCUS) in NEU2E
           // dloss/dsyn0_b_c := 2 (label - sigmoid(f)) * syn1neg_b_c
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (g * syn1neg[l2 + b*layer1_size + c]);
-          printf("BEFORE QR,id:%d\n",id);
-          for (b = 0; b < P; b++) 
-          { for (c = 0; c < layer1_size; c++) 
-              printf("%f ",neu2e[b*layer1_size + c]);
-            printf("\n");
-          } 
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (2*g * (syn0[l1 + b*layer1_size + c]-syn1neg[l2 + b*layer1_size + c]));
           // Get Q factor from QR factorization of NEU2E
-          long long int LWORK2=P, K2 = P, LDA2=layer1_size;
+          int LWORK2=P, K2 = P, LDA2=layer1_size;
           real *TAU2=malloc(sizeof(real)*K2);
           real *WORK2=malloc(sizeof(real)*LWORK2);
           // perform the QR factorization
@@ -632,13 +630,7 @@ void *TrainModelThread(void *id) {
           real *WORK3=malloc(sizeof(real)*LWORK2);
           dorgqr_(&layer1_size, &P, &K2, neu2e, &LDA2, TAU2, WORK3, &LWORK2, &INFO);
           if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
-          printf("AFTER QR,id:%d\n",id);
-          for (b = 0; b < P; b++) 
-          { for (c = 0; c < layer1_size; c++) 
-              printf("%f ",neu2e[b*layer1_size + c]);
-            printf("\n");
-          } 
-          exit(1);
+
           free(TAU);
           free(WORK);
           free(WORK1);

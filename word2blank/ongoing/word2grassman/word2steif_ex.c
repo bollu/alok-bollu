@@ -361,10 +361,6 @@ void ReadVocab() {
 
 void InitNet() {
   long long a, b;
-  a = posix_memalign((void **)&M, 128, (long long)P * P * sizeof(real));
-  if (M == NULL) {printf("Memory allocation failed\n"); exit(1);}
-  for (a=0; a<P; a++) { for (b=0; b<P; b++) { M[a*P +b] =  rand()%10 + 1; printf("%f ",M[a*P+b]);} printf("\n");}
-  
   unsigned long long next_random = 1;
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
@@ -577,7 +573,6 @@ void *TrainModelThread(void *id) {
             // set target dot product 0
             label = 0;
           }
-
           // target: integer index of the word
           // l2: offset into the arrays
           // weights[word][subspce_dim][embedix]
@@ -585,82 +580,31 @@ void *TrainModelThread(void *id) {
 
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
-          // f := geodesic(X,Y) = (need to read a bit more)
           
-          f = 0;
-          //Calculate M.T M, store it in Denom 
-          real Denom[P][P]; 
-          memset(Denom, 0, P*P*sizeof(real));
-          real elem_sum = 0.0 ;
-          for (b = 0; b < P; b++)
-          {
-              for (c = 0; c < P; c++)
-              {
-                  elem_sum = 0.0 ;
-                  for ( int k = 0; k < P; k++)
-                      elem_sum += M[k*P + b]*M[k*P + c];
-                  Denom[b][c] = elem_sum;
-              }      
-          }
-
-          for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");} 
-          //Calculate the inverse of Denom using lapack
-          int errorHandler;
-          long long int PP;
-          PP = P * P;
-          long long int *pivotArray = malloc(sizeof(long long int)*P);
-          real *lapackWorkspace = malloc(sizeof(real)*PP);
-          // dgetrf_(&P, &P, Denom[0], &P, pivotArray, &errorHandler);
-          // if(errorHandler !=0){fprintf(stderr,"dgetrf calculation failed, error code %d\n",errorHandler);exit(1);}
-
-          // dgetri_(&P, Denom[0], &P, pivotArray, lapackWorkspace, &PP, &errorHandler);
-          // if(errorHandler !=0){fprintf(stderr,"dgetri calculation failed, error code %d\n",errorHandler);exit(1);}
-          
-          // printf("AFTER INVERSE:\n");
-          // for (b=0; b<P; b++) { for (c=0; c<P; c++) printf("%f ",Denom[b][c]); printf("\n");}
-          
-          //Calculate syn0.T syn1neg, store it in Numer
-          real Numer[P][P]; 
-          memset(Numer, 0, P*P*sizeof(real));
-          elem_sum = 0.0 ;
-          for (b = 0; b < P; b++)
-          {
-              for (c = 0; c < P; c++)
-              {
-                  elem_sum = 0.0 ;
-                  for ( int k = 0; k < layer1_size; k++)
-                      elem_sum += syn0[ l1 + b*layer1_size + k]*syn1neg[l2 + c*layer1_size + k];
-                  Numer[b][c] = elem_sum;
-              }
-              
-          } 
-
-          //Calculate trace(Denom @ Numer)
-          for ( b = 0; b < P; b++) for ( c = 0; c < P; c++) f += Denom[b][c] * Numer[c][b];
+          f = 0; 
+         
+          real *Diff = (real *)calloc(P*layer1_size, sizeof(real));
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) Diff[b*layer1_size + c] = 0;
+          //Calculate tr[(syn0 - syn1neg).T (syn0 - syn1neg)]
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) Diff[b*layer1_size + c] = syn0[ l1 + b*layer1_size + c] - syn1neg[l2 + b*layer1_size + c];
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) f += Diff[ b*layer1_size + c]*Diff[b*layer1_size + c];
           printf("%f\n",f);
+          
           // ---------
-          // Regular f = trace [(syn0.T syn0)^-1 (syn0.T syn1neg)]
+          // Regular f = trace [(syn0.T syn1neg)]
           // loss := (label - sigmoid(f))^2 (ignore derivative of sigmoid)
       
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) *alpha;
+          //(1 - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))])*(expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))])
           
           // ------
-          // UPDATE RULE :: X_i_j = Span(X_i_j + grad*alpha) = (X_i_j + grad*alpha)*M   , M belongs to invertible R^(pxp)
-          // To preserve good conditions for M, Q_factor_of_QR_decomposition(X_i_j + grad*alpha) and then multiply with M 
+          // UPDATE RULE :: X_i_j = (X_i_j + grad*alpha)
           
           // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
-          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * (\sum_d Denom_b_d * syn0_d_c)
-          
-          for (b = 0; b < P; b++)  
-          {  
-            for (c = 0; c < layer1_size; c++)
-            { 
-              for ( int d = 0; d < P; d++) neu1e[b*layer1_size + c] += Denom[b][d] * syn0[l1 + b*layer1_size + c]; 
-              neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] + (g * neu1e[b*layer1_size + c]);
-            }
-          }
+          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * 2*(syn0_b_c - syn1neg_b_c)
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] - (2*g * (syn0[l1 + b*layer1_size + c]-syn1neg[l2 + b*layer1_size + c]));
           // Get Q factor from QR factorization of NEU1E
           int LWORK=P, K = P, LDA=layer1_size, INFO;
           real *TAU=malloc(sizeof(real)*K);
@@ -674,15 +618,8 @@ void *TrainModelThread(void *id) {
 
 
           // STORE (SYN0 + GRADIENT*ALPHA) OF SYN0 (FOCUS) in NEU2E
-          // dloss/dsyn0_b_c := 2 (label - sigmoid(f)) * (\sum_d Denom_d_b * syn1neg_d_c)
-          for (b = 0; b < P; b++)  
-          {  
-            for (c = 0; c < layer1_size; c++)
-            { 
-              for ( int d = 0; d < P; d++) neu2e[b*layer1_size + c] += Denom[d][b] * syn1neg[l2 + d*layer1_size + c]; 
-              neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (g * neu2e[b*layer1_size + c]);
-            }
-          }
+          // dloss/dsyn0_b_c := 2 (label - sigmoid(f)) * syn1neg_b_c
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (2*g * (syn0[l1 + b*layer1_size + c]-syn1neg[l2 + b*layer1_size + c]));
           // Get Q factor from QR factorization of NEU2E
           int LWORK2=P, K2 = P, LDA2=layer1_size;
           real *TAU2=malloc(sizeof(real)*K2);
@@ -701,15 +638,13 @@ void *TrainModelThread(void *id) {
           free(WORK2);
           free(WORK3);
 
-          // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
-            for (b = 0; b < P; b++) { for (c = 0; c < layer1_size; c++) { for (int k=0; k<P; k++)
-                  syn1neg[l2 + b*layer1_size + c] = neu1e[k*layer1_size+c]*M[k*P + b]; } }
+        // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
+        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[l2 + b*layer1_size + c] = neu1e[b*layer1_size + c];
         }
 
         // Learn weights input -> hidden
         // BACKPROP ON FOCUS WORD FROM NEU1E
-          for (b = 0; b < P; b++) { for (c = 0; c < layer1_size; c++) { for (int k=0; k<P; k++)
-                  syn0[l1 + b*layer1_size + c] = neu2e[k*layer1_size + c]*M[k*P + b]; } }
+        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn0[l1 + b*layer1_size + c] = neu2e[b*layer1_size + c];
       }
     }
     sentence_position++;

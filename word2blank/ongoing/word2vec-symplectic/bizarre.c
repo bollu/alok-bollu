@@ -70,14 +70,14 @@ int main(int argc, char **argv) {
         vocab[b * max_w + a] = 0;
         for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
 
-
-        len = 0;
+        // what does the `lens` variable do?
+        len = 0; // <-- Distance
         for (a = 0; a < size/2; a++) len += M[a + b * size] * M[a + b * size];
-        lens[b*2] = len = sqrt(len);
+        lens[b*2] = len = sqrt(len); //  lens[b*2] = √(len) where len = sqrt(len) => len = √ (Σ M^2)
         for (a = 0; a < size/2; a++) M[a + b * size] /= len;
         // printf("|%20s| lensq: %4.2f\n", vocab + b*max_w, len);
 
-        len = 0;
+        len = 0; // <-- Momentum
         for (a = size/2; a < size; a++) len += M[a + b * size] * M[a + b * size];
         lens[b*2+1] = len = sqrt(len);
         for (a = size/2; a < size; a++) M[a + b * size] /= len;
@@ -96,11 +96,11 @@ int main(int argc, char **argv) {
     long long nzero = 0;
     static const int NTESTS = 1e7;
     for (int i = 1; i < NTESTS; ++i) {
-        // skip </s>, so start from (1)
+        // skip </s>, so start from (1) // <-- the 4/5th token is </s>, right? The first token is always `the`
         int c = 1 + rand() % (words-1);
         int c2 = 1 + rand() % (words - 1);
 
-        float deltas[2][max_size];
+        float deltas[2][max_size]; // <-- but where are the values initialized?
 
         float dot[2];
         dot[0] = dot[1] = 0;

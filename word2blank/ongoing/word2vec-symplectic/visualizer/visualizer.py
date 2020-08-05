@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from gensim.models.keyedvectors import KeyedVectors
 import numpy as np
+from sklearn.decomposition import PCA
 import gensim
 from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
@@ -10,11 +11,21 @@ def load_embedding(fpath, x, wordlist):
     print("Loading embeddings...")
     emb = dict()
     wv_from_bin = KeyedVectors.load_word2vec_format(fpath, binary=x)
-    vs = np.array([wv_from_bin.get_vector(w) for w in wordlist])
-    # for word, vector in tqdm(zip(wv_from_bin.vocab, wv_from_bin.vectors)):
-    #    coefs = np.asarray(vector, dtype='float32')
-    #    if word not in emb:
-    #        emb[word] = coefs
+    embs = np.array([wv_from_bin.get_vector(w) for w in wordlist])
+    vpos, vmom  = np.hsplit(embs, 2)
+    vpos = np.corrcoef(vpos)
+    vmom = np.corrcoef(vmom)
+    posval, posvec = np.linalg.eig(vpos)
+    momval, momvec = np.linalg.eig(vmom)
+    ixs = np.argsort(-posval)
+    posval = posvec[ixs]
+    posvec = posvec[:, ixs]
+    pca_posvec = posvec[:, :3]
+    ixs = np.argsort(-momval)
+    momval = momvec[ixs]
+    momvec = momvec[:, ixs]
+    pca_momvec = momvec[:, :3]
+    vs = np.concatenate((pca_posvec, pca_momvec), axis=1)
     return vs
 
 

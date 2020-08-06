@@ -9,11 +9,7 @@ import re
 
 def load_embedding(fpath, VOCAB):
     emb = dict()
-    try:
-        wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB, binary=True)
-    except EOFError:
-        # fucking fasttext fuck you
-        wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB, binary=False)
+    wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
     for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
         coefs = np.asarray(vector, dtype='float32')
         # if not re.match(r'\w+', word):
@@ -48,6 +44,11 @@ class wordMatrix:	# VOCAB x NDIMS matrix containing row-wise word embeddings
 		sim_mat = cosine_similarity(word_mat)
 		return sim_mat
 
+	# def reform(sim_mat):
+	# 	rMax, rMin = np.full(np.shape(sim_mat),0.99), np.min(sim_mat, axis=1)	# row wise MAX & MIN
+	# 	sim_mat = (sim_mat.transpose()-rMin.transpose()).transpose()
+	# 	return np.divide(sim_mat,rMax)
+
 	def plotHist(sim_mat, wordList, word_keys):
 		res = 100
 		bins = [i/res for i in range(res+1) ]
@@ -79,7 +80,7 @@ class adjMatrix:
 		elif mode is 'mean':	# thresh = mean(row) + seed
 			print('mean)')
 			for i in range(np.shape(sim_mat)[0]):
-				thresh = np.mean(sim_mat[i]) + seed
+				thresh = seed*np.mean(sim_mat[i])
 				sub_threshold_indices = sim_mat[i] < thresh
 				sim_mat[i][sub_threshold_indices] = 0
 
@@ -167,6 +168,9 @@ class graphInfo:
 		return tree
 
 	def custom_tree(comp, sim_mat, init_thresh, rate):
+		if not comp:
+			comp = range(np.shape(sim_mat)[0])
+		print(comp)
 		tree = nx.DiGraph()
 		if len(comp) is 1:
 			print("Specify atleast 2 tokens")

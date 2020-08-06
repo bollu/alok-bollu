@@ -25,6 +25,9 @@ distance-context : distance-context.c
 bizarre : bizarre.c
 	$(CC) bizarre.c -o bizarre $(CFLAGS)
 
+principal-distance : principal-distance.cpp
+	$(CC) principal-distance.cpp -o principal-distance $(CFLAGS)
+
 distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c

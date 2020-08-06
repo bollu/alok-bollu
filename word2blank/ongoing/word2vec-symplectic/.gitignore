@@ -28,3 +28,4 @@ compute-accuracy-ranked
 compute-composition
 dump-composition.temp.txt
 visualizer/posvel_models/
+principal-distance

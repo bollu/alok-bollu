@@ -25,6 +25,9 @@ distance-context : distance-context.c
 bizarre : bizarre.c
 	$(CC) bizarre.c -o bizarre $(CFLAGS)
 
+word2vec-principal-analogy : principal-distance.cpp
+	$(CC) word2vec-principal-analogy.cpp -o word2vec-principal-analogy $(CFLAGS)
+
 principal-distance : principal-distance.cpp
 	$(CC) principal-distance.cpp -o principal-distance $(CFLAGS)
 

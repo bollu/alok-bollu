@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 
     float len = 0;
     for (a = 0; a < size/2; a++) len += M[a + b * size] * M[a + b * size];
-    printf("lengths %15s:  %4.2f | ", vocab + b*max_w, len);
+    // printf("lengths %15s:  %4.2f | ", vocab + b*max_w, len);
     len = sqrt(len);
     
     if(len != 0) { for (a = 0; a < size/2; a++) M[a + b * size] /= len; }
@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
     len = 0;
     for (a = size/2; a < size; a++) len += M[a + b * size] * M[a + b * size];
     len = sqrt(len);
-    printf("%4.2f\n", len);
+    // printf("%4.2f\n", len);
     if(len != 0) {  for (a = size/2; a < size; a++) M[a + b * size] /= len; }
   }
   fclose(f);

@@ -39,7 +39,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <cmath>
+#define max(a, b) (a) > (b) ? (a) : (b)
 
 
 // singular values: https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/
@@ -55,13 +55,16 @@ void singular_values(float *mat22, float *sigma_1, float *sigma_2) {
 }
 */
 
-void principal_angles(int size, float *u, float *w, float *sigma_1, float *sigma_2) {
+void principal_angles(int size, float *a1, float *a2, float *b1, float *b2,
+        float *sigma_1, float *sigma_2) {
     float mat[2][2];
     for(int i = 0; i < 2; ++i) {
+        const float *a = i == 0 ? a1 : a2;
         for(int j = 0; j < 2; ++j) {
+            const float *b = j == 0 ? b1 : b2;
             mat[i][j] = 0;
             for(int k = 0;  k < size/2; ++k) {
-                mat[i][j] += u[i*(size/2) +k] * w[j*(size/2) + k];
+                mat[i][j] += a[k] * b[k];
             } // end k
         } // end j
     } // end i
@@ -116,7 +119,7 @@ int main(int argc, char **argv) {
 
     float len = 0;
     for (a = 0; a < size/2; a++) len += M[a + b * size] * M[a + b * size];
-    printf("lengths %15s:  %4.2f | ", vocab + b*max_w, len);
+    printf("lengths %30s:  %4.2f | ", vocab + b*max_w, len);
     len = sqrt(len);
     
     if(len != 0) { for (a = 0; a < size/2; a++) M[a + b * size] /= len; }
@@ -129,7 +132,7 @@ int main(int argc, char **argv) {
   }
   fclose(f);
   while (1) {
-    printf("analogy?>  ");
+    printf("analogy?>");
     char str_a[max_w], str_b[max_w], str_c[max_w]; scanf("%s %s %s", str_a, str_b, str_c);
     int aix = -1, bix=-1, cix =-1;
     for(int i = 0; i < words; ++i) {
@@ -141,45 +144,49 @@ int main(int argc, char **argv) {
     if (bix == -1) { printf("unable to find word: |%s|\n", str_b); continue; }
     if (cix == -1) { printf("unable to find word: |%s|\n", str_c); continue; }
 
-    float ab_sigma_1 = 0, ab_sigma_2 = 0;
-    principal_angles(size, M + size*aix, M + size*bix,
-        &ab_sigma_1, &ab_sigma_2);
+    // float ab_sigma_1 = 0, ab_sigma_2 = 0;
+    // principal_angles(size, M + size*aix, M + size*bix,
+    //     &ab_sigma_1, &ab_sigma_2);
+    // ab_sigma_1 = acos(ab_sigma_1);
+    // ab_sigma_2 = acos(ab_sigma_2);
 
 
-    float best_losses[TOPK];
+    float best_gains[TOPK];
     char bestws[TOPK][max_w];
-    for(int i = 0; i < TOPK; ++i)  { best_losses[i] = 99999; bestws[i][0] = '\0'; }
+    for(int i = 0; i < TOPK; ++i)  { best_gains[i] = -1; bestws[i][0] = '\0'; }
 
     for(int wix = 0; wix < words; ++wix) {
         float cw_sigma_1 = 0, cw_sigma_2 = 0;
-        principal_angles(size, M + size*cix, M + size*wix,
+        principal_angles(size,
+                M + size*aix,
+                M + size*wix,
+                M + size*cix,
+                M + size*bix, 
                 &cw_sigma_1, &cw_sigma_2);
-        // TODO: can improve this by not taking sqrt and then squaring.
-        // -ffast-math removes this, IIUC.
-        const float l1 = (ab_sigma_1 - cw_sigma_1);
-        const float l2 = (ab_sigma_2 - cw_sigma_2);
-        const float loss = l1*l1 + l2*l2;
+        //cw_sigma_1 = acos(cw_sigma_1);
+        //cw_sigma_2 = acos(cw_sigma_2);
+        const float gain = (cw_sigma_1*cw_sigma_1) + (cw_sigma_2*cw_sigma_2);
 
 
         for(int i = 0; i < TOPK; ++i) {
-            // sorted in ascending order: best_losses[0] < best_losses[1] < ...
-            if(loss < best_losses[i]) {
+            // sorted in descding order: best_gains[0] > best_gains[1] > ...
+            if(gain > best_gains[i]) {
                 // move everything to the right.
                 for(int j = TOPK-1; j > i; j--) {
-                    best_losses[j] = best_losses[j-1];
+                    best_gains[j] = best_gains[j-1];
                     strcpy(bestws[j], bestws[j-1]);
                 }
                 // update best gain.
-                best_losses[i] = loss;
+                best_gains[i] = gain;
                 strcpy(bestws[i], vocab + wix*max_w);
                 break;
-            } // end gain > best_losses[i]
+            } // end gain > best_gains[i]
         } // end TOPK loop
     } // end words
 
     printf("===closest to analogy===\n");
     for(int i = 0; i < TOPK; ++i) {
-      printf("%20s | %4.2f\n", bestws[i], best_losses[i]);
+      printf("%20s | %10.7f\n", bestws[i], best_gains[i]);
     }
 
   } // end while(1)

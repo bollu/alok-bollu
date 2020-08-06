@@ -29,3 +29,5 @@ compute-composition
 dump-composition.temp.txt
 visualizer/posvel_models/
 principal-distance
+word2vec-principal-analogy
+bizarre

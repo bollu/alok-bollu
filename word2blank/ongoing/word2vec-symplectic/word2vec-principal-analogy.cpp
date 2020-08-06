@@ -39,10 +39,8 @@
 #include <math.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <cmath>
 
-const long long max_size = 2000;         // max length of strings
-const long long TOPK = 20;                  // number of closest words that will be shown
-const long long max_w = 50;              // max length of vocabulary entries
 
 // singular values: https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/
 /*
@@ -58,15 +56,12 @@ void singular_values(float *mat22, float *sigma_1, float *sigma_2) {
 */
 
 void principal_angles(int size, float *u, float *w, float *sigma_1, float *sigma_2) {
-    float *uvecs[2] = { u, u + (size/2)};
-    float *wvecs[2] = { w, w + (size/2)};
-
     float mat[2][2];
     for(int i = 0; i < 2; ++i) {
         for(int j = 0; j < 2; ++j) {
             mat[i][j] = 0;
             for(int k = 0;  k < size/2; ++k) {
-                mat[i][j] += uvecs[i][k] * wvecs[j][k];
+                mat[i][j] += u[i*(size/2) +k] * w[j*(size/2) + k];
             } // end k
         } // end j
     } // end i
@@ -79,6 +74,9 @@ void principal_angles(int size, float *u, float *w, float *sigma_1, float *sigma
     *sigma_1 = sqrt(0.5*(s1 + s2));
     *sigma_2 = (s1 <= s2 ? 0 : sqrt(0.5*(s1 - s2)));
 }
+const long long max_size = 2000;         // max length of strings
+const long long TOPK = 20;                  // number of closest words that will be shown
+const long long max_w = 50;              // max length of vocabulary entries
 
 float func(float a, float b);            // f(distance, momentum)
 
@@ -131,7 +129,7 @@ int main(int argc, char **argv) {
   }
   fclose(f);
   while (1) {
-    printf("Enter [a, b, c] for  a:b::c:?: ");
+    printf("analogy?>  ");
     char str_a[max_w], str_b[max_w], str_c[max_w]; scanf("%s %s %s", str_a, str_b, str_c);
     int aix = -1, bix=-1, cix =-1;
     for(int i = 0; i < words; ++i) {
@@ -139,44 +137,44 @@ int main(int argc, char **argv) {
       if (!strcmp(vocab + max_w*i, str_b)) { bix = i; }
       if (!strcmp(vocab + max_w*i, str_c)) { cix = i; }
     } // end words
-    if (aix == -1) { printf("unable to find word: |%s|\n", str_a); }
-    if (bix == -1) { printf("unable to find word: |%s|\n", str_b); }
-    if (cix == -1) { printf("unable to find word: |%s|\n", str_c); }
+    if (aix == -1) { printf("unable to find word: |%s|\n", str_a); continue; }
+    if (bix == -1) { printf("unable to find word: |%s|\n", str_b); continue; }
+    if (cix == -1) { printf("unable to find word: |%s|\n", str_c); continue; }
 
-    float ab_sigma_1, ab_sigma_2;
-    principal_angles(size, M + max_size*aix, M + max_size*bix,
+    float ab_sigma_1 = 0, ab_sigma_2 = 0;
+    principal_angles(size, M + size*aix, M + size*bix,
         &ab_sigma_1, &ab_sigma_2);
 
 
     float best_losses[TOPK];
     char bestws[TOPK][max_w];
-    for(int i = 0; i < TOPK; ++i)  { best_losses[i] = -1; bestws[i][0] = '\0'; }
+    for(int i = 0; i < TOPK; ++i)  { best_losses[i] = 99999; bestws[i][0] = '\0'; }
 
     for(int wix = 0; wix < words; ++wix) {
-    float cw_sigma_1 = 0, cw_sigma_2 = 0;
-      principal_angles(size, M + max_size*cix, M + max_size*wix,
-              &cw_sigma_1, &cw_sigma_2);
-      // TODO: can improve this by not taking sqrt and then squaring.
-      // -ffast-math removes this, IIUC.
-      const float l1 = (ab_sigma_1 - cw_sigma_1);
-      const float l2 = (ab_sigma_2 - cw_sigma_2);
-      const float loss = l1*l1 + l2*l2;
+        float cw_sigma_1 = 0, cw_sigma_2 = 0;
+        principal_angles(size, M + size*cix, M + size*wix,
+                &cw_sigma_1, &cw_sigma_2);
+        // TODO: can improve this by not taking sqrt and then squaring.
+        // -ffast-math removes this, IIUC.
+        const float l1 = (ab_sigma_1 - cw_sigma_1);
+        const float l2 = (ab_sigma_2 - cw_sigma_2);
+        const float loss = l1*l1 + l2*l2;
 
-      
-      for(int i = 0; i < TOPK; ++i) {
-        // sorted in ascending order: best_losses[0] < best_losses[1] < ...
-        if(loss < best_losses[i]) {
-          // move everything to the right.
-          for(int j = TOPK-1; j > i; j--) {
-            best_losses[j] = best_losses[j-1];
-            strcpy(bestws[j], bestws[j-1]);
-          }
-          // update best gain.
-          best_losses[i] = loss;
-          strcpy(bestws[i], vocab + wix*max_w);
-          break;
-        } // end gain > best_losses[i]
-      } // end TOPK loop
+
+        for(int i = 0; i < TOPK; ++i) {
+            // sorted in ascending order: best_losses[0] < best_losses[1] < ...
+            if(loss < best_losses[i]) {
+                // move everything to the right.
+                for(int j = TOPK-1; j > i; j--) {
+                    best_losses[j] = best_losses[j-1];
+                    strcpy(bestws[j], bestws[j-1]);
+                }
+                // update best gain.
+                best_losses[i] = loss;
+                strcpy(bestws[i], vocab + wix*max_w);
+                break;
+            } // end gain > best_losses[i]
+        } // end TOPK loop
     } // end words
 
     printf("===closest to analogy===\n");

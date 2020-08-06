@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     for(int i = 0; i < words; ++i) {
       if (!strcmp(vocab + max_w*i, str_u)) { uix = i; }
     } // end words
-    if (uix == -1) { printf("unable to find word: |%s|\n", str_u); }
+    if (uix == -1) { printf("unable to find word: |%s|\n", str_u); continue; }
 
     float bestgains[TOPK];
     char bestws[TOPK][max_w];

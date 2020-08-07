@@ -63,19 +63,20 @@ void principal_angles(int size, float *a1, float *a2, float *b1, float *b2,
         for(int j = 0; j < 2; ++j) {
             const float *b = j == 0 ? b1 : b2;
             mat[i][j] = 0;
-            for(int k = 0;  k < size/2; ++k) {
+            for(int k = 0;  k < size; ++k) { // <-- Here we populate mat with a_i . b_j for i, j
                 mat[i][j] += a[k] * b[k];
             } // end k
         } // end j
     } // end i
 
+    // SVD of a 2x2 matrix
     const float a = mat[0][0], b = mat[0][1], c = mat[1][0], d = mat[1][1];
     const float s1 = a*a + b*b + c*c + d*d;
     const float s2 = 
         sqrt((a*a + b*b - c*c - d*d) * (a*a + b*b - c*c - d*d) + 
-                (4 * (a*c + b*d) * (a*c + b*d)));
-    *sigma_1 = sqrt(0.5*(s1 + s2));
-    *sigma_2 = (s1 <= s2 ? 0 : sqrt(0.5*(s1 - s2)));
+                (4 * (a*c + b*d) * (a*c + b*d))); 
+    *sigma_1 = sqrt(0.5*(s1 + s2)); 
+    *sigma_2 = (s1 <= s2 ? 0 : sqrt(0.5*(s1 - s2))); 
 }
 const long long max_size = 2000;         // max length of strings
 const long long TOPK = 20;                  // number of closest words that will be shown
@@ -107,6 +108,7 @@ int main(int argc, char **argv) {
     printf("Cannot allocate memory: %lld MB    %lld  %lld\n", (long long)words * size * sizeof(float) / 1048576, words, size);
     return -1;
   }
+  // Read w2v file
   for (int b = 0; b < words; b++) {
     int a = 0;
     while (1) {
@@ -116,23 +118,18 @@ int main(int argc, char **argv) {
     }
     vocab[b * max_w + a] = 0;
     for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-
+  
+    // Normalizing lengths
     float len = 0;
-    for (a = 0; a < size/2; a++) len += M[a + b * size] * M[a + b * size];
-    printf("lengths %30s:  %4.2f | ", vocab + b*max_w, len);
+    for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+    printf("lengths %30s:  %4.2f | normalized.\n", vocab + b*max_w, len);
     len = sqrt(len);
-    
-    if(len != 0) { for (a = 0; a < size/2; a++) M[a + b * size] /= len; }
+    if(len != 0) { for (a = 0; a < size; a++) M[a + b * size] /= len; }
 
-    len = 0;
-    for (a = size/2; a < size; a++) len += M[a + b * size] * M[a + b * size];
-    len = sqrt(len);
-    printf("%4.2f\n", len);
-    if(len != 0) {  for (a = size/2; a < size; a++) M[a + b * size] /= len; }
   }
   fclose(f);
   while (1) {
-    printf("analogy?>");
+    printf("analogy?> ");
     char str_a[max_w], str_b[max_w], str_c[max_w]; scanf("%s %s %s", str_a, str_b, str_c);
     int aix = -1, bix=-1, cix =-1;
     for(int i = 0; i < words; ++i) {
@@ -158,7 +155,7 @@ int main(int argc, char **argv) {
     for(int wix = 0; wix < words; ++wix) {
         float cw_sigma_1 = 0, cw_sigma_2 = 0;
         principal_angles(size,
-                M + size*aix,
+                M + size*aix, //  <-- pointer based indexing. 
                 M + size*wix,
                 M + size*cix,
                 M + size*bix, 

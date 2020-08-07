@@ -73,6 +73,10 @@ dump-accuracy-simlex : dump-accuracy-simlex.c
 compute-composition: compute-composition.cpp
 	$(CC) -O2 compute-composition.cpp -o compute-composition -lm  -Wno-unused-result
 
+word2vec-compute-accuracy : word2vec-compute-accuracy.cpp
+	$(CC) word2vec-compute-accuracy.cpp -o word2vec-compute-accuracy $(CFLAGS)
+	chmod +x *.sh
+
 cli: makefile cli.cpp  linenoise.c
 	$(CC) -c linenoise.c -o linenoise.o $(CFLAGS)
 	$(CXX) -std=c++11 -c cli.cpp -o cli.o $(CFLAGS)
@@ -80,4 +84,4 @@ cli: makefile cli.cpp  linenoise.c
 
 
 clean:
-	rm -rf word2vec word2phrase distance word-analogy compute-accuracy dump-vect
+	rm -rf word2vec word2phrase distance word-analogy compute-accuracy* dump-vect word2vec-principal-analogy principal-distance word2vec-compute-accuracy

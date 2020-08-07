@@ -1,7 +1,10 @@
 from gensim.models.keyedvectors import KeyedVectors
 from sklearn import preprocessing
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize as nm
+from scipy.spatial.distance import cosine
 from matplotlib import pyplot as plt
+from itertools import combinations
 import numpy as np
 from tqdm import tqdm
 import networkx as nx
@@ -178,3 +181,83 @@ class graphInfo:
 		node_index = len(sim_mat)	
 		node_index, tree = graphInfo.decluster(comp, node_index, tree, sim_mat, init_thresh, rate)
 		return tree
+
+	def hyperlex(focus,sim_mat,word_keys,ind_keys,edgeThresh=1.2,degThresh=4,clusterThresh=0.9):
+
+		focus = word_keys[focus]
+		mean = np.mean(sim_mat,axis=1)	# for each row // vector
+		thresh = edgeThresh*np.mean(sim_mat[focus,:])
+		print("mean & thresh calced")
+		vertices = [ind for ind in range(np.shape(sim_mat)[0]) if ind > 100 and sim_mat[focus][ind] >= thresh and ind!=focus]	# words important to 'focus'
+		H,D = list(), dict()
+		for ind in vertices:
+			inwardList = list(np.where(sim_mat[:,ind]>=edgeThresh*mean)[0])
+			D[ind]=[len(inwardList),inwardList]
+		print("Degree calced")
+		def clusterCoeff(ind):
+			inDeg, inwardList = D[ind]
+			if(len(inwardList)==0):
+				return 0
+			c, crossEdges = 0, list(combinations(inwardList,2))
+			for i,j in crossEdges:
+				c += sim_mat[i][j]
+			return c/len(crossEdges)
+
+		def goodCandidate(ind):
+			return D[ind][0] > degThresh and clusterCoeff(ind) > clusterThresh
+
+		S = {ind:sim_mat[focus][ind] for ind in D.keys()}
+		# del S[focus]
+
+		while(len(S)):
+			print("len S:",len(S))
+			V = [ind for ind, val in sorted(S.items(), key=lambda x: x[1], reverse=True)]	# vertices sorted by decreasing degree
+			if goodCandidate(V[0]):
+				print("New candidate:",ind_keys[V[0]])
+				H.append(V[0])
+				for node in D[V[0]][1]:
+					try:
+						del S[node]
+					except:
+						pass
+			try:
+				del S[V[0]]
+			except:
+				pass
+
+		adj_mat = np.zeros(np.shape(sim_mat))
+		for i in vertices:
+			for j in vertices:
+				if sim_mat[i][j] > edgeThresh*mean[i]:
+					adj_mat[i][j] = 1 - sim_mat[i][j]
+
+		np.fill_diagonal(adj_mat, 0)	# ignore self-loops	
+		
+		for ind in H:
+			adj_mat[focus][ind] = 0.1	# MUST BE INCL IN MST
+
+		g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.Graph)	
+		for i in range(np.shape(adj_mat)[0]):
+			if(i not in vertices and i != focus):
+				g.remove_node(i)
+		print("focus graph made")
+		tree = nx.minimum_spanning_tree(g)
+		print(tree)
+		print("mst made")
+		return tree 
+		
+
+def check_analogy(wA,wB,wC,embMat,word_keys,ind_keys):
+	indA, indB, indC = word_keys[wA], word_keys[wB], word_keys[wC] 
+	vecA, vecB, vecC = embMat[indA,:], embMat[indB,:], embMat[indC,:] 
+	# vecA, vecB, vecC = nm(embMat[indA,:]), nm(embMat[indB,:]), nm(embMat[indC,:]) 
+	vecD = vecB - vecA + vecC
+	simScore = np.zeros(len(ind_keys))
+	for indE in ind_keys:
+		vecE = embMat[indE,:]
+		# vecE = nm(embMat[indE,:])
+		simScore[indE] = 1 - cosine(vecD,vecE)
+	simCand = simScore.argsort()[-5:][::-1]	# Top 5 words
+	simList = [[ind_keys[ind],simScore[ind]] for ind in simCand]
+	print(simList)
+

@@ -19,27 +19,50 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <assert.h>
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
 
-float func(float a, float b)
-{
-  float c = a + b; // replace with function
-  return c;
+// orthonormalize a2 wrt a1
+void orthonorm(const int size, const float *a1, const float *a2, float *a2_perp) {
+    // we assume a1 is orthonormal.
+    float dot = 0;
+    for(int i = 0; i < size; ++i) {
+        dot += a1[i] * a2[i];
+    }
+
+    // compute a2' = a2 - (a2.a1) a1_hat
+    // we assume that a1 is already normalized, hence a1_hat = a1
+    float l = 0;
+    for(int i = 0; i < size; ++i) {
+        a2_perp[i] = a2[i] -  dot * a1[i];
+        l += a2_perp[i] * a2_perp[i];
+    }
+
+    l = sqrt(l);
+    for(int i = 0; i < size; ++i) { a2_perp[i] /= l; }
+
+
 }
 
-void principal_angles(int size, float *a1, float *a2, float *b1, float *b2,
+void principal_angles(const int size,
+        const float *a1, const float *a2,
+        const float *b1, const float *b2,
         float *sigma_1, float *sigma_2) {
+    float a2_perp[max_size];
+    float b2_perp[max_size];
+
+    orthonorm(size, a1, a2, a2_perp);
+    orthonorm(size, b1, b2, b2_perp);
     float mat[2][2];
     for(int i = 0; i < 2; ++i) {
-        const float *a = i == 0 ? a1 : a2;
+        const float *a = i == 0 ? a1 : a2_perp;
         for(int j = 0; j < 2; ++j) {
-            const float *b = j == 0 ? b1 : b2;
+            const float *b = j == 0 ? b1 : b2_perp;
             mat[i][j] = 0;
-            for(int k = 0;  k < size; ++k) { // <-- Here we populate mat with a_i . b_j for i, j
-                mat[i][j] += a[k] * b[k];
-            } // end k
+            for(int k = 0;  k < size; ++k) { mat[i][j] += a[k] * b[k]; }
         } // end j
     } // end i
 
@@ -57,7 +80,7 @@ int main(int argc, char **argv)
 {
   FILE *f;
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  float len, deldist, delmom, disp, bestd[N], vec[max_size];
+  float len, bestd[N];
   long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
   float *M;
   char *vocab;
@@ -134,7 +157,7 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    for (a = 0; a < N; a++) bestd[a] = -1000;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -151,16 +174,24 @@ int main(int argc, char **argv)
       
       float cw_sigma_1 = 0, cw_sigma_2 = 0;
       
-      principal_angles(size, M + size * b1, M + size * c, M + size * b3, M + size * b2, &cw_sigma_1, &cw_sigma_2);
+      principal_angles(size,
+            M + size * b1,
+            M + size * c,
+            M + size * b2,
+            M + size * b3,
+            &cw_sigma_1,
+            &cw_sigma_2);
       
-      const float gain = (cw_sigma_1 * cw_sigma_1) + (cw_sigma_2 * cw_sigma_2);
+      const float gain = sqrt((cw_sigma_1*cw_sigma_1) + (cw_sigma_2*cw_sigma_2));
       for (int a = 0; a < N; a++) {
         if (gain > bestd[a]) {
+        // if (loss < bestd[a]) {
             for (d = N - 1; d > a; d--) {
                 bestd[d] = bestd[d - 1];
                 strcpy(bestw[d], bestw[d - 1]);
             }
-            // update best gain.
+            // update best loss.
+            // bestd[a] = gain;
             bestd[a] = gain;
             strcpy(bestw[a], vocab + c * max_w);
             break;
@@ -172,6 +203,8 @@ int main(int argc, char **argv)
       CACN++;
       if (QID <= 5) SEAC++; else SYAC++;
     }
+    const bool correct = !strcmp(st4, bestw[0]);
+    fprintf(stderr, "%15s : %15s :: %15s : %15s (correct: %15s) %5s\n", st1, st2, st3, bestw[0], st4, correct ? "✓": "x");
     if (QID <= 5) SECN++; else SYCN++;
     TCN++;
     TACN++;

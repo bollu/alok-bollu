@@ -4,7 +4,7 @@ CXX = g++
 DEBUG=-fsanitize=address -fsanitize=undefined -g -O2
 RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall \
-		 -funroll-loops -Wno-unused-result ${DEBUG} -fuse-ld=gold
+		 -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
 
 all: word2vec word2phrase distance word-analogy compute-accuracy
 
@@ -14,7 +14,7 @@ bin2text:
 text0:
 	head -c 1000000 text8 > text0
 
-word2vec : word2vec.c
+word2vec : word2vec.c makefile
 	$(CC) word2vec.c -o word2vec $(CFLAGS)
 word2phrase : word2phrase.c
 	$(CC) word2phrase.c -o word2phrase $(CFLAGS)
@@ -24,6 +24,8 @@ distance-context : distance-context.c
 
 bizarre : bizarre.c
 	$(CC) bizarre.c -o bizarre $(CFLAGS)
+word2vec-principal-compute-accuracy : word2vec-principal-compute-accuracy.cpp
+	$(CC) word2vec-principal-compute-accuracy.cpp -o word2vec-principal-compute-accuracy $(CFLAGS)
 
 word2vec-principal-analogy : word2vec-principal-analogy.cpp
 	$(CC) word2vec-principal-analogy.cpp -o word2vec-principal-analogy $(CFLAGS)

@@ -3,14 +3,16 @@
 #include <stdlib.h>
 #include <igraph.h>
 #include <assert.h>
+#include <vector>
 using namespace std;
 
 using real = float;
-static const long long MAX_VOCAB_SIZE = 10000000;
+static const long long MAX_VOCAB_SIZE = 1000000;
 static const long long MAX_WORDLEN = 200;
 long long VOCABSIZE, DIMSIZE;
 real *vecs[MAX_VOCAB_SIZE];
 char words[MAX_VOCAB_SIZE][MAX_WORDLEN];
+vector<long> adj_list[MAX_VOCAB_SIZE];
 static const long long TOPK = 50;
 static const real INFTY = 1e9;
 
@@ -129,8 +131,11 @@ int main(int argc, char **argv) {
     }
     fscanf(f, "%lld %lld", &VOCABSIZE, &DIMSIZE);
     cerr << "VOCABSIZE: " << VOCABSIZE << " | DIMSIZE: " << DIMSIZE << "\n";
+    cerr << "TOREAD: " << TOREAD << " | MAX_VOCAB_SIZE: " << MAX_VOCAB_SIZE << "\n";
     VOCABSIZE = min<long long>(VOCABSIZE, TOREAD);
     cerr << "VOCABSIZE adjusted to: max(" << VOCABSIZE << ", " << TOREAD << ") = |" << VOCABSIZE << "|\n";
+    assert(VOCABSIZE < MAX_VOCAB_SIZE);
+
     for(int i = 0; i < VOCABSIZE; ++i) {
         fscanf(f, "%s", words[i]);
         cerr << "words[" << i << "] = |" << words[i] << "|";
@@ -153,6 +158,7 @@ int main(int argc, char **argv) {
         for (int j = 0; j < DIMSIZE; j++) { vecs[i][j] /= len; }
     }
 
+    /*
     printf("exponentiating vectors...\n");
 
     for(int i = 0; i < VOCABSIZE; ++i) {
@@ -176,6 +182,7 @@ int main(int argc, char **argv) {
             vecs[i][j] = vecs[i][j] > mean ? 1 : 0;
         }
     }
+    */
 
 
     // make the graph
@@ -185,46 +192,71 @@ int main(int argc, char **argv) {
     cerr << "creating graph...";
     igraph_empty(&g, VOCABSIZE, DIRECTED);
 
-    int *topk_wixs = new int[VOCABSIZE * TOPK];
-    real *topk_bestds = new real[VOCABSIZE * TOPK];
-    assert(topk_wixs != nullptr);
-    assert(topk_bestds != nullptr);
+    real *dots = new real[VOCABSIZE*VOCABSIZE];
 
-    // initialize
-    for(int i = 0; i < VOCABSIZE*TOPK; ++i) { topk_wixs[i] = -INFTY; topk_bestds[i] = -1; }
-
-    #pragma omp parallel for
-    for(int w = 0; w < VOCABSIZE; ++w) { // w for word
-        // cerr << "w = " << w << " | " << words[w] << "\n";
-        real *bestd = topk_bestds + TOPK*w; // best distance, sorted highest to lowest.
-        int *wixs = topk_wixs + TOPK*w; // indexes of the words
-
-        // find top-k words.
-        for(int o = 0; o < VOCABSIZE; ++o) { // o for other word
-            real dot = 0;
-            // #pragma omp parallel for reduction(+: dot)
-            for(int i = 0; i < DIMSIZE; ++i){ dot += vecs[w][i] * vecs[o][i]; }
-
-            // find location of this word in our collection of words.
-            for(int i = 0; i < TOPK; i++) {
-                if (bestd[i] > dot) continue;
-                // we are better than this index.
-                // Copy values forward. So n-2 -> n-1; n-3 -> n-2; ... ; i -> i+1.
-                // this creates space at i.
-                for(int j = TOPK - 2; j >= i; --j) {
-                    bestd[j+1] = bestd[j]; wixs[j+1] = wixs[j]; 
-                }
-
-                bestd[i] = dot; wixs[i] = o;
-                break;
-            }
-        }
-
+#pragma omp parallel for
+    for(long long i = 0; i < VOCABSIZE*VOCABSIZE; ++i) {
+        const long long w1 = i/VOCABSIZE;
+        const long long w2 = i%VOCABSIZE;
+        // #pragma omp parallel for reduction(+: dot)
+        float dot = 0;
+        for(int i = 0; i < DIMSIZE; ++i){ dot += vecs[w1][i] * vecs[w2][i]; }
+        dots[w1*VOCABSIZE + w2] = dots[w2*VOCABSIZE+w1] = fabs(dot);
     }
 
-    build_igraph(g, topk_wixs, topk_bestds);
-    check_tri_inequality(topk_wixs, topk_bestds);
+fprintf(stderr, "computing adjacency list...\n");
 
+// weakest (strongest link)
+float cutoff = 0;
+for(long long i = 0; i < VOCABSIZE; ++i) {
+    float cur_cutoff = dots[i*VOCABSIZE+0];
+    for(long long j = 0; j < VOCABSIZE; ++j) {
+        cur_cutoff = min(cur_cutoff, dots[i*VOCABSIZE+j]);
+    }
+    cutoff = max(cutoff, cur_cutoff);
+}
+
+// compute pruned adjacency list.
+for(int i = 0; i < VOCABSIZE; ++i) {
+    for(int j = i+1; j < VOCABSIZE; ++j) {
+        if (dots[i*VOCABSIZE+j] >= cutoff) {
+            adj_list[i].push_back(j);
+            adj_list[j].push_back(i);
+        }
+    }
+    if (adj_list[i].size() > 0) {
+        printf("#ws adj to |%20s|: %lld\n",
+                words[i],
+                (long long)adj_list[i].size());
+    }
+}
+
+fprintf(stderr, "Cutoff: %4.2f\n", cutoff);
+fprintf(stderr, "Done.\n");
+fprintf(stderr, "Press-key>.\n"); getchar();
+
+fprintf(stderr, "\nProgress...");
+for(long long w1 = 0; w1 < VOCABSIZE; ++w1) {
+    for(long long ixw2 = 0; ixw2 < adj_list[w1].size(); ++ixw2) {
+        const long long w2 = adj_list[w1][ixw2];
+        for(long long ixw3 = 0; ixw3 < adj_list[w2].size(); ++ixw3) {
+            const long long w3 = adj_list[w2][ixw3];
+            if (w1 == w2) continue;
+            if (w1 == w3) continue;
+            if (w2 == w3) continue;
+            // (w1, w2) < (w1, w3) + (w3, w2)
+            const real l12 = dots[w1*VOCABSIZE+w2];
+            const real l23 = dots[w2*VOCABSIZE+w3];
+            const real l31 = dots[w1*VOCABSIZE+w3];
+            if (l12 < (l23 + l31)) { continue; }
+            if (l12 - (l23 + l31) < 1e-2) { continue; }
+            fprintf(stdout,
+                    "\n|%s|--%4.2f--|%s|--%4.2f--|%s|--%4.2f--|%s|: %4.2f !< %4.2f + %4.2f = %4.2f\n",
+                    words[w1], l12, words[w2], l23, words[w3], l31, words[w1],
+                    l12, l23, l31, l23 + l31);
+        }
+    }
+}
 
     return 0;
 }

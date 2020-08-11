@@ -185,13 +185,6 @@ int main(int argc, char **argv) {
     */
 
 
-    // make the graph
-    // https://igraph.org/c/doc/igraph-Tutorial.html
-    igraph_t g;
-    const bool DIRECTED = true;
-    cerr << "creating graph...";
-    igraph_empty(&g, VOCABSIZE, DIRECTED);
-
     real *dots = new real[VOCABSIZE*VOCABSIZE];
 
 #pragma omp parallel for
@@ -201,21 +194,16 @@ int main(int argc, char **argv) {
         // #pragma omp parallel for reduction(+: dot)
         float dot = 0;
         for(int i = 0; i < DIMSIZE; ++i){ dot += vecs[w1][i] * vecs[w2][i]; }
-        dots[w1*VOCABSIZE + w2] = dots[w2*VOCABSIZE+w1] = fabs(dot);
+
+        assert(fabs(dot) < 2);
+        dots[w1*VOCABSIZE + w2] = dots[w2*VOCABSIZE+w1] = max<double>(0, 1.3 - fabs(dot));
+        assert(dots[w1*VOCABSIZE+w2] >= 0);
+        assert(dots[w2*VOCABSIZE+w1] >= 0);
     }
 
 fprintf(stderr, "computing adjacency list...\n");
 
-// weakest (strongest link)
 float cutoff = 0;
-for(long long i = 0; i < VOCABSIZE; ++i) {
-    float cur_cutoff = dots[i*VOCABSIZE+0];
-    for(long long j = 0; j < VOCABSIZE; ++j) {
-        cur_cutoff = min(cur_cutoff, dots[i*VOCABSIZE+j]);
-    }
-    cutoff = max(cutoff, cur_cutoff);
-}
-
 // compute pruned adjacency list.
 for(int i = 0; i < VOCABSIZE; ++i) {
     for(int j = i+1; j < VOCABSIZE; ++j) {
@@ -248,12 +236,20 @@ for(long long w1 = 0; w1 < VOCABSIZE; ++w1) {
             const real l12 = dots[w1*VOCABSIZE+w2];
             const real l23 = dots[w2*VOCABSIZE+w3];
             const real l31 = dots[w1*VOCABSIZE+w3];
-            if (l12 < (l23 + l31)) { continue; }
-            if (l12 - (l23 + l31) < 1e-2) { continue; }
+            if (l12 < (l23 + l31)) { 
+                continue;
+
+                // fprintf(stdout,
+                //         "\n|%s|--%4.2f--|%s|--%4.2f--|%s|--%4.2f--|%s|: %4.2f < %4.2f + %4.2f = %4.2f\n",
+                //         words[w1], l12, words[w2], l23, words[w3], l31, words[w1],
+                //         l12, l23, l31, l23 + l31);
+            }
+            // if (l12 - (l23 + l31) < 1e-2) { continue; }
             fprintf(stdout,
                     "\n|%s|--%4.2f--|%s|--%4.2f--|%s|--%4.2f--|%s|: %4.2f !< %4.2f + %4.2f = %4.2f\n",
                     words[w1], l12, words[w2], l23, words[w3], l31, words[w1],
                     l12, l23, l31, l23 + l31);
+            // assert(false);
         }
     }
 }

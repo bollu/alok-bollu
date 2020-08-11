@@ -23,6 +23,6 @@ gcc -lm -pthread  -march=native -Wall \
 #    -alpha 0.025 -cbow 0 -size 200 -window 8 -negative 25 \
 #    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 15 
 
-time ./word2vec -train ../../utilities/text8 -output models/symp-size=400-init0-iters30.bin \
-    -alpha 0.025 -cbow 0 -size 400 -window 8 -negative 25 \
-    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 30 
+time ./word2vec -train ../../utilities/text8 -output models/symp-size=800-init0-iters100.bin \
+    -alpha 0.025 -cbow 0 -size 800 -window 8 -negative 25 \
+    -hs 0 -sample 1e-4 -threads 40 -binary 1 -iter 100

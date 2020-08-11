@@ -24,14 +24,19 @@ distance-context : distance-context.c
 
 bizarre : bizarre.c
 	$(CC) bizarre.c -o bizarre $(CFLAGS)
+
 word2vec-principal-compute-accuracy : word2vec-principal-compute-accuracy.cpp
 	$(CC) word2vec-principal-compute-accuracy.cpp -o word2vec-principal-compute-accuracy $(CFLAGS)
-
 word2vec-principal-analogy : word2vec-principal-analogy.cpp
 	$(CC) word2vec-principal-analogy.cpp -o word2vec-principal-analogy $(CFLAGS)
-
 principal-distance : principal-distance.cpp
 	$(CC) principal-distance.cpp -o principal-distance $(CFLAGS)
+word2vec-principal-compute-accuracy-topn : word2vec-principal-angle-compute-accuracy-topn.cpp
+	$(CC) word2vec-principal-angle-compute-accuracy-topn.cpp -o word2vec-compute-accuracy-topn $(CFLAGS)
+	chmod +x *.sh
+word2vec-principal-compute-accuracy-ranked : word2vec-principal-angle-compute-accuracy-ranked.cpp
+	$(CC) word2vec-principal-angle-compute-accuracy-ranked.cpp -o word2vec-compute-accuracy-ranked $(CFLAGS)
+	chmod +x *.sh
 
 distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
@@ -54,13 +59,6 @@ compute-accuracy : compute-accuracy.c
 	$(CC) compute-accuracy.c -o compute-accuracy $(CFLAGS)
 	chmod +x *.sh
 
-compute-accuracy-topn : compute-accuracy-topn.c
-	$(CC) compute-accuracy-topn.c -o compute-accuracy-topn $(CFLAGS)
-	chmod +x *.sh
-
-compute-accuracy-ranked : compute-accuracy-ranked.cpp
-	$(CC) compute-accuracy-ranked.cpp -o compute-accuracy-ranked $(CFLAGS)
-	chmod +x *.sh
 
 word-fuzzy-distance: word-fuzzy-distance.c
 	$(CC) word-fuzzy-distance.c -o word-fuzzy-distance $(CFLAGS)
@@ -86,4 +84,4 @@ cli: makefile cli.cpp  linenoise.c
 
 
 clean:
-	rm -rf word2vec word2phrase distance word-analogy compute-accuracy* dump-vect word2vec-principal-analogy principal-distance word2vec-compute-accuracy
+	rm -rf word2vec word2phrase distance word-analogy compute-accuracy* dump-vect word2vec-principal-analogy principal-distance word2vec-compute-accuracy*

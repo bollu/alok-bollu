@@ -28,3 +28,7 @@ compute-accuracy-ranked
 compute-composition
 dump-composition.temp.txt
 visualizer/posvel_models/
+principal-distance
+word2vec-principal-analogy
+bizarre
+word2vec-principal-compute-accuracy

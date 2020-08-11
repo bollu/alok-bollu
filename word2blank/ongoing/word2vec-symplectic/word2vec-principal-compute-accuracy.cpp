@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <assert.h>
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
@@ -32,7 +34,7 @@ void orthonorm(const int size, const float *a1, const float *a2, float *a2_perp)
     }
 
     // compute a2' = a2 - (a2.a1) a1_hat
-    // we assume that a1 is already normalized.
+    // we assume that a1 is already normalized, hence a1_hat = a1
     float l = 0;
     for(int i = 0; i < size; ++i) {
         a2_perp[i] = a2[i] -  dot * a1[i];
@@ -72,22 +74,17 @@ void principal_angles(const int size,
                 (4 * (a*c + b*d) * (a*c + b*d))); 
     *sigma_1 = sqrt(0.5*(s1 + s2)); 
     *sigma_2 = (s1 <= s2 ? 0 : sqrt(0.5*(s1 - s2))); 
-    //*sigma_1_sq = 0.5*(s1 + s2); 
-    //*sigma_2_sq = 0.5*(s1 - s2);
 }
-
-float func(float a, float b);           // f(distance, momentum)
 
 int main(int argc, char **argv)
 {
   FILE *f;
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  float bestd[N], vec[max_size];
+  float len, bestd[N];
   long long words, size, a, b, c, d, b1, b2, b3, threshold = 0;
   float *M;
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
-  printf("This model computes the accuracy of symplectic vectors using principal angles");
   if (argc < 2) {
     printf("Usage: ./compute-accuracy <FILE> <threshold>\nwhere FILE contains word projections, and threshold is used to reduce vocabulary of the model for fast approximate evaluation (0 = off, otherwise typical value is 30000)\n");
     return 0;
@@ -119,19 +116,14 @@ int main(int argc, char **argv)
     vocab[b * max_w + a] = 0;
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
     for (a = 0; a < size; a++) fread(&M[a + b * size], sizeof(float), 1, f);
-    float len = 0;
-    for (a = 0; a < size/2; a++) len += M[a + b * size] * M[a + b * size];
-    len = sqrt(len);
-    printf("%20s: %4.2f |", vocab + b*max_w, len);
-    for (a = 0; a < size/2; a++) M[a + b * size] /= len;
-
     len = 0;
-    for (a = size/2; a < size; a++) len += M[a + b * size] * M[a + b * size];
+    for (a = 0; a < size; a++) len += M[a + b * size] * M[a + b * size];
+    printf("lensq: %4.2f | normalized.\n", len);
     len = sqrt(len);
-    printf("%4.2f \n", len);
-    for (a = size/2; a < size; a++) M[a + b * size] /= len;
+    for (a = 0; a < size; a++) M[a + b * size] /= len;
   }
   fclose(f);
+  
   TCN = 0;
   while (1) {
     for (a = 0; a < N; a++) bestd[a] = 0;
@@ -173,48 +165,50 @@ int main(int argc, char **argv)
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
-    for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
+    // for (a = 0; a < size; a++) vec[a] = (M[a + b2 * size] - M[a + b1 * size]) + M[a + b3 * size];
     TQS++;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
-      if (c == b3) continue;
+      if (c == b3) continue; 
       
-      float ct_1 = 0, ct_2 = 0;
-      principal_angles(size/2, vec, vec+size/2,
-              M + c*size, M + c*size + size/2,
-              &ct_1, &ct_2);
-      const float gain = ct_1*ct_1 + ct_2*ct_2;
+      float cw_sigma_1 = 0, cw_sigma_2 = 0;
       
-      for (a = 0; a < N; a++) {
+      principal_angles(size,
+            M + size * b1,
+            M + size * c,
+            M + size * b2,
+            M + size * b3,
+            &cw_sigma_1,
+            &cw_sigma_2);
+      
+      const float gain = sqrt((cw_sigma_1*cw_sigma_1) + (cw_sigma_2*cw_sigma_2));
+      for (int a = 0; a < N; a++) {
         if (gain > bestd[a]) {
-          for (d = N - 1; d > a; d--) {
-            bestd[d] = bestd[d - 1];
-            strcpy(bestw[d], bestw[d - 1]);
-          }
-          bestd[a] = gain;
-          strcpy(bestw[a], &vocab[c * max_w]);
-          break;
+        // if (loss < bestd[a]) {
+            for (d = N - 1; d > a; d--) {
+                bestd[d] = bestd[d - 1];
+                strcpy(bestw[d], bestw[d - 1]);
+            }
+            // update best loss.
+            // bestd[a] = gain;
+            bestd[a] = gain;
+            strcpy(bestw[a], vocab + c * max_w);
+            break;
         }
       }
     }
-    const int correct = !strcmp(st4, bestw[0]);
-    fprintf(stderr, "%15s : %15s :: %15s : %15s (correct: %15s) %5s\n", st1, st2, st3, bestw[0], st4, correct ? "✓": "x");
     if (!strcmp(st4, bestw[0])) {
       CCN++;
       CACN++;
       if (QID <= 5) SEAC++; else SYAC++;
     }
+    const bool correct = !strcmp(st4, bestw[0]);
+    fprintf(stderr, "%15s : %15s :: %15s : %15s (correct: %15s) %5s\n", st1, st2, st3, bestw[0], st4, correct ? "✓": "x");
     if (QID <= 5) SECN++; else SYCN++;
     TCN++;
     TACN++;
   }
   printf("Questions seen / total: %d %d   %.2f %% \n", TQS, TQ, TQS/(float)TQ*100);
   return 0;
-}
-
-float func(float a, float b)
-{
-  float c = a + b; // replace with function
-  return c;
 }

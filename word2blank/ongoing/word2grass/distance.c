@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
   char st1[max_size];
   char *bestw[N];
   char file_name[max_size], st[100][max_size];
-  double dist, len, bestd[N];
+  double dist, bestd[N];
   long long words, size, a, b, c, d, cn, bi[100],P;
   double *M, *Mat, *T_0;
   char *vocab;

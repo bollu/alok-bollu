@@ -38,6 +38,10 @@ word2vec-principal-compute-accuracy-ranked : word2vec-principal-angle-compute-ac
 	$(CC) word2vec-principal-angle-compute-accuracy-ranked.cpp -o word2vec-compute-accuracy-ranked $(CFLAGS)
 	chmod +x *.sh
 
+hamiltonian: hamiltonian.c
+	$(CC) hamiltonian.c -o hamiltonian $(CFLAGS)
+	chmod +x *.sh
+
 distance : distance.c
 	$(CC) distance.c -o distance $(CFLAGS)
 word-analogy : word-analogy.c

@@ -396,7 +396,7 @@ void *TrainModelThread(void *id) {
   long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
-  double f, g;
+  double f, g, sum, grad;
   clock_t now;
   double *neu1 = (double*)calloc(P*layer1_size, sizeof(double));
   double *neu1e = (double*)calloc(P*layer1_size, sizeof(double));
@@ -580,17 +580,19 @@ void *TrainModelThread(void *id) {
           {
             for(c = 0; c < layer1_size; c++) 
             {
+              sum = 0.0;
               for(long long k = 0; k < P; k++)
               {
-                T_0[b*layer1_size + c] += syn0[l1 + k*layer1_size + c]*syn0[l1 + k*layer1_size + b];
-                T_0[b*layer1_size + c] -= syn1neg[l2 + k*layer1_size + c]*syn1neg[l2 + k*layer1_size + b];    
+                sum += syn0[l1 + k*layer1_size + c]*syn0[l1 + k*layer1_size + b];
+                sum -= syn1neg[l2 + k*layer1_size + c]*syn1neg[l2 + k*layer1_size + b];    
               }
+              T_0[b*layer1_size + c] = sum;
             }
           }
           
           f = 0.0; 
 
-          //Calculate tr(syn0.T syn1neg)
+          //Calculate f = 1/ (\sqrt 2) *|| syn0 syn0^T - syn1neg syn1neg^T ||_F
           for (b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) f += T_0[ b*layer1_size + c]*T_0[ b*layer1_size + c];
           f = sqrt(f/2);
           
@@ -600,7 +602,7 @@ void *TrainModelThread(void *id) {
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
           else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
           
-          double grad;
+          
           // ------
           // UPDATE RULE :: X_i_j = (X_i_j + grad*alpha)
           

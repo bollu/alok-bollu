@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
   char st1[max_size];
   char *bestw[N];
   char file_name[max_size], st[100][max_size];
-  double dist, bestd[N];
+  double dist, sum, bestd[N];
   long long words, size, a, b, c, d, cn, bi[100],P;
   double *M, *Mat, *T_0;
   char *vocab;
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
   fclose(f);
   while (1) {
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     printf("Enter word or sentence (EXIT to break): ");
     a = 0;
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
       for (long long row = 0; row < P; row++) for (long long col = 0; col < size; col++) Mat[row*size + col] = M[col + row*size + (bi[b] * size * P)];
     }
     
-    for (a = 0; a < N; a++) bestd[a] = -1;
+    for (a = 0; a < N; a++) bestd[a] = 300000.0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     for (c = 0; c < words; c++) {
       a = 0;
@@ -113,18 +113,20 @@ int main(int argc, char **argv) {
       {
         for( long long col = 0; col < size; col++) 
         {
+          sum = 0.0;
           for(long long k = 0; k < P; k++)
           {
-            T_0[row*size + col] += Mat[k*size + col]*Mat[k*size + row];
-            T_0[row*size + col] -= M[(c*size*P) + k*size + col]*M[(c*size*P) + k*size + row];    
+            sum += Mat[k*size + col]*Mat[k*size + row];
+            sum -= M[(c*size*P) + k*size + col]*M[(c*size*P) + k*size + row];    
           }
+          T_0[row*size + col] = sum;
         }
       }
       for (long long row = 0; row < size; row++) for (long long col = 0; col < size; col++) dist += T_0[ row*size + col]*T_0[ row*size + col];
       dist = sqrt(dist/2);
       for (a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
-          for (d = N - 1; d > a; d--) {
+        if (dist < bestd[a]) {
+          for (d = N -1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
           }

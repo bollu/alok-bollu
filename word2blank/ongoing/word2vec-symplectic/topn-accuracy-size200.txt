@@ -1,0 +1,43 @@
+capital-common-countries:
+ACCURACY TOP1: 80.43 %  (407 / 506)
+Total accuracy: 80.43 %   Semantic accuracy: 80.43 %   Syntactic accuracy: -nan % 
+capital-world:
+ACCURACY TOP1: 52.36 %  (1866 / 3564)
+Total accuracy: 55.85 %   Semantic accuracy: 55.85 %   Syntactic accuracy: -nan % 
+currency:
+ACCURACY TOP1: 3.69 %  (22 / 596)
+Total accuracy: 49.19 %   Semantic accuracy: 49.19 %   Syntactic accuracy: -nan % 
+city-in-state:
+ACCURACY TOP1: 56.57 %  (1318 / 2330)
+Total accuracy: 51.64 %   Semantic accuracy: 51.64 %   Syntactic accuracy: -nan % 
+family:
+ACCURACY TOP1: 66.19 %  (278 / 420)
+Total accuracy: 52.47 %   Semantic accuracy: 52.47 %   Syntactic accuracy: -nan % 
+gram1-adjective-to-adverb:
+ACCURACY TOP1: 24.90 %  (247 / 992)
+Total accuracy: 49.22 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 24.90 % 
+gram2-opposite:
+ACCURACY TOP1: 23.02 %  (174 / 756)
+Total accuracy: 47.05 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 24.08 % 
+gram3-comparative:
+ACCURACY TOP1: 49.85 %  (664 / 1332)
+Total accuracy: 47.41 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 35.23 % 
+gram4-superlative:
+ACCURACY TOP1: 16.33 %  (162 / 992)
+Total accuracy: 44.72 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 30.62 % 
+gram5-present-participle:
+ACCURACY TOP1: 52.46 %  (554 / 1056)
+Total accuracy: 45.38 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 35.12 % 
+gram6-nationality-adjective:
+ACCURACY TOP1: 73.24 %  (1114 / 1521)
+Total accuracy: 48.39 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 43.84 % 
+gram7-past-tense:
+ACCURACY TOP1: 55.51 %  (866 / 1560)
+Total accuracy: 49.10 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 46.06 % 
+gram8-plural:
+ACCURACY TOP1: 54.35 %  (724 / 1332)
+Total accuracy: 49.51 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 47.22 % 
+gram9-plural-verbs:
+ACCURACY TOP1: 34.02 %  (296 / 870)
+Total accuracy: 48.76 %   Semantic accuracy: 52.47 %   Syntactic accuracy: 46.11 % 
+Questions seen / total: 17827 19544   91.21 %

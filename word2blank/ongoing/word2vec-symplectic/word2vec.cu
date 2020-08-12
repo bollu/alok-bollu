@@ -58,18 +58,33 @@ __global__ void gpu_compute_loss(
     const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= PAIRS_PER_BATCH) return;
     real dot = 0;
-    const real *v1 = pos + w1_ixs[x]*DIMSIZE;
-    const real *v2 = pos + w2_ixs[x]*DIMSIZE;
-    for(int i = 0; i < DIMSIZE; ++i) { dot += v1[i]*v2[i]; }
+    const real *vpos = pos + w1_ixs[x]*DIMSIZE;
+    const real *vneg = neg + w2_ixs[x]*DIMSIZE;
+    for(int i = 0; i < DIMSIZE; ++i) { dot += vpos[i]*vneg[i]; }
     loss[x] = dot_targets[x] - dot;
 }
 
-__global__ void loop_vocab(const long long vocabsize,
-        const long long dimsize, real *pos) {
+const float ALPHA = 1e-3;
+
+__global__ void gpu_backprop(
+        const long long PAIRS_PER_BATCH,
+        const int DIMSIZE, 
+        const long long *w1_ixs,
+        const long long *w2_ixs,
+        const real *dot_targets,
+        real *pos,
+        real *neg,
+        const real *loss) {
     const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
-    if (x >= vocabsize) return;
-    pos[0] += 1e-3;
+    if (x >= PAIRS_PER_BATCH) return;
+    real *vpos = pos + w1_ixs[x]*DIMSIZE;
+    real *vneg = neg + w2_ixs[x]*DIMSIZE;
+    for(int i = 0; i < DIMSIZE; ++i) { vneg[i] -= ALPHA * loss[x] * vpos[i]; }
+    for(int i = 0; i < DIMSIZE; ++i) { vpos[i] -= ALPHA * loss[x] * vneg[i]; }
 }
+
+
+
 
 const char *SPINNERS[] = { "|", "/", "-", "\\" };
 
@@ -239,7 +254,14 @@ int main() {
                     dev_pos,
                     dev_neg,
                     dev_loss);
-            loop_vocab<<<(1 + (VOCABSIZE/512)), 512>>>(1, DIMSIZE,dev_pos);
+            gpu_backprop<<<(1 + (PAIRS_PER_BATCH/1024)), 1024>>>(PAIRS_PER_BATCH,
+                    DIMSIZE,
+                    dev_w1_ixs,
+                    dev_w2_ixs,
+                    dev_dot_targets,
+                    dev_pos,
+                    dev_neg,
+                    dev_loss);
         }
     }
 

@@ -45,6 +45,22 @@ bool is_stop(char c) {
 }
 
 
+__global__ void gpu_init_arrays(const int VOCABSIZE,
+        const int DIMSIZE,
+        real *pos,
+        real *neg) {
+    const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= VOCABSIZE) return;
+    real *vpos = pos + x*DIMSIZE;
+    real *vneg = neg + x*DIMSIZE;
+    unsigned long long next_random = 1;
+    for(int i = 0; i < DIMSIZE; ++i) { 
+        const float rand01 = (float)(next_random & 0xFFFF)/(65536.0);
+        vpos[i] = vneg[i] = (rand01 - 0.5) / DIMSIZE;
+        next_random = next_random * (unsigned long long)25214903917 + 11;
+    }
+}
+
 
 __global__ void gpu_compute_loss(
         const long long PAIRS_PER_BATCH,
@@ -92,9 +108,9 @@ static const long long MAX_WORDLEN = 512;
 static const long long MINFREQ = 5;
 static const long long WINDOWSIZE = 8;
 static const long long NUM_NEGSAMPLES = 0;
-static const long long DIMSIZE = 300;
-static const long long BATCHSIZE = 100000;
-static const long long NEPOCH = 1;
+static const long long DIMSIZE = 100;
+static const long long BATCHSIZE = 1000000;
+static const long long NEPOCH = 3;
 // word to frequency
 unordered_map<string, long long> w2f;
 unordered_map<string, long long> w2ix;
@@ -105,6 +121,12 @@ vector<long long> corpus;
 
 
 int main() {
+    printf("min freq: %4lld\n", MINFREQ);
+    printf("number of negsamples: %4lld\n", NUM_NEGSAMPLES);
+    printf("window size: %4lld\n", WINDOWSIZE);
+    printf("dimension size: %4lld\n", DIMSIZE);
+    printf("batch size: %4lld\n", BATCHSIZE);
+
     srand(0);
     FILE *f = fopen("../../utilities/text8", "rb");
     while(!feof(f)) {
@@ -209,6 +231,8 @@ int main() {
     GPU_ERRCHECK(cudaMalloc((void **)&dev_dot_targets, (long long) PAIRS_PER_BATCH * sizeof(real)));
     GPU_ERRCHECK(cudaMalloc((void **)&dev_loss, (long long) PAIRS_PER_BATCH  * sizeof(real)));
 
+    gpu_init_arrays<<<(1 + (VOCABSIZE / 1024)), (1024)>>>(VOCABSIZE, DIMSIZE, dev_pos, dev_neg);
+
     long long *w1_ixs = (long long*)malloc(PAIRS_PER_BATCH * sizeof(long));
     long long *w2_ixs = (long long*)malloc(PAIRS_PER_BATCH * sizeof(long));
     real *dot_targets = (real*)malloc(PAIRS_PER_BATCH * sizeof(real));
@@ -246,7 +270,7 @@ int main() {
             cudaMemcpy(dev_dot_targets, dot_targets, PAIRS_PER_BATCH*sizeof(real), cudaMemcpyHostToDevice);
             cudaMemcpy(dev_w1_ixs, w1_ixs, PAIRS_PER_BATCH*sizeof(long long), cudaMemcpyHostToDevice);
             cudaMemcpy(dev_w2_ixs, w2_ixs, PAIRS_PER_BATCH*sizeof(long long), cudaMemcpyHostToDevice);
-            gpu_compute_loss<<<(1 + (PAIRS_PER_BATCH / 512)), (512)>>>(PAIRS_PER_BATCH,
+            gpu_compute_loss<<<(1 + (PAIRS_PER_BATCH / 1024)), (1024)>>>(PAIRS_PER_BATCH,
                     DIMSIZE,
                     dev_w1_ixs,
                     dev_w2_ixs,

@@ -28,15 +28,6 @@
 using namespace std;
 using real = float;
 
-const char *SPINNERS[] = { "|", "/", "-", "\\" };
-
-static const long long MAX_WORDLEN = 512;
-static const long long MINFREQ = 5;
-static const long long WINDOWSIZE = 8;
-static const long long NUM_NEGSAMPLES = 0;
-static const long long DIMSIZE = 300;
-static const long long BATCHSIZE = 100000;
-static const long long NEPOCH = 1;
 
 #define GPU_ERRCHECK(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -54,6 +45,41 @@ bool is_stop(char c) {
 }
 
 
+
+__global__ void gpu_compute_loss(
+        const long long PAIRS_PER_BATCH,
+        const int DIMSIZE, 
+        const long long *w1_ixs,
+        const long long *w2_ixs,
+        const real *dot_targets,
+        const real *pos,
+        const real *neg,
+        real *loss) {
+    const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= PAIRS_PER_BATCH) return;
+    real dot = 0;
+    const real *v1 = pos + w1_ixs[x]*DIMSIZE;
+    const real *v2 = pos + w2_ixs[x]*DIMSIZE;
+    for(int i = 0; i < DIMSIZE; ++i) { dot += v1[i]*v2[i]; }
+    loss[x] = dot_targets[x] - dot;
+}
+
+__global__ void loop_vocab(const long long vocabsize,
+        const long long dimsize, real *pos) {
+    const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= vocabsize) return;
+    pos[0] += 1e-3;
+}
+
+const char *SPINNERS[] = { "|", "/", "-", "\\" };
+
+static const long long MAX_WORDLEN = 512;
+static const long long MINFREQ = 5;
+static const long long WINDOWSIZE = 8;
+static const long long NUM_NEGSAMPLES = 0;
+static const long long DIMSIZE = 300;
+static const long long BATCHSIZE = 100000;
+static const long long NEPOCH = 1;
 // word to frequency
 unordered_map<string, long long> w2f;
 unordered_map<string, long long> w2ix;
@@ -62,24 +88,6 @@ vector<string> ix2w;
 // corpus as word indexes.
 vector<long long> corpus;
 
-
-__global__ void gpu_compute_loss(
-        long long PAIRS_PER_BATCH,
-        int dimsize, 
-        const long long *w1_ixs,
-        const long long *w2_ixs,
-        const real *dot_targets,
-        const real *pos,
-        const real *neg,
-        real *dots) {
-    const unsigned long long x = blockIdx.x * blockDim.x + threadIdx.x;
-    if (x >= PAIRS_PER_BATCH) return;
-    real dot = 0;
-    const real *v1 = pos + w1_ixs[x]*DIMSIZE;
-    const real *v2 = pos + w2_ixs[x]*DIMSIZE;
-    for(int i = 0; i < dimsize; ++i) { dot += v1[i]*v2[i]; }
-    dots[x] = dot_targets[x] - dots[x];
-}
 
 int main() {
     srand(0);
@@ -172,7 +180,7 @@ int main() {
     }
 
 
-    float *dev_pos, *dev_gpos, *dev_neg, *dev_gneg;
+    real *dev_pos, *dev_gpos, *dev_neg, *dev_gneg;
     GPU_ERRCHECK(cudaMalloc((void **)&dev_pos, (long long) VOCABSIZE * DIMSIZE * sizeof(real))); 
     GPU_ERRCHECK(cudaMalloc((void **)&dev_gpos, (long long) VOCABSIZE * DIMSIZE * sizeof(real)));
     GPU_ERRCHECK(cudaMalloc((void **)&dev_neg, (long long) VOCABSIZE * DIMSIZE * sizeof(real)));
@@ -180,11 +188,11 @@ int main() {
 
     static const int PAIRS_PER_BATCH = (2*WINDOWSIZE*(1+NUM_NEGSAMPLES))*BATCHSIZE;
     long long *dev_w1_ixs, *dev_w2_ixs;
-    real *dev_dot_targets, *dev_dots;
+    real *dev_dot_targets, *dev_loss;
     GPU_ERRCHECK(cudaMalloc((void **)&dev_w1_ixs, (long long) PAIRS_PER_BATCH * sizeof(long long)));
     GPU_ERRCHECK(cudaMalloc((void **)&dev_w2_ixs, (long long) PAIRS_PER_BATCH * sizeof(long long )));
     GPU_ERRCHECK(cudaMalloc((void **)&dev_dot_targets, (long long) PAIRS_PER_BATCH * sizeof(real)));
-    GPU_ERRCHECK(cudaMalloc((void **)&dev_dots, (long long) PAIRS_PER_BATCH  * sizeof(real)));
+    GPU_ERRCHECK(cudaMalloc((void **)&dev_loss, (long long) PAIRS_PER_BATCH  * sizeof(real)));
 
     long long *w1_ixs = (long long*)malloc(PAIRS_PER_BATCH * sizeof(long));
     long long *w2_ixs = (long long*)malloc(PAIRS_PER_BATCH * sizeof(long));
@@ -193,15 +201,17 @@ int main() {
     for(long long e = 0; e < NEPOCH; ++e) {
         printf("\n===epoch %4lld/%4lld===\n", e+1, NEPOCH);
         int count = 0;
-        for(long long f = 0; f < (long long)corpus.size(); ++f) {
+        for(long long f = WINDOWSIZE; 
+                f < (long long)corpus.size() - WINDOWSIZE; ++f) {
             if (f % 100 == 0) { 
                 printf("\r%4lld/%4lld %4.2f", 
                     f, (long long)corpus.size(), (100.0*f)/corpus.size());
             }
             for(long long w = -WINDOWSIZE; w <= WINDOWSIZE; ++w) {
                 if (w == 0) { continue; }
-                w1_ixs[count] = f;
-                w2_ixs[count] = w;
+                // if (f + w < 0 || f + w >= (long long)corpus.size()) continue;
+                w1_ixs[count] = corpus[f];
+                w2_ixs[count] = corpus[f+w];
                 dot_targets[count] = 0;
                 count++;
                 assert(count <= PAIRS_PER_BATCH);
@@ -226,8 +236,10 @@ int main() {
                     dev_w1_ixs,
                     dev_w2_ixs,
                     dev_dot_targets,
-                    dev_pos, dev_neg,
-                    dev_dots);
+                    dev_pos,
+                    dev_neg,
+                    dev_loss);
+            loop_vocab<<<(1 + (VOCABSIZE/512)), 512>>>(1, DIMSIZE,dev_pos);
         }
     }
 

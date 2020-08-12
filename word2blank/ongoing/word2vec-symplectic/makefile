@@ -17,12 +17,13 @@ bin2text:
 text0:
 	head -c 1000000 text8 > text0
 
-gpu-word2vec:
+gpu-word2vec: word2vec.cu makefile
 	nvcc word2vec.cu -o gpu-word2vec -lm \
         -Xcompiler -pthread  \
         -Xcompiler -march=native \
         -Xcompiler -Wall -Xcompiler \
-        -funroll-loops \
+        -funroll-loops -std=c++11 \
+		-Xcompiler -Wall -Xcompiler -Werror \
         -Xcompiler -Wno-unused-result  $(GPU_RELEASE)
 
 word2vec : word2vec.c makefile

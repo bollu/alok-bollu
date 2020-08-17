@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     dirname = '~/GitHubRepos'
     fname = 'wiki-news-300d-1M.vec'
-    VOCAB = 5000
+    VOCAB = 1000
     emb = util.load_embedding(path.join(dirname, fname), VOCAB)
     # emb = util.load_embedding('/home/kvaditya/GitHubRepos/glove.6B.300d.txt', VOCAB,typ='glove')
     print("embeddings loaded")
@@ -66,12 +66,12 @@ if __name__ == '__main__':
     # print('TOTAL:','C:',correct,'T:',total,'A:',correct/total)
 
     # SINGLETON ANALYSIS
-    # temp_mat = sim_mat.copy()
-    # # temp_mat = wm.similarity(sim_mat)
-    # tree = gi.singleton_analysis(temp_mat,0.2,0.01)
-    # tree = nx.relabel_nodes(tree,ind_keys)
-    # dot = to_pydot(tree)
-    # write_dot(tree,"tree.dot")
+    temp_mat = sim_mat.copy()
+    # temp_mat = wm.similarity(sim_mat)
+    tree = gi.singleton_analysis(temp_mat,0.2,0.01)
+    tree = nx.relabel_nodes(tree,ind_keys)
+    dot = to_pydot(tree)
+    write_dot(tree,"tree.dot")
 
     # CUSTOM SINGLETON ANALYSIS
     # tree_words = ['go','going','gone','went','pull','pulled','be','am','is','was','will','would','could','should','what','where','why','who','when','how','here','there','then','now','that','this','never','always','ever','sometimes']

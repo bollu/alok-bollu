@@ -18,11 +18,11 @@ np.random.seed(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-inputpath", type=str, default='text8')
-parser.add_argument("-dimsize", type=int, default=200)
+parser.add_argument("-dimsize", type=int, default=2)
 parser.add_argument("-vocabsize", type=int, default=2000)
 parser.add_argument("-windowsize", type=int, default=4)
 parser.add_argument("-numiters", type=int, default=30000)
-parser.add_argument("-batchrows", type=int, default=3)
+parser.add_argument("-batchrows", type=int, default=2000)
 args = parser.parse_args()
 
 
@@ -116,7 +116,7 @@ for cur_iter in range(1, 1+NUM_ITERS):
 
     # Solve the problem.
     # increase max iters otherwise, a few iterations are "OPTIMAL_INACCURATE"
-    for _ in range(5):
+    for _ in range(1):
         obj = cp.Minimize(cp.norm(A[ROWS, :][:, ROWS] - X@XVAL_CUR.T, 'fro'))
         prob = cp.Problem(obj, constraint)
         prob.solve(solver=cp.GUROBI)

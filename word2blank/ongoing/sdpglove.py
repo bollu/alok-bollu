@@ -19,10 +19,10 @@ np.random.seed(0)
 parser = argparse.ArgumentParser()
 parser.add_argument("-inputpath", type=str, default='text8')
 parser.add_argument("-dimsize", type=int, default=10)
-parser.add_argument("-vocabsize", type=int, default=1000)
-parser.add_argument("-windowsize", type=int, default=8)
-parser.add_argument("-numiters", type=int, default=200)
-parser.add_argument("-batchrows", type=int, default=100)
+parser.add_argument("-vocabsize", type=int, default=2000)
+parser.add_argument("-windowsize", type=int, default=20)
+parser.add_argument("-numiters", type=int, default=30000)
+parser.add_argument("-batchrows", type=int, default=50)
 args = parser.parse_args()
 
 
@@ -40,8 +40,11 @@ CORPUS = [w.strip() for w in CORPUS.split(' ') if w.strip()]
 FREQ = collections.Counter(CORPUS)
 
 print("building most common words")
-# overwrite words with most common words
-WORDS = set([w for (w, freq) in FREQ.most_common(VOCABSIZE)])
+# Zipf: fuck the top 10%
+max_freq = 0
+for w in FREQ: max_freq = max(max_freq, FREQ[w])
+
+WORDS = set([w for (w, freq) in FREQ.most_common(VOCABSIZE) if freq >= 2])
 VOCABSIZE = len(WORDS) # we may have less words than VOCABSIZE! adjust
 IX2WORD = dict(enumerate(WORDS))
 WORD2IX = { w: ix for (ix, w) in IX2WORD.items() }
@@ -65,6 +68,7 @@ for fix in range(len(CORPUS)):
     for cix in window:
         c = CORPUS[cix]
         A[f][c] += 1; A[c][f] += 1
+A /= np.max(A)
 print("\n")
 
 # A = np.eye(VOCABSIZE)
@@ -79,9 +83,9 @@ print("generating random Y...")
 
 # Pick random x, y values
 # YVAL = XVAL = sparse_vocab_x_vocab(VOCABSIZE, DIMSIZE)
-YVAL = XVAL = np.eye(VOCABSIZE, DIMSIZE)
+XVAL = np.eye(VOCABSIZE, DIMSIZE)
 
-print("initial state: [✗ full: %8.3f]" % (np.linalg.norm(A - XVAL @ YVAL.T)))
+print("initial state: [✗ full: %8.3f]" % (np.linalg.norm(A - XVAL @ XVAL.T)))
 
 def write_output_file(): # really a macro, not a function
     with open("x.bin", "wb") as f:
@@ -99,52 +103,43 @@ for cur_iter in range(1, 1+NUM_ITERS):
     output_str = ""
     output_str += "[iter %5d/%5d]" % (cur_iter, NUM_ITERS)
 
-    # At the beginning of an iteration, X and Y are NumPy
-    # array types, NOT CVXPY variables.
 
-    # For odd iterations, treat Y constant, optimize over X.
     NROWS = min(args.batchrows, VOCABSIZE)
+    # TODO: sample based on frequency?
     ROWS = random.sample(range(0, VOCABSIZE), NROWS)
-    if cur_iter % 2 == 1:
-        X = cp.Variable(shape=(NROWS, DIMSIZE))
-        constraint = [X >= -1, X <= 1]
-        Y = YVAL[ROWS]
-    # For even iterations, treat X constant, optimize over Y.
-    else:
-        Y = cp.Variable(shape=(NROWS, DIMSIZE))
-        constraint = [Y >= -1, Y <= 1]
-        X = XVAL[ROWS]
+
+    X = cp.Variable(shape=(NROWS, DIMSIZE))
+    constraint = [X >= -2, X <= 2]
+    XVAL_CUR = XVAL[ROWS] # HACK!
 
 
     # Solve the problem.
     # increase max iters otherwise, a few iterations are "OPTIMAL_INACCURATE"
-    # (eg a few of the entries in X or Y are negative beyond standard tolerances)
-    obj = cp.Minimize(cp.norm(A[ROWS, :][:, ROWS] - X@Y.T, 'fro'))
-    prob = cp.Problem(obj, constraint)
-    prob.solve(solver=cp.GUROBI)
+    for _ in range(5):
+        obj = cp.Minimize(cp.norm(A[ROWS, :][:, ROWS] - X@XVAL_CUR.T, 'fro'))
+        prob = cp.Problem(obj, constraint)
+        prob.solve(solver=cp.GUROBI)
 
+        if prob.status != cp.OPTIMAL:
+            output_str += "[no converge]"
+            continue # skip iteration
 
-    if prob.status != cp.OPTIMAL:
-        output_str += "[no converge]"
-        continue # skip iteration
+        # Convert variable to NumPy array constant for next iteration.
+        XVAL[ROWS,:] = X.value
 
     # ✗ = error
     output_str += "[✗ solver %8.2f]" %(prob.value) # error reported by solver
     residual[cur_iter-1] = prob.value
     output_str += "[✗ batch: %8.3f]" \
-            % (np.linalg.norm(A[ROWS, :][:, ROWS] - XVAL[ROWS] @ YVAL[ROWS].T)) # error calculated by us
+            % (np.linalg.norm(A[ROWS, :][:, ROWS] - XVAL[ROWS] @ XVAL[ROWS].T)) # error calculated by us
     output_str += "[✗ corpus: %8.3f]" \
-        % (np.linalg.norm(A - XVAL @ YVAL.T))
+        % (np.linalg.norm(A - XVAL @ XVAL.T))
     print("\r" + output_str, end='')
 
-    # Convert variable to NumPy array constant for next iteration.
-    if cur_iter % 2 == 1:
-        XVAL[ROWS,:] = X.value
-    else:
-        YVAL[ROWS,:] = Y.value
 
-    if cur_iter % 50 == 0:
+    if cur_iter % 10 == 0:
         write_output_file()
+        print(" [wrote output]")
 
 # write out matrix
 print("\n".join(["%8s: %20s" % (ix, w) for (ix, w) in IX2WORD.items()]))

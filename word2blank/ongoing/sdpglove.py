@@ -18,11 +18,11 @@ np.random.seed(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-inputpath", type=str, default='text8')
-parser.add_argument("-dimsize", type=int, default=10)
+parser.add_argument("-dimsize", type=int, default=200)
 parser.add_argument("-vocabsize", type=int, default=2000)
-parser.add_argument("-windowsize", type=int, default=20)
+parser.add_argument("-windowsize", type=int, default=4)
 parser.add_argument("-numiters", type=int, default=30000)
-parser.add_argument("-batchrows", type=int, default=50)
+parser.add_argument("-batchrows", type=int, default=3)
 args = parser.parse_args()
 
 
@@ -68,7 +68,8 @@ for fix in range(len(CORPUS)):
     for cix in window:
         c = CORPUS[cix]
         A[f][c] += 1; A[c][f] += 1
-A /= np.max(A)
+# TODO: think about this, is this really what we want?
+# A /= np.max(A)
 print("\n")
 
 # A = np.eye(VOCABSIZE)
@@ -83,7 +84,7 @@ print("generating random Y...")
 
 # Pick random x, y values
 # YVAL = XVAL = sparse_vocab_x_vocab(VOCABSIZE, DIMSIZE)
-XVAL = np.eye(VOCABSIZE, DIMSIZE)
+XVAL = np.zeros((VOCABSIZE, DIMSIZE), dtype=np.float)
 
 print("initial state: [✗ full: %8.3f]" % (np.linalg.norm(A - XVAL @ XVAL.T)))
 

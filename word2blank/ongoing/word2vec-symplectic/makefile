@@ -24,7 +24,7 @@ gpu-word2vec: word2vec.cu makefile
         -Xcompiler -Wall -Xcompiler \
         -funroll-loops -std=c++11 \
 		-Xcompiler -Wall -Xcompiler -Werror \
-        -Xcompiler -Wno-unused-result  $(GPU_RELEASE)
+        -Xcompiler -Wno-unused-result  $(GPU_DEBUG)
 
 word2vec : word2vec.c makefile
 	$(CC) word2vec.c -o word2vec $(CFLAGS)

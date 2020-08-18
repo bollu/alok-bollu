@@ -35,7 +35,8 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    if (code != cudaSuccess) 
    {
       fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) { exit(code); };
+      assert(false && "GPU error!");
+      // if (abort) { exit(code); };
    }
 }
 
@@ -53,10 +54,15 @@ __global__ void gpu_init_arrays(const int VOCABSIZE,
     if (x >= VOCABSIZE) return;
     real *vpos = pos + x*DIMSIZE;
     real *vneg = neg + x*DIMSIZE;
-    unsigned long long next_random = 1;
+    unsigned long long next_random = 2 + x;
     for(int i = 0; i < DIMSIZE; ++i) { 
         const float rand01 = (float)(next_random & 0xFFFF)/(65536.0);
-        vpos[i] = vneg[i] = (rand01 - 0.5) / DIMSIZE;
+        vpos[i] = (rand01 - 0.5) / DIMSIZE;
+        next_random = next_random * (unsigned long long)25214903917 + 11;
+    }
+    for(int i = 0; i < DIMSIZE; ++i) { 
+        const float rand01 = (float)(next_random & 0xFFFF)/(65536.0);
+        vneg[i] = (rand01 - 0.5) / DIMSIZE;
         next_random = next_random * (unsigned long long)25214903917 + 11;
     }
 }
@@ -80,7 +86,7 @@ __global__ void gpu_compute_loss(
     loss[x] = dot_targets[x] - dot;
 }
 
-const float ALPHA = 1e-3;
+const float ALPHA = 0.01;
 
 __global__ void gpu_backprop(
         const long long PAIRS_PER_BATCH,
@@ -107,9 +113,9 @@ const char *SPINNERS[] = { "|", "/", "-", "\\" };
 static const long long MAX_WORDLEN = 512;
 static const long long MINFREQ = 5;
 static const long long WINDOWSIZE = 8;
-static const long long NUM_NEGSAMPLES = 0;
-static const long long DIMSIZE = 100;
-static const long long BATCHSIZE = 1000000;
+static const long long NUM_NEGSAMPLES = 1;
+static const long long DIMSIZE = 1;
+static const long long BATCHSIZE = 10000;
 static const long long NEPOCH = 3;
 // word to frequency
 unordered_map<string, long long> w2f;
@@ -240,8 +246,7 @@ int main() {
     for(long long e = 0; e < NEPOCH; ++e) {
         printf("\n===epoch %4lld/%4lld===\n", e+1, NEPOCH);
         int count = 0;
-        for(long long f = WINDOWSIZE; 
-                f < (long long)corpus.size() - WINDOWSIZE; ++f) {
+        for(long long f = WINDOWSIZE; f < (long long)corpus.size() - WINDOWSIZE; ++f) {
             if (f % 100 == 0) { 
                 printf("\r%4lld/%4lld %4.2f", 
                     f, (long long)corpus.size(), (100.0*f)/corpus.size());
@@ -253,14 +258,14 @@ int main() {
                 w2_ixs[count] = corpus[f+w];
                 dot_targets[count] = 0;
                 count++;
-                assert(count <= PAIRS_PER_BATCH);
+                assert(count <= PAIRS_PER_BATCH && "focus word");
                 for(int r = 0; r < NUM_NEGSAMPLES; ++r) {
                     w1_ixs[count] = f;
                     w2_ixs[count] = rand() % VOCABSIZE;
                     dot_targets[count] = 1;
                     count++;
                 }
-                assert(count <= PAIRS_PER_BATCH);
+                assert(count <= PAIRS_PER_BATCH && "negsampling");
             }
             // we haven't done enough vectors yet
             if (count != PAIRS_PER_BATCH) { continue; }

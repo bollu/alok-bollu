@@ -6,13 +6,24 @@ from scipy.spatial.distance import cosine
 from matplotlib import pyplot as plt
 from itertools import combinations
 import numpy as np
+from numpy import logical_and as AND, logical_or as OR, logical_not as NOT
 from tqdm import tqdm
 import networkx as nx
 import re
+from gensim.test.utils import datapath, get_tmpfile
+from gensim.models import KeyedVectors
+from gensim.scripts.glove2word2vec import glove2word2vec
 
-def load_embedding(fpath, VOCAB):
+def load_embedding(fpath, VOCAB, typ='w2v'):
     emb = dict()
-    wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
+    if typ is 'glove':
+        glove_file = datapath(fpath)
+        tmp_file = get_tmpfile("test_word2vec.txt")
+        _ = glove2word2vec(glove_file, tmp_file)
+        wv_from_bin = KeyedVectors.load_word2vec_format(tmp_file, limit=VOCAB)
+    elif typ is 'w2v':
+        wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
+        
     for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
         coefs = np.asarray(vector, dtype='float32')
         # if not re.match(r'\w+', word):
@@ -23,6 +34,7 @@ def load_embedding(fpath, VOCAB):
         else:
             emb[word.lower()] = np.mean([emb[word.lower()], coefs], axis=0)
     return emb
+        
 
 class wordMatrix:	# VOCAB x NDIMS matrix containing row-wise word embeddings 
 
@@ -35,7 +47,7 @@ class wordMatrix:	# VOCAB x NDIMS matrix containing row-wise word embeddings
 
     def normalize(word_mat, axis):
         word_mat = np.exp(word_mat)			# e^x for x in all vectors
-        word_mat = preprocessing.normalize(word_mat, norm='l1', axis=axis)
+        word_mat = preprocessing.normalize(word_mat, norm='l2', axis=axis)
         return word_mat
 
     def discretize(word_mat, axis):	# axis: 0:column-wise ; 1:row-wise
@@ -45,6 +57,18 @@ class wordMatrix:	# VOCAB x NDIMS matrix containing row-wise word embeddings
 
     def similarity(word_mat):
         sim_mat = cosine_similarity(word_mat)
+        return sim_mat
+
+    def xor_similarity(word_mat):
+        m = word_mat.shape[0]
+        sim_mat = np.zeros((m,m))
+        for i in tqdm(range(m)):
+            for j in range(m):
+                    val = (300-np.sum(np.logical_xor(word_mat[i],word_mat[j])))/300
+                    # print(val)
+                    sim_mat[i][j] = val
+                    # print(sim_mat[i][j])
+
         return sim_mat
 
     # def reform(sim_mat):
@@ -243,17 +267,45 @@ class graphInfo:
         return tree 
         
 
-def check_analogy(wA,wB,wC,embMat,word_keys,ind_keys):
+def check_analogy(wA,wB,wC,word_mat,word_keys,ind_keys):
+    def sim(x,y):
+        return np.sum(np.multiply(x,y))/(np.linalg.norm(x)*np.linalg.norm(y))
     indA, indB, indC = word_keys[wA], word_keys[wB], word_keys[wC] 
-    vecA, vecB, vecC = embMat[indA,:], embMat[indB,:], embMat[indC,:] 
-    # vecA, vecB, vecC = nm(embMat[indA,:]), nm(embMat[indB,:]), nm(embMat[indC,:]) 
+    vecA, vecB, vecC = word_mat[indA,:], word_mat[indB,:], word_mat[indC,:] 
+    # vecA, vecB, vecC = nm(word_mat[indA,:],norm='l1'), nm(word_mat[indB,:],norm='l1'), nm(word_mat[indC,:],norm='l1') 
     vecD = vecB - vecA + vecC
+    # vecD = np.logical_xor(vecC,np.logical_xor(vecA,vecB))
+    A,B,C = vecA, vecB, vecC
+    # vecD = OR(OR(AND(NOT(A),NOT(C)),AND(B,C)),AND(B,NOT(A)))
+    # vecD = OR(AND(NOT(C),OR(AND(A,NOT(B)),AND(NOT(A),B))),AND(C,OR(AND(NOT(A),NOT(B)),AND(A,B))))
     simScore = np.zeros(len(ind_keys))
     for indE in ind_keys:
-        vecE = embMat[indE,:]
-        # vecE = nm(embMat[indE,:])
-        simScore[indE] = 1 - cosine(vecD,vecE)
-    simCand = simScore.argsort()[-5:][::-1]	# Top 5 words
+        if indE in [indA,indB,indC]:
+            simScore[indE] = 0.0
+            continue
+        vecE = word_mat[indE,:]
+        simScore[indE] = sim(vecD,vecE)
+        # simScore[indE] = (1 - cosine(np.logical_and(vecA,vecB),np.logical_and(vecC,vecE)))
+    # simCand = simScore.argsort()[-5:][::-1] # Top 5 words
+    simCand = simScore.argsort()[-1:][::-1]
     simList = [[ind_keys[ind],simScore[ind]] for ind in simCand]
-    print(simList)
+    # print(simList)
+    return simList[0][0]
 
+def dimensionalSimilarity(word_mat,word_keys,ind_keys,mode='xor'):
+
+    m, dim = np.shape(word_mat)
+
+    if mode is 'xor':
+        xor_mat = np.zeros((m,m,dim))
+        for i in range(m):
+            for j in range(m):
+                xor_mat[i][j] = np.logical_xor(word_mat[i],word_mat[j])
+        return xor_mat
+
+    elif mode is 'xnor':
+        xnor_mat = np.zeros(m,m,dim)
+        for i in range(m):
+            for j in range(m):
+                xnor_mat[i][j] = np.logical_not(np.logical_xor(word_mat[i],word_mat[j]))
+        return xnor_mat

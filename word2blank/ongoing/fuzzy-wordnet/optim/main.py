@@ -1,72 +1,106 @@
 import util
 from util import wordMatrix as wm, adjMatrix as am, graphInfo as gi
-from os import path
+from os import path, listdir
 from tqdm import tqdm
 import numpy as np
 import networkx as nx
 from sklearn.metrics.pairwise import cosine_similarity
 from networkx.drawing.nx_pydot import write_dot, to_pydot
+from scipy.spatial.distance import cosine
 import sys
+import pickle as pkl
 
-# sys.setrecursionlimit(10**7) 
+sys.setrecursionlimit(10**7) 
 
 if __name__ == '__main__':
 
     print("libs loaded")
 
-    dirname = '~/work/alok-bollu/word2blank/ongoing/fuzzy-wordnet/'
+    dirname = '~/GitHubRepos'
     fname = 'wiki-news-300d-1M.vec'
-    VOCAB = 5000
+    VOCAB = 1000
     emb = util.load_embedding(path.join(dirname, fname), VOCAB)
+    # emb = util.load_embedding('/home/kvaditya/GitHubRepos/glove.6B.300d.txt', VOCAB,typ='glove')
+    print("embeddings loaded")
     ind_keys, word_keys, word_mat = wm.build(emb)
     word_mat = wm.normalize(word_mat, 0)
     word_mat = wm.discretize(word_mat, 0)
     sim_mat = wm.similarity(word_mat)
-    # sim_mat = wm.reform(sim_mat) 
+    # sim_mat = wm.xor_similarity(word_mat)
+    # print("similarity matrix made")
+    # print(sim_mat)
 
-    # king = sim_mat[word_keys['king']]
-    # queen = sim_mat[word_keys['queen']]
-    # man = sim_mat[word_keys['man']]
-    # woman = sim_mat[word_keys['woman']]
 
-    print("similarity matrix made")
+    # quit = False
+    # while(not quit):
+    #     try:
+    #         inp = input("Enter spaced out args a,b,c from a:b::c:? \n").split(' ')
+    #         analogyList = list()
+    #         w_a, w_b, w_c = inp[0], inp[1], inp[2]
+    #         indA, indB, indC = word_keys[w_a], word_keys[w_b], word_keys[w_c] 
+    #     except:
+    #         print("retry")
+    #         continue
+    #     util.check_analogy(w_a,w_b,w_c,word_mat,word_keys,ind_keys)
+    #     quit = 'n'==input('continue? (y/n) ')
+
+    # total, correct = 0, 0
+    # mypath = '/home/kvaditya/GitHubRepos/alok-bollu/word2blank/utilities/glove/eval/question-data'
+    # files = [f for f in listdir(mypath) if path.isfile(path.join(mypath, f))]
+    # for file in files:
+    #     Ftotal, Fcorrect = 0, 0
+    #     with open(path.join(mypath,file)) as infile:
+    #         for line in tqdm(infile):
+    #             try:
+    #                 wA,wB,wC,wD = line.rstrip('\n').split(' ')
+    #                 iA,iB,iC,iD = [word_keys[w] for w in [wA,wB,wC,wD]]
+    #                 Ftotal += 1  # valid example
+    #             except:
+    #                 continue
+    #             wE = util.check_analogy(wA,wB,wC,word_mat,word_keys,ind_keys)
+    #             Fcorrect += int(wE==wD)
+    #     Ftotal += 0.0001
+    #     print(file.split('.')[0],'C:',Fcorrect,'T:',Ftotal,'A:',Fcorrect/Ftotal)
+    #     correct+=Fcorrect
+    #     total+=Ftotal
+    # print('TOTAL:','C:',correct,'T:',total,'A:',correct/total)
 
     # SINGLETON ANALYSIS
-    # temp_mat = sim_mat.copy()
-    # # temp_mat = wm.similarity(sim_mat)
-    # tree = gi.singleton_analysis(temp_mat,0.5,0.001)
-    # tree = nx.relabel_nodes(tree,ind_keys)
-    # dot = to_pydot(tree)
-    # write_dot(tree,"tree.dot")
+    temp_mat = sim_mat.copy()
+    # temp_mat = wm.similarity(sim_mat)
+    tree = gi.singleton_analysis(temp_mat,0.2,0.01)
+    tree = nx.relabel_nodes(tree,ind_keys)
+    dot = to_pydot(tree)
+    write_dot(tree,"tree.dot")
 
     # CUSTOM SINGLETON ANALYSIS
-    # tree_words = ['good','better','best','worst','poor','hot','cold','warm','man','woman','men','women','he','she','it']
-    # tree_words = ['king','queen','man','woman','boy','girl']
+    # tree_words = ['go','going','gone','went','pull','pulled','be','am','is','was','will','would','could','should','what','where','why','who','when','how','here','there','then','now','that','this','never','always','ever','sometimes']
+    # # tree_words = ['good','better','best','worst','poor','hot','cold','warm','man','woman','men','women','he','she','it','education','school','bridge','river','bank','money','may','might','prpbably','march','april','marched']
+    # # tree_words = ['king','queen','man','woman','boy','girl']
     # comp = [word_keys[word] for word in tree_words if word in word_keys]
     # tree = gi.custom_tree(comp, sim_mat, 0.2, 0.001)
     # tree = nx.relabel_nodes(tree,ind_keys)
     # write_dot(tree,"tree.dot")
 
     # Hyperlex
-    quit = False
-    while(not quit):
-        try:
-            focus, e, d, c = input("Enter focus, edgeThresh, degThresh, clusterThresh\n").split(" ")
-        except:
-            print("Retry!")
-            continue
-        # default values for VOCAB=5000: <word> 1.2 20 0.4
-        # edgeThresh between 1.15 and 1.23
-        tree = gi.hyperlex(focus,sim_mat,word_keys,ind_keys,edgeThresh=float(e),degThresh=int(d),clusterThresh=float(c))
-        tree = nx.relabel_nodes(tree,ind_keys)
-        print(tree.adj)
-        dot = to_pydot(tree)
-        write_dot(tree,"tree.dot")
-        quit = 'n'==input("continue? (y/n)")
+    # quit = False
+    # while(not quit):
+    #     try:
+    #         focus, e, d, c = input("Enter focus, edgeThresh, degThresh, clusterThresh\n").split(" ")
+    #     except:
+    #         print("Retry!")
+    #         continue
+    #     # default values for VOCAB=5000: <word> 1.2 20 0.4
+    #     # edgeThresh between 1.15 and 1.23
+    #     tree = gi.hyperlex(focus,sim_mat,word_keys,ind_keys,edgeThresh=float(e),degThresh=int(d),clusterThresh=float(c))
+    #     tree = nx.relabel_nodes(tree,ind_keys)
+    #     print(tree.adj)
+    #     dot = to_pydot(tree)
+    #     write_dot(tree,"tree.dot")
+    #     quit = 'n'==input("continue? (y/n)")
 
     # temp_mat = sim_mat.copy()
-    # # temp_mat = wm.similarity(sim_mat)
-    # adj_mat = am.build(temp_mat,seed=1.1,mode='mean')
+    # adj_mat = am.build(temp_mat,seed=1.3,mode='mean')
     # g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     # print("Graph made")
 

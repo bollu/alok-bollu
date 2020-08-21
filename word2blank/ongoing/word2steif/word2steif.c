@@ -7,26 +7,25 @@
 #include <math.h>
 #include <assert.h>
 #include <stddef.h>
+#include <lapacke.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
- 
+#define LAPACK_COL_MAJOR  102
+
 // No of basis vectors used to describe the subspace, so we get O(P, layer1_size)
 long long int P = 2;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
-typedef float real;                    // Precision of float numbers
+//typedef float real;                    // Precision of float numbers
 
-// //for inverse
-void dgetrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, long long int *IPIV, int *INFO);
-void dgetri_(long long int *N, real *matA, long long int *LDA, long long int *IPIV, real *WORK, long long int *LWORK, int *INFO);
 
 //for Q calculation 
-void dgeqrf_(long long int *rows, long long int *cols, real *matA, int *LDA, real *TAU, real *WORK, int *LWORK, int *INFO);
-void dorgqr_(long long int *rows, long long int *cols, int *K, real *matA, int *LDA, real *TAU, real *WORK, int *LWORK, int *INFO);
+//void dgeqrf_(long long int *rows, long long int *cols, double*matA, long long int *LDA, double*TAU, double*WORK,long long int *LWORK,int *INFO);
+//void dorgqr_(long long int *rows, long long int *cols, long long int *K, double*matA,long long int *LDA, double*TAU, double*WORK,long long int *LWORK,int *INFO);
 
 struct vocab_word {
   long long cn;
@@ -37,12 +36,12 @@ struct vocab_word {
 char train_file[MAX_STRING], output_file[MAX_STRING];
 char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
-int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1, geodesic = 0;
+int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
-real alpha = 0.025, starting_alpha, sample = 1e-3;
-real *syn0, *syn1, *syn1neg, *expTable, *M;
+double alpha = 0.025, starting_alpha, sample = 1e-3;
+double*syn0, *syn1, *syn1neg, *expTable, *M;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -362,16 +361,16 @@ void ReadVocab() {
 void InitNet() {
   long long a, b;
   unsigned long long next_random = 1;
-  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
+  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
   if (hs) {
-    a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(real));
+    a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
     if (syn1 == NULL) {printf("Memory allocation failed\n"); exit(1);}
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) 
      syn1[a * layer1_size + b] = 0;
   }
   if (negative>0) {
-    a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
+    a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
     // ZERO INITIALIZATION OF SYN1NEG
     for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (long long c = 0; c < layer1_size; c++)
@@ -387,7 +386,7 @@ void InitNet() {
     // 0 .. 1
     // -0.5 .. 0.5
     // -0.5 / layer1_size ... 0.5 / layer1_size
-    syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+    syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
   }
   CreateBinaryTree();
 }
@@ -402,11 +401,11 @@ void *TrainModelThread(void *id) {
   long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
-  real f, g;
+  double f, g;
   clock_t now;
-  real *neu1 = (real *)calloc(P*layer1_size, sizeof(real));
-  real *neu1e = (real *)calloc(P*layer1_size, sizeof(real));
-  real *neu2e = (real *)calloc(P*layer1_size, sizeof(real));
+  double *neu1 = (double*)calloc(P*layer1_size, sizeof(double));
+  double *neu1e = (double*)calloc(P*layer1_size, sizeof(double));
+  double *neu2e = (double*)calloc(P*layer1_size, sizeof(double));
   
   // open the train file
   FILE *fi = fopen(train_file, "rb");
@@ -421,11 +420,11 @@ void *TrainModelThread(void *id) {
       if ((debug_mode > 1)) {
         now=clock();
         printf("%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ", 13, alpha,
-         word_count_actual / (real)(iter * train_words + 1) * 100,
-         word_count_actual / ((real)(now - start + 1) / (real)CLOCKS_PER_SEC * 1000));
+         word_count_actual / (double)(iter * train_words + 1) * 100,
+         word_count_actual / ((double)(now - start + 1) / (double)CLOCKS_PER_SEC * 1000));
         fflush(stdout);
       }
-      alpha = starting_alpha * (1 - word_count_actual / (real)(iter * train_words + 1));
+      alpha = starting_alpha * (1 - word_count_actual / (double)(iter * train_words + 1));
       if (alpha < starting_alpha * 0.0001) alpha = starting_alpha * 0.0001;
     }
     if (sentence_length == 0) {
@@ -437,9 +436,9 @@ void *TrainModelThread(void *id) {
         if (word == 0) break;
         // The subsampling randomly discards frequent words while keeping the ranking same
         if (sample > 0) {
-          real ran = (sqrt(vocab[word].cn / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].cn;
+          double ran = (sqrt(vocab[word].cn / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].cn;
           next_random = next_random * (unsigned long long)25214903917 + 11;
-          if (ran < (next_random & 0xFFFF) / (real)65536) continue;
+          if (ran < (next_random & 0xFFFF) / (double)65536) continue;
         }
         sen[sentence_length] = word;
         sentence_length++;
@@ -573,6 +572,7 @@ void *TrainModelThread(void *id) {
             // set target dot product 0
             label = 0;
           }
+
           // target: integer index of the word
           // l2: offset into the arrays
           // weights[word][subspce_dim][embedix]
@@ -581,14 +581,11 @@ void *TrainModelThread(void *id) {
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
           
-          f = 0; 
-         
-          real *Diff = (real *)calloc(P*layer1_size, sizeof(real));
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) Diff[b*layer1_size + c] = 0;
-          //Calculate tr[(syn0 - syn1neg).T (syn0 - syn1neg)]
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) Diff[b*layer1_size + c] = syn0[ l1 + b*layer1_size + c] - syn1neg[l2 + b*layer1_size + c];
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) f += Diff[ b*layer1_size + c]*Diff[b*layer1_size + c];
-          printf("%f\n",f);
+          f = 0.0; 
+
+          //Calculate tr(syn0.T syn1neg)
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) f += syn0[ l1 + b*layer1_size + c]*syn1neg[l2 + b*layer1_size + c];
+          //printf("%f\n",f);
           
           // ---------
           // Regular f = trace [(syn0.T syn1neg)]
@@ -596,47 +593,37 @@ void *TrainModelThread(void *id) {
       
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) *alpha;
-          //(1 - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))])*(expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))])
+          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          
           
           // ------
           // UPDATE RULE :: X_i_j = (X_i_j + grad*alpha)
           
           // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
-          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * 2*(syn0_b_c - syn1neg_b_c)
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] - (2*g * (syn0[l1 + b*layer1_size + c]-syn1neg[l2 + b*layer1_size + c]));
+          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * syn0_b_c
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] + (g * syn0[l1 + b*layer1_size + c]);
           // Get Q factor from QR factorization of NEU1E
-          int LWORK=P, K = P, LDA=layer1_size, INFO;
-          real *TAU=malloc(sizeof(real)*K);
-          real *WORK=malloc(sizeof(real)*LWORK);
+          long long int LWORK=P, K = P, LDA=layer1_size;
+          long long int INFO;
+          double *TAU1=malloc(sizeof(double)*K);
           // perform the QR factorization
-          dgeqrf_(&layer1_size, &P, neu1e, &LDA, TAU, WORK, &LWORK, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn1neg failed, error code %d\n",INFO);exit(1);}
-          real *WORK1=malloc(sizeof(real)*LWORK);
-          dorgqr_(&layer1_size, &P, &K, neu1e, &LDA, TAU, WORK1, &LWORK, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn1neg failed, error code %d\n",INFO);exit(1);}
-
+          INFO = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, layer1_size, P, neu1e, LDA, TAU1);
+          if(INFO !=0) {fprintf(stderr,"dgeqrf subroutine for Syn0 failed, error code %lld\n",INFO);exit(1);}
+          INFO = LAPACKE_dorgqr(LAPACK_COL_MAJOR, layer1_size, P, K, neu1e, LDA, TAU1);
+          if(INFO !=0) {fprintf(stderr,"dorgqr subroutine for Syn0 failed, error code %lld\n",INFO);exit(1);}
 
           // STORE (SYN0 + GRADIENT*ALPHA) OF SYN0 (FOCUS) in NEU2E
           // dloss/dsyn0_b_c := 2 (label - sigmoid(f)) * syn1neg_b_c
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (2*g * (syn0[l1 + b*layer1_size + c]-syn1neg[l2 + b*layer1_size + c]));
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (g * syn1neg[l2 + b*layer1_size + c]);
           // Get Q factor from QR factorization of NEU2E
-          int LWORK2=P, K2 = P, LDA2=layer1_size;
-          real *TAU2=malloc(sizeof(real)*K2);
-          real *WORK2=malloc(sizeof(real)*LWORK2);
+          double *TAU2=malloc(sizeof(double)*K);
           // perform the QR factorization
-          dgeqrf_(&layer1_size, &P, neu2e, &LDA2, TAU2, WORK2, &LWORK2, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
-          real *WORK3=malloc(sizeof(real)*LWORK2);
-          dorgqr_(&layer1_size, &P, &K2, neu2e, &LDA2, TAU2, WORK3, &LWORK2, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
-
-          free(TAU);
-          free(WORK);
-          free(WORK1);
+          INFO = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, layer1_size, P, neu2e, LDA, TAU2);
+          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %lld\n",INFO);exit(1);}
+          INFO = LAPACKE_dorgqr(LAPACK_COL_MAJOR, layer1_size, P, K, neu2e, LDA, TAU2);
+          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %lld\n",INFO);exit(1);}
+          free(TAU1);
           free(TAU2);
-          free(WORK2);
-          free(WORK3);
 
         // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
         for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[l2 + b*layer1_size + c] = neu1e[b*layer1_size + c];
@@ -681,8 +668,8 @@ void TrainModel() {
     // EMBEDSIZE := layer1_size
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
-      fprintf(fo, "%s\n", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn0[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(real), 1, fo);
+      fprintf(fo, "%s ", vocab[a].word);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn0[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(double), 1, fo);
       else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn0[(a * P * layer1_size) + (b*layer1_size) + c]);
       fprintf(fo, "\n");
     }
@@ -698,7 +685,7 @@ void TrainModel() {
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
       fprintf(fo, "%s\n", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn1neg[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(real), 1, fo);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn1neg[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(double), 1, fo);
       else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn1neg[(a * P * layer1_size) + (b*layer1_size) + c]);
       fprintf(fo, "\n");
     }
@@ -711,8 +698,8 @@ void TrainModel() {
     int clcn = classes, iter = 10, closeid;
     int *centcn = (int *)malloc(classes * sizeof(int));
     int *cl = (int *)calloc(vocab_size, sizeof(int));
-    real closev, x;
-    real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
+    double closev, x;
+    double *cent = (double *)calloc(classes * layer1_size, sizeof(double));
     for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
     for (a = 0; a < iter; a++) {
       for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;
@@ -833,9 +820,9 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
-  expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
+  expTable = (double*)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));
   for (i = 0; i < EXP_TABLE_SIZE; i++) {
-    expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
+    expTable[i] = exp((i / (double)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
     expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
   }
   TrainModel();

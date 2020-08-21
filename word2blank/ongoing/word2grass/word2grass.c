@@ -16,11 +16,9 @@
 #define MAX_CODE_LENGTH 40
 #define LAPACK_COL_MAJOR  102
 
-// No of basis vectors used to describe the subspace, so we get O(P, layer1_size)
-long long int P = 2;
+// No of basis vectors used to describe the subspace, so we get Gr(P, layer1_size)
+const long long int P = 3;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
-
-
 
 struct vocab_word {
   long long cn;
@@ -36,7 +34,7 @@ int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
 double alpha = 0.025, starting_alpha, sample = 1e-3;
-double*syn0, *syn1, *syn1neg, *expTable, *M;
+double*syn0, *syn1, *syn1neg, *expTable, *M , *Mat;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -354,15 +352,17 @@ void ReadVocab() {
 // syn1neg: word -> context -> ZERO
 
 void InitNet() {
-  long long a, b;
+  long long a, b, len;
   unsigned long long next_random = 1;
+  a = posix_memalign((void **)&Mat, 128, (long long)P * layer1_size * sizeof(double));
+  if (Mat == NULL) {printf("memory allocation failed\n"); exit(1);}
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
   if (hs) {
     a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
     if (syn1 == NULL) {printf("Memory allocation failed\n"); exit(1);}
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) 
-     syn1[a * layer1_size + b] = 0;
+    syn1[a * layer1_size + b] = 0;
   }
   if (negative>0) {
     a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
@@ -372,7 +372,11 @@ void InitNet() {
      syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = 0;
   }
   // random initialize syn0 (this is esentially a 3D matrix with shape (vocab_size,P,layer1_size))
-  for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (long long c = 0; c < layer1_size; c++) {
+  for (a = 0; a < vocab_size; a++) 
+  {	
+    for (b = 0; b < P; b++)
+   { 
+    for (long long c = 0; c < layer1_size; c++) {
     // rnext = r * CONST + CONST2
     // 0... 2^32 - 1
     next_random = next_random * (unsigned long long)25214903917 + 11;
@@ -382,7 +386,21 @@ void InitNet() {
     // -0.5 .. 0.5
     // -0.5 / layer1_size ... 0.5 / layer1_size
     syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
-  }
+    Mat[b*layer1_size + c] = syn0[(a*P*layer1_size) + (b*layer1_size) + c];
+   }
+}
+   long long int lda = layer1_size,ldu = layer1_size, ldvt = P,INFO;
+   double *s = malloc(P * sizeof(double));
+    // Setup buffers to hold the matrices U and Vt:
+    double *u = malloc(layer1_size*ldu * sizeof(double));
+    double *vt = malloc(ldvt*P * sizeof(double));
+    INFO = LAPACKE_dgesdd(LAPACK_COL_MAJOR, 'S', layer1_size, P, Mat, lda, s, u, ldu, vt, ldvt);
+    if(INFO != 0) {fprintf(stderr,"%lld\n",INFO);exit(1);}
+    // do something useful with U, S, Vt ...
+    len  = sizeof(s)/sizeof(double);
+    printf("rank = %lld\n", len);
+    //if ( len == P) printf("FULL COLUMN BABY\n");
+  } 
   CreateBinaryTree();
 }
 

@@ -3,6 +3,7 @@
 #include<math.h>
 #include<lapacke.h>
 
+#define LAPACK_COL_MAJOR  102
 //void dgeqrf_(long long *rows, long long *cols, double *matA, long long *LDA, double *TAU, double *WORK, long long *LWORK, int *INFO);
 //void dorgqr_(long long *rows, long long *cols, long long *K, double *matA, long long *LDA, double *TAU, double *WORK, long long *LWORK, int *INFO);
 int main()
@@ -37,14 +38,15 @@ int main()
     long long LDA=N;
     int INFO;
 
+//lapack_int LAPACKE_dgeqrf( int matrix_layout, lapack_int m, lapack_int n, double* a, lapack_int lda, double* tau );
+//lapack_int LAPACKE_dorgqr( int matrix_layout, lapack_int m, lapack_int n, lapack_int k, double *a, lapack_int lda, double * tau);
+
     long long int LWORK2=P, K2 = P, LDA2=N;
     double *TAU2=malloc(sizeof(double)*K2);
-    double *WORK2=malloc(sizeof(double)*LWORK2);
     // perform the QR factorization
-    dgeqrf_(&N, &P, matA, &LDA2, TAU2, WORK2, &LWORK2, &INFO);
+    INFO = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, N, P, matA, LDA2, TAU2);
     if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
-    double *WORK3=malloc(sizeof(double)*LWORK2);
-    dorgqr_(&N, &P, &K2, matA, &LDA2, TAU2, WORK3, &LWORK2, &INFO);
+    INFO = LAPACKE_dorgqr(LAPACK_COL_MAJOR, N, P, K2, matA, LDA2, TAU2);
     if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
 
     // double *TAU=malloc(sizeof(double)*K);
@@ -64,8 +66,6 @@ int main()
     printf("\n");
     }
 
-    free(WORK2);
-    free(WORK3);
     free(TAU2);
     free(matA);
     return 0;

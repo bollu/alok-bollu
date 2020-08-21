@@ -7,23 +7,20 @@
 #include <math.h>
 #include <assert.h>
 #include <stddef.h>
-#include <lapacke.h>
+#include <armadillo>
+
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
- 
+
+using namespace std;
+using namespace arma;
+
 // No of basis vectors used to describe the subspace, so we get O(P, layer1_size)
-long long int P = 2;
+const long long int P = 2;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
-
-typedef float real;                    // Precision of float numbers
-
-
-//for Q calculation 
-void dgeqrf_(long long int *rows, long long int *cols, real *matA, long long int *LDA, real *TAU, real *WORK,long long int *LWORK,int *INFO);
-void dorgqr_(long long int *rows, long long int *cols, long long int *K, real *matA,long long int *LDA, real *TAU, real *WORK,long long int *LWORK,int *INFO);
 
 struct vocab_word {
   long long cn;
@@ -38,8 +35,8 @@ int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
-real alpha = 0.025, starting_alpha, sample = 1e-3;
-real *syn0, *syn1, *syn1neg, *expTable, *M;
+double alpha = 0.025, starting_alpha, sample = 1e-3;
+double*syn0, *syn1, *syn1neg, *expTable, *M;
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -359,32 +356,42 @@ void ReadVocab() {
 void InitNet() {
   long long a, b;
   unsigned long long next_random = 1;
-  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
+  mat M(P,layer1_size); M.zeros();
+  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
   if (hs) {
-    a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(real));
+    a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
     if (syn1 == NULL) {printf("Memory allocation failed\n"); exit(1);}
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) 
      syn1[a * layer1_size + b] = 0;
   }
   if (negative>0) {
-    a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(real));
+    a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
     // ZERO INITIALIZATION OF SYN1NEG
     for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (long long c = 0; c < layer1_size; c++)
      syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = 0;
   }
   // random initialize syn0 (this is esentially a 3D matrix with shape (vocab_size,P,layer1_size))
-  for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (long long c = 0; c < layer1_size; c++) {
-    // rnext = r * CONST + CONST2
-    // 0... 2^32 - 1
-    next_random = next_random * (unsigned long long)25214903917 + 11;
-    // RANDOM INITIALIZATION OF SYN0
-    // 0 ... 2^16 - 1
-    // 0 .. 1
-    // -0.5 .. 0.5
-    // -0.5 / layer1_size ... 0.5 / layer1_size
-    syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
+  for (a = 0; a < vocab_size; a++) 
+  {
+    for (b = 0; b < P; b++) 
+      for (long long c = 0; c < layer1_size; c++) 
+      {
+        // rnext = r * CONST + CONST2
+        // 0... 2^32 - 1
+        next_random = next_random * (unsigned long long)25214903917 + 11;
+        // RANDOM INITIALIZATION OF SYN0
+        // 0 ... 2^16 - 1
+        // 0 .. 1
+        // -0.5 .. 0.5
+        // -0.5 / layer1_size ... 0.5 / layer1_size
+        syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
+        M(b,c) = syn0[(a * P*layer1_size) + (b*layer1_size) + c ];
+      }
+    uword r = arma::rank(M.t());
+    if (r < P)
+      printf("Rank of the matrix is %llu\n", r);  
   }
   CreateBinaryTree();
 }
@@ -399,12 +406,14 @@ void *TrainModelThread(void *id) {
   long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
-  real f, g;
+  double f, g, sum, grad;
   clock_t now;
-  real *neu1 = (real *)calloc(P*layer1_size, sizeof(real));
-  real *neu1e = (real *)calloc(P*layer1_size, sizeof(real));
-  real *neu2e = (real *)calloc(P*layer1_size, sizeof(real));
-  
+  double *neu1 = (double*)calloc(P*layer1_size, sizeof(double));
+  double *neu1e = (double*)calloc(P*layer1_size, sizeof(double));
+  double *neu2e = (double*)calloc(P*layer1_size, sizeof(double));
+  double *T_0 = (double*)calloc(layer1_size*layer1_size, sizeof(double));
+  mat NEU1E(P, layer1_size); NEU1E.zeros();
+  mat NEU2E(P, layer1_size); NEU2E.zeros();
   // open the train file
   FILE *fi = fopen(train_file, "rb");
 
@@ -418,11 +427,11 @@ void *TrainModelThread(void *id) {
       if ((debug_mode > 1)) {
         now=clock();
         printf("%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ", 13, alpha,
-         word_count_actual / (real)(iter * train_words + 1) * 100,
-         word_count_actual / ((real)(now - start + 1) / (real)CLOCKS_PER_SEC * 1000));
+         word_count_actual / (double)(iter * train_words + 1) * 100,
+         word_count_actual / ((double)(now - start + 1) / (double)CLOCKS_PER_SEC * 1000));
         fflush(stdout);
       }
-      alpha = starting_alpha * (1 - word_count_actual / (real)(iter * train_words + 1));
+      alpha = starting_alpha * (1 - word_count_actual / (double)(iter * train_words + 1));
       if (alpha < starting_alpha * 0.0001) alpha = starting_alpha * 0.0001;
     }
     if (sentence_length == 0) {
@@ -434,9 +443,9 @@ void *TrainModelThread(void *id) {
         if (word == 0) break;
         // The subsampling randomly discards frequent words while keeping the ranking same
         if (sample > 0) {
-          real ran = (sqrt(vocab[word].cn / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].cn;
+          double ran = (sqrt(vocab[word].cn / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].cn;
           next_random = next_random * (unsigned long long)25214903917 + 11;
-          if (ran < (next_random & 0xFFFF) / (real)65536) continue;
+          if (ran < (next_random & 0xFFFF) / (double)65536) continue;
         }
         sen[sentence_length] = word;
         sentence_length++;
@@ -554,10 +563,10 @@ void *TrainModelThread(void *id) {
         // negative := # of negative samples
         if (negative > 0) for (d = 0; d < negative + 1; d++) {
           // if we are are in the first iteration, the word we are
-          // targeting is 'word', and we want trace 1
+          // targeting is 'word', and we want chordal distance
           if (d == 0) {
-            target = word; // take trace w/current word
-            label = 1; // set target  trace= 1
+            target = word; // take chordal distance w/current word
+            label = 0; // set target distance= 0
           } else {
             // pick a random word
             next_random = next_random * (unsigned long long)25214903917 + 11;
@@ -568,7 +577,7 @@ void *TrainModelThread(void *id) {
             if (target == word) continue;
 
             // set target dot product 0
-            label = 0;
+            label = 1;
           }
 
           // target: integer index of the word
@@ -579,80 +588,73 @@ void *TrainModelThread(void *id) {
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
           
+          for ( b = 0; b < layer1_size; b++) 
+          {
+            for(c = 0; c < layer1_size; c++) 
+            {
+              sum = 0.0;
+              for(long long k = 0; k < P; k++)
+              {
+                sum += syn0[l1 + k*layer1_size + c]*syn0[l1 + k*layer1_size + b];
+                sum -= syn1neg[l2 + k*layer1_size + c]*syn1neg[l2 + k*layer1_size + b];    
+              }
+              T_0[b*layer1_size + c] = sum;
+            }
+          }
+          
           f = 0.0; 
 
-          //Calculate tr(syn0.T syn1neg)
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) f += syn0[ l1 + b*layer1_size + c]*syn1neg[l2 + b*layer1_size + c];
-          //printf("%f\n",f);
+          //Calculate f = 1/ (\sqrt 2) *|| syn0 syn0^T - syn1neg syn1neg^T ||_F
+          for (b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) f += T_0[ b*layer1_size + c]*T_0[ b*layer1_size + c];
+          f = sqrt(f/2);
           
           // ---------
-          // Regular f = trace [(syn0.T syn1neg)]
-          // loss := (label - sigmoid(f))^2 (ignore derivative of sigmoid)
-      
+          // loss := (label - sigmoid(f))^2       
           if (f > MAX_EXP) g = (label - 1) * alpha;
           else if (f < -MAX_EXP) g = (label - 0) * alpha;
           else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-          
           
           // ------
           // UPDATE RULE :: X_i_j = (X_i_j + grad*alpha)
           
           // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
-          // dloss/dsyn1neg_b_c := 2 (label - sigmoid(f)) * syn0_b_c
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = syn1neg[l2 + b*layer1_size +c] + (g * syn0[l1 + b*layer1_size + c]);
-          // Get Q factor from QR factorization of NEU1E
-          long long int LWORK=P, K = P, LDA=layer1_size;
-          int INFO;
-          real *TAU=malloc(sizeof(real)*K);
-          real *WORK=malloc(sizeof(real)*LWORK);
-          // perform the QR factorization
-          dgeqrf_(&layer1_size, &P, neu1e, &LDA, TAU, WORK, &LWORK, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn1neg failed, error code %d\n",INFO);exit(1);}
-          real *WORK1=malloc(sizeof(real)*LWORK);
-          dorgqr_(&layer1_size, &P, &K, neu1e, &LDA, TAU, WORK1, &LWORK, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn1neg failed, error code %d\n",INFO);exit(1);}
-
-
+          // dloss/dsyn1neg_i_j := 2 (label - sigmoid(f)) * -2/f * \sum_k T_0[i][k]*syn1neg[k][j]
+          for (b = 0; b < P; b++) 
+          {
+            for (c = 0; c < layer1_size; c++) 
+            {
+              grad = 0.0;
+              for ( long long k = 0; k < layer1_size; k++)
+                grad += T_0[k*layer1_size + c]*syn1neg[l2 + b*layer1_size + k]; 
+              NEU1E(b,c) = syn1neg[l2 + b*layer1_size +c] + (-2 * grad * g)/f;
+            }
+          }
+           
           // STORE (SYN0 + GRADIENT*ALPHA) OF SYN0 (FOCUS) in NEU2E
-          // dloss/dsyn0_b_c := 2 (label - sigmoid(f)) * syn1neg_b_c
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = syn0[l1 + b*layer1_size +c] + (g * syn1neg[l2 + b*layer1_size + c]);
-          printf("BEFORE QR,id:%d\n",id);
+          // dloss/dsyn0_i_j := 2 (label - sigmoid(f)) * 2/f * \sum_k T_0[i][k]*syn0[k][j]
           for (b = 0; b < P; b++) 
-          { for (c = 0; c < layer1_size; c++) 
-              printf("%f ",neu2e[b*layer1_size + c]);
-            printf("\n");
-          } 
-          // Get Q factor from QR factorization of NEU2E
-          long long int LWORK2=P, K2 = P, LDA2=layer1_size;
-          real *TAU2=malloc(sizeof(real)*K2);
-          real *WORK2=malloc(sizeof(real)*LWORK2);
-          // perform the QR factorization
-          dgeqrf_(&layer1_size, &P, neu2e, &LDA2, TAU2, WORK2, &LWORK2, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
-          real *WORK3=malloc(sizeof(real)*LWORK2);
-          dorgqr_(&layer1_size, &P, &K2, neu2e, &LDA2, TAU2, WORK3, &LWORK2, &INFO);
-          if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %d\n",INFO);exit(1);}
-          printf("AFTER QR,id:%d\n",id);
-          for (b = 0; b < P; b++) 
-          { for (c = 0; c < layer1_size; c++) 
-              printf("%f ",neu2e[b*layer1_size + c]);
-            printf("\n");
-          } 
-          exit(1);
-          free(TAU);
-          free(WORK);
-          free(WORK1);
-          free(TAU2);
-          free(WORK2);
-          free(WORK3);
-
-        // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
-        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[l2 + b*layer1_size + c] = neu1e[b*layer1_size + c];
+          {
+            for (c = 0; c < layer1_size; c++) 
+            {
+              grad = 0.0;
+              for ( long long k = 0; k < layer1_size; k++)
+                grad += T_0[k*layer1_size + c]*syn0[l1+ b*layer1_size + k]; 
+              NEU2E(b,c) = syn0[l1 + b*layer1_size +c] + (2 * grad * g)/f;
+            }
+          }
+          mat Q_SYN1NEG;
+          mat R_SYN1NEG;
+          arma::qr(Q_SYN1NEG, R_SYN1NEG, NEU1E.t());
+          // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
+          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[l2 + b*layer1_size + c] = Q_SYN1NEG(c, b);
         }
-
+        
+        mat Q_SYN0;
+        mat R_SYN0;
+        arma::qr(Q_SYN0, R_SYN0, NEU2E.t());
         // Learn weights input -> hidden
         // BACKPROP ON FOCUS WORD FROM NEU1E
-        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn0[l1 + b*layer1_size + c] = neu2e[b*layer1_size + c];
+        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn0[l1 + b*layer1_size + c] = Q_SYN0(c, b);
       }
     }
     sentence_position++;
@@ -661,10 +663,10 @@ void *TrainModelThread(void *id) {
       continue;
     }
   }
-  fclose(fi);
-  free(neu1);
-  free(neu1e);
-  free(neu2e);
+  // fclose(fi);
+  // free(neu1);
+  // free(neu1e);
+  // free(neu2e);
   pthread_exit(NULL);
 }
 
@@ -687,10 +689,10 @@ void TrainModel() {
     assert(fo != NULL);
     // Save the word vectors
     // EMBEDSIZE := layer1_size
-    fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+    fprintf(fo, "%lld %lld %lld\n", vocab_size, layer1_size, P);
     for (a = 0; a < vocab_size; a++) {
-      fprintf(fo, "%s\n", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn0[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(real), 1, fo);
+      fprintf(fo, "%s ", vocab[a].word);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn0[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(double), 1, fo);
       else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn0[(a * P * layer1_size) + (b*layer1_size) + c]);
       fprintf(fo, "\n");
     }
@@ -705,8 +707,8 @@ void TrainModel() {
     assert(fo != NULL);
     fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
-      fprintf(fo, "%s\n", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn1neg[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(real), 1, fo);
+      fprintf(fo, "%s ", vocab[a].word);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn1neg[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(double), 1, fo);
       else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn1neg[(a * P * layer1_size) + (b*layer1_size) + c]);
       fprintf(fo, "\n");
     }
@@ -719,8 +721,8 @@ void TrainModel() {
     int clcn = classes, iter = 10, closeid;
     int *centcn = (int *)malloc(classes * sizeof(int));
     int *cl = (int *)calloc(vocab_size, sizeof(int));
-    real closev, x;
-    real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
+    double closev, x;
+    double *cent = (double *)calloc(classes * layer1_size, sizeof(double));
     for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
     for (a = 0; a < iter; a++) {
       for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;
@@ -841,9 +843,9 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
-  expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
+  expTable = (double*)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));
   for (i = 0; i < EXP_TABLE_SIZE; i++) {
-    expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
+    expTable[i] = exp((i / (double)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
     expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
   }
   TrainModel();

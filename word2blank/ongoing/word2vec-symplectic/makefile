@@ -6,6 +6,9 @@ RELEASE=-O3
 CFLAGS = -lm -pthread  -march=native -Wall \
 		 -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
 
+GPU_DEBUG=-Xcompiler -fsanitize=address -Xcompiler -fsanitize=undefined -g -O0 -Xcompiler -fuse-ld=gold
+GPU_RELEASE=-O3
+
 all: word2vec word2phrase distance word-analogy compute-accuracy
 
 bin2text:
@@ -13,6 +16,15 @@ bin2text:
 
 text0:
 	head -c 1000000 text8 > text0
+
+gpu-word2vec: word2vec.cu makefile
+	nvcc word2vec.cu -o gpu-word2vec -lm \
+        -Xcompiler -pthread  \
+        -Xcompiler -march=native \
+        -Xcompiler -Wall -Xcompiler \
+        -funroll-loops -std=c++11 \
+		-Xcompiler -Wall -Xcompiler -Werror \
+        -Xcompiler -Wno-unused-result  $(GPU_DEBUG)
 
 word2vec : word2vec.c makefile
 	$(CC) word2vec.c -o word2vec $(CFLAGS)
@@ -36,6 +48,10 @@ word2vec-principal-compute-accuracy-topn : word2vec-principal-angle-compute-accu
 	chmod +x *.sh
 word2vec-principal-compute-accuracy-ranked : word2vec-principal-angle-compute-accuracy-ranked.cpp
 	$(CC) word2vec-principal-angle-compute-accuracy-ranked.cpp -o word2vec-compute-accuracy-ranked $(CFLAGS)
+	chmod +x *.sh
+
+hamiltonian: hamiltonian.c
+	$(CC) hamiltonian.c -o hamiltonian $(CFLAGS)
 	chmod +x *.sh
 
 distance : distance.c

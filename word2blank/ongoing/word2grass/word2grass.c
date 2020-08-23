@@ -17,7 +17,7 @@
 #define LAPACK_COL_MAJOR  102
 
 // No of basis vectors used to describe the subspace, so we get Gr(P, layer1_size)
-const long long int P = 3;
+const long long int P = 2;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
 struct vocab_word {
@@ -352,8 +352,8 @@ void ReadVocab() {
 // syn1neg: word -> context -> ZERO
 
 void InitNet() {
-  long long a, b, len;
-  unsigned long long next_random = 1;
+  long long a, b;
+  unsigned long long next_random = 1, next_random1 = 1;
   a = posix_memalign((void **)&Mat, 128, (long long)P * layer1_size * sizeof(double));
   if (Mat == NULL) {printf("memory allocation failed\n"); exit(1);}
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
@@ -368,38 +368,46 @@ void InitNet() {
     a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
     // ZERO INITIALIZATION OF SYN1NEG
-    for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (long long c = 0; c < layer1_size; c++)
-     syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = 0;
+    for (a = 0; a < vocab_size; a++)
+    { 
+      for (b = 0; b < P; b++)
+      { 
+        for (long long c = 0; c < layer1_size; c++)
+        {
+          next_random1 = next_random1* (unsigned long long)45632823823  + 9;
+          syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = (((next_random1 & 0xFFFF)/ (double)78832) - 0.5)/layer1_size;
+          Mat[b*layer1_size + c] = syn1neg[(a*P*layer1_size) + (b*layer1_size) + c];
+        }
+      }
+    
+      long long int lda = layer1_size,ldu = layer1_size, ldvt = P, INFO;
+      double s[2];
+      // Setup buffers to hold the matrices U and Vt:
+      double *u = (double *)malloc(layer1_size*ldu * sizeof(double));
+      double *vt =(double *) malloc(ldvt*P * sizeof(double));
+      INFO = LAPACKE_dgesdd(LAPACK_COL_MAJOR, 'S', layer1_size, P, Mat, lda, s, u, ldu, vt, ldvt);
+      if(INFO != 0) {fprintf(stderr,"%lld\n",INFO);exit(1);}
+      // do something useful with U, S, Vt ...
+      for( long long d = 0; d < P; d++){if( s[d] == 0) printf("Not full rank!\n");}
+    }
   }
   // random initialize syn0 (this is esentially a 3D matrix with shape (vocab_size,P,layer1_size))
   for (a = 0; a < vocab_size; a++) 
   {	
     for (b = 0; b < P; b++)
-   { 
-    for (long long c = 0; c < layer1_size; c++) {
-    // rnext = r * CONST + CONST2
-    // 0... 2^32 - 1
-    next_random = next_random * (unsigned long long)25214903917 + 11;
-    // RANDOM INITIALIZATION OF SYN0
-    // 0 ... 2^16 - 1
-    // 0 .. 1
-    // -0.5 .. 0.5
-    // -0.5 / layer1_size ... 0.5 / layer1_size
-    syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
-    Mat[b*layer1_size + c] = syn0[(a*P*layer1_size) + (b*layer1_size) + c];
-   }
-}
-   long long int lda = layer1_size,ldu = layer1_size, ldvt = P,INFO;
-   double *s = malloc(P * sizeof(double));
-    // Setup buffers to hold the matrices U and Vt:
-    double *u = malloc(layer1_size*ldu * sizeof(double));
-    double *vt = malloc(ldvt*P * sizeof(double));
-    INFO = LAPACKE_dgesdd(LAPACK_COL_MAJOR, 'S', layer1_size, P, Mat, lda, s, u, ldu, vt, ldvt);
-    if(INFO != 0) {fprintf(stderr,"%lld\n",INFO);exit(1);}
-    // do something useful with U, S, Vt ...
-    len  = sizeof(s)/sizeof(double);
-    printf("rank = %lld\n", len);
-    //if ( len == P) printf("FULL COLUMN BABY\n");
+    { 
+      for (long long c = 0; c < layer1_size; c++) {
+      // rnext = r * CONST + CONST2
+      // 0... 2^32 - 1
+      next_random = next_random * (unsigned long long)25214903917 + 11;
+      // RANDOM INITIALIZATION OF SYN0
+      // 0 ... 2^16 - 1
+      // 0 .. 1
+      // -0.5 .. 0.5
+      // -0.5 / layer1_size ... 0.5 / layer1_size
+      syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
+      }
+    }
   } 
   CreateBinaryTree();
 }
@@ -637,9 +645,9 @@ void *TrainModelThread(void *id) {
             }
           }
           // Get Q factor from QR factorization of NEU1E
-          long long int LWORK=P, K = P, LDA=layer1_size;
+          long long int K = P, LDA=layer1_size;
           long long int INFO;
-          double *TAU1=malloc(sizeof(double)*K);
+          double *TAU1=(double *)malloc(sizeof(double)*K);
           // perform the QR factorization
           INFO = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, layer1_size, P, neu1e, LDA, TAU1);
           if(INFO !=0) {fprintf(stderr,"dgeqrf subroutine for Syn1neg failed, error code %lld\n",INFO);exit(1);}
@@ -659,7 +667,7 @@ void *TrainModelThread(void *id) {
             }
           }
           // Get Q factor from QR factorization of NEU2E
-          double *TAU2=malloc(sizeof(double)*K);
+          double *TAU2= (double *)malloc(sizeof(double)*K);
           // perform the QR factorization
           INFO = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, layer1_size, P, neu2e, LDA, TAU2);
           if(INFO !=0) {fprintf(stderr,"QR factorization of Syn0 failed, error code %lld\n",INFO);exit(1);}

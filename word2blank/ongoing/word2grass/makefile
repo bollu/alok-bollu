@@ -9,11 +9,11 @@ CFLAGS = -llapacke -llapack -lblas -lm -lpthread  -march=native -Wall \
 CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
                  -funroll-loops -Wno-unused-result -fuse-ld=gold
 
-all : word2grass compute-accuracy
+all : word2grass compute-accuracy simlex-accuracy
 #distance compute-accuracy
 
-word2grass : word2grass.cpp
-		$(CXX) word2grass.cpp -o word2grass $(CFLAGS_arma)
+word2grass : word2grass.c
+		$(CXX) word2grass.c -o word2grass $(CFLAGS)
 
 # distance : distance.c
 #       $(CC) distance.c -o distance $(CFLAGS)
@@ -21,8 +21,10 @@ word2grass : word2grass.cpp
 compute-accuracy : compute-accuracy.cpp
 		$(CXX) compute-accuracy.cpp -o compute-accuracy $(CFLAGS_arma) 
 
+simlex-accuracy : simlex-accuracy.cpp
+		$(CXX) simlex-accuracy.cpp -o simlex-accuracy $(CFLAGS_arma)
 clean:
-		rm -rf word2grass compute-accuracy
+		rm -rf word2grass compute-accuracy simlex-accuracy
         # distance compute-accuracy
 
 # backprop-bollu.out: backprop-bollu.cpp makefile

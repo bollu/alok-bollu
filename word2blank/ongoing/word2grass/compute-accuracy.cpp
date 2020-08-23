@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <armadillo>
-
+#include <iostream>
 //compute-accuracy /path/to/model.bin < questions-words.txt > output-file.txt
 using namespace std;
 using namespace arma;
@@ -13,7 +13,6 @@ using namespace arma;
 const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
-
 
 int main(int argc, char **argv)
 {
@@ -46,7 +45,10 @@ int main(int argc, char **argv)
     printf("Cannot allocate memory: %lld MB\n", words * P * size * sizeof(double) / 1048576);
     return -1;
   }
-  mat Mat(P,size); Mat.zeros();
+  mat Mat_b1(P,size); Mat_b1.zeros();
+  mat Mat_b2(P,size); Mat_b2.zeros();
+  mat Mat_b3(P,size); Mat_b3.zeros();
+  mat Mat_b4(P,size); Mat_b4.zeros();
   T_0 = (double *)malloc(size * size * sizeof(double));
   if (T_0 == NULL) {
     printf("Cannot allocate memory: %lld MB\n", size * size * sizeof(double) / 1048576);
@@ -97,7 +99,7 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = 300000;
+    for (a = 0; a < N; a++) bestd[a] = 0;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -105,14 +107,18 @@ int main(int argc, char **argv)
     if (b3 == words) continue;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
-    for (row = 0; row < P; row++) for (col = 0; col < size; col++) Mat(row,col) = (M[col + (row*size) + (b2*size*P)] - M[col + (row*size) + (b1*size*P)]) + M[col + (row*size) + (b3*size*P)];
-    uword r = arma::rank(Mat.t());
-    fprintf(stderr,"Rank of the matrix is %llu\n", r); 
-
-    mat Q_Mat;
-    mat R_Mat;
-    arma::qr(Q_Mat, R_Mat, Mat.t());
-    for (row = 0; row < P; row++) for (col = 0; col < size; col++) Mat(row, col) = Q_Mat(col, row); 
+    for (row = 0; row < P; row++) for (col = 0; col < size; col++) 
+    {
+      Mat_b2(row, col) = M[col + (row*size) + (b2*size*P)] ;
+      Mat_b1(row, col) = M[col + (row*size) + (b1*size*P)] ;
+      Mat_b3(row, col) = M[col + (row*size) + (b3*size*P)] ;
+    }
+    // uword r = arma::rank(Mat.t());
+    // fprintf(stderr,"Rank of the matrix is %llu\n", r); 
+    // mat Q_Mat;
+    // mat R_Mat;
+    // arma::qr(Q_Mat, R_Mat, Mat.t());
+    // for (row = 0; row < P; row++) for (col = 0; col < size; col++) Mat(row, col) = Q_Mat(col, row); 
     //------------
     TQS++;
     for (c = 0; c < words; c++) {
@@ -120,23 +126,14 @@ int main(int argc, char **argv)
       if (c == b2) continue;
       if (c == b3) continue;
       dist = 0;
-      for ( row = 0; row < size; row++) 
-      {
-        for( col = 0; col < size; col++) 
-        {
-          sum = 0.0;
-          for(long long k = 0; k < P; k++)
-          {
-            sum += Mat(k,col)*Mat(k, row);
-            sum -= M[(c*size*P) + k*size + col]*M[(c*size*P) + k*size + row];    
-          }
-          T_0[row*size + col] = sum;
-        }
-      }
-      for (long long row = 0; row < size; row++) for (long long col = 0; col < size; col++) dist += T_0[ row*size + col]*T_0[ row*size + col];
-      dist = sqrt(dist/2);
+      for (row = 0; row < P; row++) for (col = 0; col < size; col++) Mat_b4(row, col) = M[col + (row*size) +(c*size*P)];
+      
+      vec s_b1 = arma::svd(Mat_b4 * Mat_b1.t());
+      vec s_b2 = arma::svd(Mat_b4 * Mat_b2.t());
+      vec s_b3 = arma::svd(Mat_b4 * Mat_b3.t());
+      dist = arma::min(s_b3)*arma::min(s_b2)/arma::min(s_b1);
       for (a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);

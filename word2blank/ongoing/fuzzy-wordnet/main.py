@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     dirname = '~/GitHubRepos'
     fname = 'wiki-news-300d-1M.vec'
+    # fname = 'w2v_2k_emb'
     VOCAB = 1000
     emb = util.load_embedding(path.join(dirname, fname), VOCAB)
     # emb = util.load_embedding('/home/kvaditya/GitHubRepos/glove.6B.300d.txt', VOCAB,typ='glove')
@@ -26,10 +27,11 @@ if __name__ == '__main__':
     word_mat = wm.normalize(word_mat, 0)
     word_mat = wm.discretize(word_mat, 0)
     sim_mat = wm.similarity(word_mat)
-    # sim_mat = wm.xor_similarity(word_mat)
-    # print("similarity matrix made")
-    # print(sim_mat)
 
+    rank_mat = wm.rank(sim_mat)
+    # sim_mat = wm.xor_similarity(word_mat)
+    print("similarity matrix made")
+    # print(sim_mat)
 
     # quit = False
     # while(not quit):
@@ -44,34 +46,42 @@ if __name__ == '__main__':
     #     util.check_analogy(w_a,w_b,w_c,word_mat,word_keys,ind_keys)
     #     quit = 'n'==input('continue? (y/n) ')
 
-    # total, correct = 0, 0
-    # mypath = '/home/kvaditya/GitHubRepos/alok-bollu/word2blank/utilities/glove/eval/question-data'
-    # files = [f for f in listdir(mypath) if path.isfile(path.join(mypath, f))]
-    # for file in files:
-    #     Ftotal, Fcorrect = 0, 0
-    #     with open(path.join(mypath,file)) as infile:
-    #         for line in tqdm(infile):
-    #             try:
-    #                 wA,wB,wC,wD = line.rstrip('\n').split(' ')
-    #                 iA,iB,iC,iD = [word_keys[w] for w in [wA,wB,wC,wD]]
-    #                 Ftotal += 1  # valid example
-    #             except:
-    #                 continue
-    #             wE = util.check_analogy(wA,wB,wC,word_mat,word_keys,ind_keys)
-    #             Fcorrect += int(wE==wD)
-    #     Ftotal += 0.0001
-    #     print(file.split('.')[0],'C:',Fcorrect,'T:',Ftotal,'A:',Fcorrect/Ftotal)
-    #     correct+=Fcorrect
-    #     total+=Ftotal
-    # print('TOTAL:','C:',correct,'T:',total,'A:',correct/total)
+    # analogyScore = [[0.0,{}] for i in range(256)]
+    # for boolInd in range(43,44):
+    #     print("\n============================")
+    #     print("[ ITER - ",boolInd,"]")
+    #     total, correct = 0, 0
+    #     mypath = '/home/kvaditya/GitHubRepos/alok-bollu/word2blank/utilities/glove/eval/question-data'
+    #     files = [f for f in listdir(mypath) if path.isfile(path.join(mypath, f))]
+    #     for file in files:
+    #         Ftotal, Fcorrect = 0, 0
+    #         with open(path.join(mypath,file)) as infile:
+    #             for line in tqdm(infile):
+    #                 try:
+    #                     wA,wB,wC,wD = line.rstrip('\n').split(' ')
+    #                     iA,iB,iC,iD = [word_keys[w] for w in [wA,wB,wC,wD]]
+    #                     Ftotal += 1  # valid example
+    #                 except:
+    #                     continue
+    #                 wE = util.check_analogy(wA,wB,wC,word_mat,word_keys,ind_keys,boolInd)
+    #                 Fcorrect += int(wE==wD)
+    #         Ftotal += 0.0001
+    #         analogyScore[boolInd][1][file.split('.')[0]] = Fcorrect/Ftotal
+    #         print(file.split('.')[0],'C:',Fcorrect,'T:',Ftotal,'A:',Fcorrect/Ftotal)
+    #         correct+=Fcorrect
+    #         total+=Ftotal
+    #         analogyScore[boolInd][0] = correct/total
+    #     print('TOTAL:','C:',correct,'T:',total,'A:',correct/total)
+    # with open('analogy_report_abs_xorsim.pkl','wb') as outfile:
+    #     pkl.dump(analogyScore,outfile)
 
     # SINGLETON ANALYSIS
-    temp_mat = sim_mat.copy()
-    # temp_mat = wm.similarity(sim_mat)
-    tree = gi.singleton_analysis(temp_mat,0.2,0.01)
-    tree = nx.relabel_nodes(tree,ind_keys)
-    dot = to_pydot(tree)
-    write_dot(tree,"tree.dot")
+    # temp_mat = sim_mat.copy()
+    # # temp_mat = wm.similarity(sim_mat)
+    # tree = gi.singleton_analysis(temp_mat,0.2,0.01)
+    # tree = nx.relabel_nodes(tree,ind_keys)
+    # dot = to_pydot(tree)
+    # write_dot(tree,"tree.dot")
 
     # CUSTOM SINGLETON ANALYSIS
     # tree_words = ['go','going','gone','went','pull','pulled','be','am','is','was','will','would','could','should','what','where','why','who','when','how','here','there','then','now','that','this','never','always','ever','sometimes']
@@ -99,10 +109,44 @@ if __name__ == '__main__':
     #     write_dot(tree,"tree.dot")
     #     quit = 'n'==input("continue? (y/n)")
 
-    # temp_mat = sim_mat.copy()
-    # adj_mat = am.build(temp_mat,seed=1.3,mode='mean')
+    temp_mat = sim_mat.copy()
+    adj_mat = am.build(np.transpose(temp_mat),seed=1.17,mode='mean')
+    g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
+    print("Graph made")
+
+    msa = nx.maximum_spanning_arborescence(g)
+    msa = nx.relabel_nodes(msa,ind_keys)
+    dot = to_pydot(msa)
+    write_dot(msa,"Tmsa.dot")
+
+    # print(rank_mat)
+
+    # temp_mat = rank_mat.copy()
+    # adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True)
     # g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     # print("Graph made")
+
+    # Rmsa = nx.minimum_spanning_arborescence(g)
+    # Rmsa = nx.relabel_nodes(Rmsa,ind_keys)
+    # dot = to_pydot(Rmsa)
+    # write_dot(Rmsa,"TRmsa.dot")
+
+    #Clustering -- Brought to you by NetworkX
+    # pr = list()
+    # res = nx.pagerank(g, alpha=0.85, max_iter=1000, tol=1e-07, nstart=None, weight='weight') 
+    # for i in res:
+    #     pr.append([res[i],ind_keys[i]])
+    # pr.sort(reverse=True)
+    # for w in pr:
+    #     print(w[1],w[0])
+
+    # knn = list()
+    # res = nx.k_nearest_neighbors(g, weight='weight', source='out', target='in')
+    # for i in res:
+    #     knn.append([res[i],ind_keys[i]])
+    # knn.sort(reverse=True)
+    # for w in knn:
+    #     print(w[1],w[0])
 
     # tree = nx.relabel_nodes(tree,ind_keys)
     # dot = to_pydot(tree)
@@ -197,3 +241,18 @@ if __name__ == '__main__':
     # print('Std:',np.std(vec))
     # wm.plotHist(word_mat, wordList, word_keys)
 
+    # X = word_mat
+    # import scipy.cluster.hierarchy as sch
+    # import matplotlib.pyplot as plt
+    # dendrogram = sch.dendrogram(sch.linkage(X, method  = "ward"), labels=list(word_keys.keys()),above_threshold_color='C1')
+    # # dendrogram(
+    # #         linked,
+    # #         orientation='right',
+    # #         labels=labelList,
+    # #         distance_sort='descending',
+    # #         show_leaf_counts=False
+    # #       )
+    # plt.title('Dendrogram')
+    # plt.xlabel('Embeddings')
+    # plt.ylabel('Distance')
+    # plt.show()

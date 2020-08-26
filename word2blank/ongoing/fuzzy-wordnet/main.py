@@ -109,27 +109,27 @@ if __name__ == '__main__':
     #     write_dot(tree,"tree.dot")
     #     quit = 'n'==input("continue? (y/n)")
 
-    temp_mat = sim_mat.copy()
-    adj_mat = am.build(np.transpose(temp_mat),seed=1.17,mode='mean')
-    g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
-    print("Graph made")
-
-    msa = nx.maximum_spanning_arborescence(g)
-    msa = nx.relabel_nodes(msa,ind_keys)
-    dot = to_pydot(msa)
-    write_dot(msa,"Tmsa.dot")
-
-    # print(rank_mat)
-
-    # temp_mat = rank_mat.copy()
-    # adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True)
+    # temp_mat = sim_mat.copy()
+    # adj_mat = am.build(np.transpose(temp_mat),seed=1.17,mode='mean')
     # g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     # print("Graph made")
 
-    # Rmsa = nx.minimum_spanning_arborescence(g)
-    # Rmsa = nx.relabel_nodes(Rmsa,ind_keys)
-    # dot = to_pydot(Rmsa)
-    # write_dot(Rmsa,"TRmsa.dot")
+    # msa = nx.maximum_spanning_arborescence(g)
+    # msa = nx.relabel_nodes(msa,ind_keys)
+    # dot = to_pydot(msa)
+    # write_dot(msa,"Tmsa.dot")
+
+    # print(rank_mat)
+
+    temp_mat = rank_mat.copy()
+    adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True)
+    g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
+    print("Graph made")
+
+    Rmsa = nx.minimum_spanning_arborescence(g)
+    Rmsa = nx.relabel_nodes(Rmsa,ind_keys)
+    dot = to_pydot(Rmsa)
+    write_dot(Rmsa,"TRmsa.dot")
 
     #Clustering -- Brought to you by NetworkX
     # pr = list()

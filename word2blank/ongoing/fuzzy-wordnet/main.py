@@ -17,9 +17,10 @@ if __name__ == '__main__':
     print("libs loaded")
 
     dirname = '~/GitHubRepos'
-    fname = 'wiki-news-300d-1M.vec'
-    # fname = 'w2v_2k_emb'
-    VOCAB = 1000
+    # fname = 'trmsa_nouns_wt.vec'
+    fname = 'wiki-news-300d-nouns.txt'  #Filtered Vectors acc to nouns.txt #Run filter_vecs.py to generate
+    # fname = 'wiki-news-300d-1M.vec'
+    VOCAB = 10000   # set greater than total if all words are to be covered
     emb = util.load_embedding(path.join(dirname, fname), VOCAB)
     # emb = util.load_embedding('/home/kvaditya/GitHubRepos/glove.6B.300d.txt', VOCAB,typ='glove')
     print("embeddings loaded")
@@ -27,10 +28,11 @@ if __name__ == '__main__':
     word_mat = wm.normalize(word_mat, 0)
     word_mat = wm.discretize(word_mat, 0)
     sim_mat = wm.similarity(word_mat)
-
-    rank_mat = wm.rank(sim_mat)
-    # sim_mat = wm.xor_similarity(word_mat)
     print("similarity matrix made")
+    # sim_mat = wm.xor_similarity(word_mat)
+
+    rank_mat = wm.rank(sim_mat) 
+    print("rank matrix made")
     # print(sim_mat)
 
     # quit = False
@@ -78,7 +80,7 @@ if __name__ == '__main__':
     # SINGLETON ANALYSIS
     # temp_mat = sim_mat.copy()
     # # temp_mat = wm.similarity(sim_mat)
-    # tree = gi.singleton_analysis(temp_mat,0.2,0.01)
+    # tree = gi.singleton_analysis(temp_mat,0.3,0.03)
     # tree = nx.relabel_nodes(tree,ind_keys)
     # dot = to_pydot(tree)
     # write_dot(tree,"tree.dot")
@@ -121,36 +123,33 @@ if __name__ == '__main__':
 
     # print(rank_mat)
 
-    temp_mat = rank_mat.copy()
-    adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True)
+    # TRMSA or RMSA
+    temp_mat = rank_mat.copy()  
+    # 'seed' is the MAXIMUM edge rank allowed in the msa
+    adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True) # Remove transpose for Rmsa
     g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     print("Graph made")
 
     Rmsa = nx.minimum_spanning_arborescence(g)
     Rmsa = nx.relabel_nodes(Rmsa,ind_keys)
     dot = to_pydot(Rmsa)
-    write_dot(Rmsa,"TRmsa.dot")
+    write_dot(Rmsa,"TRmsa_nouns.dot")
 
-    #Clustering -- Brought to you by NetworkX
-    # pr = list()
-    # res = nx.pagerank(g, alpha=0.85, max_iter=1000, tol=1e-07, nstart=None, weight='weight') 
-    # for i in res:
-    #     pr.append([res[i],ind_keys[i]])
-    # pr.sort(reverse=True)
-    # for w in pr:
-    #     print(w[1],w[0])
-
-    # knn = list()
-    # res = nx.k_nearest_neighbors(g, weight='weight', source='out', target='in')
-    # for i in res:
-    #     knn.append([res[i],ind_keys[i]])
-    # knn.sort(reverse=True)
-    # for w in knn:
-    #     print(w[1],w[0])
-
-    # tree = nx.relabel_nodes(tree,ind_keys)
-    # dot = to_pydot(tree)
-    # write_dot(tree,"tree.dot")
+    import csv  # Saving the edgelist as csv ; For Poincare implementation
+    csv_columns = ['id1','id2','weight']
+    dict_data = list()
+    for u in Rmsa:
+        for v in Rmsa[u]:
+            dict_data.append({'id1':u, 'id2':v, 'weight':1})
+    csv_file = "TRmsa_nouns.csv"
+    try:
+        with open(csv_file, 'w') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+            writer.writeheader()
+            for data in dict_data:
+                writer.writerow(data)
+    except IOError:
+        print("I/O error")
 
     #1 SCC
     # scc = list(nx.strongly_connected_components(g))

@@ -35,7 +35,7 @@ def load_embedding(fpath, VOCAB, typ='w2v'):
         else:
             emb[word.lower()] = np.mean([emb[word.lower()], coefs], axis=0)
     return emb
-        
+
 
 class wordMatrix:	# VOCAB x NDIMS matrix containing row-wise word embeddings 
 

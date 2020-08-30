@@ -83,6 +83,13 @@ class wordMatrix:	# VOCAB x NDIMS matrix containing row-wise word embeddings
                 rank_mat[u][simList[r][1]] = r
         return rank_mat
 
+    def flip(rank_mat,focusRank=1):
+        flip_mat = np.zeros(rank_mat.shape)
+        for u in range(rank_mat.shape[0]):
+            for v in range(rank_mat.shape[0]):
+                if rank_mat[u][v] <= focusRank:
+                    flip_mat[u][v] = focusRank - rank_mat[u][v] + 1
+
     # def reform(sim_mat):
     # 	rMax, rMin = np.full(np.shape(sim_mat),0.99), np.min(sim_mat, axis=1)	# row wise MAX & MIN
     # 	sim_mat = (sim_mat.transpose()-rMin.transpose()).transpose()

@@ -128,7 +128,7 @@ if __name__ == '__main__':
     # TRMSA or RMSA
     temp_mat = rank_mat.copy()  
     # 'seed' is the MAXIMUM edge rank allowed in the msa
-    adj_mat = am.build(np.transpose(temp_mat),seed=2,mode='absolute',reverse=True) # Remove transpose for Rmsa
+    adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True) # Remove transpose for Rmsa
     g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     print("Graph made")
 

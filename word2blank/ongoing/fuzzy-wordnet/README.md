@@ -13,7 +13,7 @@
       * Rmsa: Rank Minimum Spanning Arboroscence [[ link ]](https://imgur.com/a/bK5shrM)
       * TRmsa: Transpose Rank Minimum Spanning Arboroscence [[ link ]](https://imgur.com/a/iYrqTOa)
 ### 3. Generating Embeddings
-  * Load graph into [Poincare code](https://github.com/facebookresearch/poincare-embeddings) and generate poincare embeddings. ([Poincare_paper](https://paperswithcode.com/paper/poincare-embeddings-for-learning-hierarchical?fbclid=IwAR2pGTiV0ais1I9syt_5CP-MGXXwnPSomQSIApSa6syAADHdvu6wbevFRg0))
+  * Load the graph into the [Poincare code](https://github.com/facebookresearch/poincare-embeddings) and generate new embeddings. ([Poincare_paper](https://paperswithcode.com/paper/poincare-embeddings-for-learning-hierarchical?fbclid=IwAR2pGTiV0ais1I9syt_5CP-MGXXwnPSomQSIApSa6syAADHdvu6wbevFRg0))
     * While generating graph, uncomment the [csv generation bit](https://github.com/bollu/alok-bollu/blob/b222a7ccd5fee64c61f103e7d7e4dd5956c12b97/word2blank/ongoing/fuzzy-wordnet/main.py#L141) too in [`main.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/main.py) (stores edge list as _.csv_)
     * Set the csv as the input file in [`train-mammals.sh`](https://github.com/facebookresearch/poincare-embeddings/blob/master/train-mammals.sh) and train the embeddings (Spits out torch model)
     * Run [`torch2gensim.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/torch2gensim.py) with input file as torch model to get vectors in w2v_format txt file

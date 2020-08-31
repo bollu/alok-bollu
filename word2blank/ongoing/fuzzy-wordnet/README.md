@@ -19,6 +19,6 @@
     * Run [`torch2gensim.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/torch2gensim.py) with input file as torch model to get vectors in w2v_format txt file
 ### 4. Evaluating Embeddings
   * Evaluate poincare embeddings on 
-    * run [`eval.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/evaluation/eval.py) with embedding text file set as input. 
+    * Run [`eval.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/evaluation/eval.py) with embedding text file set as input. 
     * Output spits out Spearman’s ρ for Lexical Entailment on HYPERLEX ([LEAR_paper](https://arxiv.org/abs/1710.06371))
     * Current ρ on TRmsa graph based embeddings (dim=10): 0.011

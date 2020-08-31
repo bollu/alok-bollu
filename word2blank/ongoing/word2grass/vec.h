@@ -12,7 +12,7 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
     arma::Mat<double> Proj = sub_x*arma::trans(sub_x) - sub_y*arma::trans(sub_y);
     arma::Mat<double> K = Proj*arma::trans(Proj);
     distance = arma::trace(K)/2;
-    grad_x = 2*sqrt(distance)*(Proj*sub_x);
+    grad_x = 2*(Proj*sub_x);
     grad_y = -2*(Proj*sub_y);
 
 }

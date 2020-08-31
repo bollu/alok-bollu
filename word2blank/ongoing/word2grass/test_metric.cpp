@@ -10,7 +10,7 @@
 using namespace std;
 
 const long long int P = 2;
-const long long int N = 3;
+const long long int N = 4;
 
 //train for projection metric
 void train_proj(arma::mat current, arma::mat target)
@@ -65,7 +65,7 @@ void train_proj(arma::mat current, arma::mat target)
 int main()
 {
     arma::mat current(N,P); current.randu();
-    arma::mat B(N,P); B(0,0) = 0 ; B(0,1) = 1; B(1,0) = 1; B(1,1) = 0;
+    arma::mat B(N,P); B.randu();
     arma::mat target = arma::orth(B);
     cout << "TARGET SUBSPACE:\n" << target ;
     

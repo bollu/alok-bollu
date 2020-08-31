@@ -11,7 +11,7 @@
     * Outputs:
       * msa: Maximum Spanning Arboroscence (as edgeWt is similairity, max is considered) [[ link ]](https://imgur.com/a/NlmAZuG)
       * Rmsa: Rank Minimum Spanning Arboroscence [[ link ]](https://imgur.com/a/bK5shrM)
-      * Trmsa: Transpose Rank Minimum Spanning Arboroscence [[ link ]](https://imgur.com/a/iYrqTOa)
+      * TRmsa: Transpose Rank Minimum Spanning Arboroscence [[ link ]](https://imgur.com/a/iYrqTOa)
 ### 3. Generating Embeddings
   * Load graph into [Poincare code](https://github.com/facebookresearch/poincare-embeddings) and generate poincare embeddings. ([Poincare_paper](https://paperswithcode.com/paper/poincare-embeddings-for-learning-hierarchical?fbclid=IwAR2pGTiV0ais1I9syt_5CP-MGXXwnPSomQSIApSa6syAADHdvu6wbevFRg0))
     * While generating graph, uncomment the [csv generation bit](https://github.com/bollu/alok-bollu/blob/b222a7ccd5fee64c61f103e7d7e4dd5956c12b97/word2blank/ongoing/fuzzy-wordnet/main.py#L141) too in [`main.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/main.py) (stores edge list as _.csv_)

@@ -26,12 +26,11 @@ double sim(int w1, int w2) {
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M1(row,col) = M[(size*P*w1) + (row*size) + col]; 
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M2(row,col) = M[(size*P*w2) + (row*size) + col]; 
     
-    arma::mat K = arma::trans(M1)*M1 - arma::trans(M2)*M2;
+    arma::mat K = arma::trans(M2)*M2 - arma::trans(M1)*M1;
     arma::mat temp = K*arma::trans(K);
-    //for ( row = 0; row <size; row++) for ( col = 0; col < size; col++) printf("%f ", temp(row,col));
     double s = arma::trace(temp);
     s = sqrt(s/2);
-    return s;
+    return s/10 ;//10*s/sqrt(2);
 }
 
 

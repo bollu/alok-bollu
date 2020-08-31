@@ -18,7 +18,7 @@ int main(int argc, char **argv)
 {
   FILE *f;
   char st1[max_size], st2[max_size], st3[max_size], st4[max_size], bestw[N][max_size], file_name[max_size];
-  double dist, bestd[N],sum;
+  double dist, bestd[N];
   long long words, size, P,  b, c, b1, b2, b3, threshold = 0,row,col;
   long long unsigned int a, d;
   double *M,*T_0;

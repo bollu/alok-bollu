@@ -354,43 +354,50 @@ void ReadVocab() {
 // syn1neg: word -> context -> ZERO
 
 void InitNet() {
-  long long a, b;
-  unsigned long long next_random = 1;
-  mat M(P,layer1_size); M.zeros();
+  long long a, b, c;
+  unsigned long long next_random1 = 1, next_random2 = 1;
+  arma::mat M(P, layer1_size); M.zeros();
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
   if (hs) {
     a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
     if (syn1 == NULL) {printf("Memory allocation failed\n"); exit(1);}
-    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++) 
+    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
      syn1[a * layer1_size + b] = 0;
   }
-  if (negative>0) {
+  if (negative>0) 
+  {
     a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
     if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
-    // ZERO INITIALIZATION OF SYN1NEG
-    for (a = 0; a < vocab_size; a++) for (b = 0; b < P; b++) for (long long c = 0; c < layer1_size; c++)
-     syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = 0;
-  }
-  // random initialize syn0 (this is esentially a 3D matrix with shape (vocab_size,P,layer1_size))
-  for (a = 0; a < vocab_size; a++) 
-  {
-    for (b = 0; b < P; b++) 
-      for (long long c = 0; c < layer1_size; c++) 
+    for (a = 0; a < vocab_size; a++)
+    { 
+      for (b = 0; b < P; b++) 
       {
-        // rnext = r * CONST + CONST2
-        // 0... 2^32 - 1
-        next_random = next_random * (unsigned long long)25214903917 + 11;
-        // RANDOM INITIALIZATION OF SYN0
-        // 0 ... 2^16 - 1
-        // 0 .. 1
-        // -0.5 .. 0.5
-        // -0.5 / layer1_size ... 0.5 / layer1_size
-        syn0[(a * P*layer1_size) + (b*layer1_size) + c ] = (((next_random & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
+        for ( c = 0; c < layer1_size; c++)
+        {
+          next_random1 = next_random1* (unsigned long long)45632823823  + 9;
+          syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = (((next_random1 & 0xFFFF)/ (double)78832) - 0.5)/layer1_size;
+          M(b,c) = syn1neg[(a * P*layer1_size) + (b*layer1_size) + c ];
+        }
+      }
+      uword r = arma::rank(M.t());
+      if (r != P)
+        printf("Rank of the matrix is %llu\n", r);  
+    }
+  }
+  for (a = 0; a < vocab_size; a++)
+  { 
+    for (b = 0; b < P; b++) 
+    {
+      for ( c = 0; c < layer1_size; c++)
+      {
+        next_random2 = next_random2 * (unsigned long long)25214903917 + 11;
+        syn0[ (a*P*layer1_size) + (b*layer1_size) + c] = (((next_random2 & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
         M(b,c) = syn0[(a * P*layer1_size) + (b*layer1_size) + c ];
       }
+    }
     uword r = arma::rank(M.t());
-    if (r < P)
+    if (r != P)
       printf("Rank of the matrix is %llu\n", r);  
   }
   CreateBinaryTree();
@@ -406,12 +413,12 @@ void *TrainModelThread(void *id) {
   long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
-  double f, g, sum, grad;
+  double f, g; //sum, grad;
   clock_t now;
   double *neu1 = (double*)calloc(P*layer1_size, sizeof(double));
   double *neu1e = (double*)calloc(P*layer1_size, sizeof(double));
   double *neu2e = (double*)calloc(P*layer1_size, sizeof(double));
-  double *T_0 = (double*)calloc(layer1_size*layer1_size, sizeof(double));
+  //double *T_0 = (double*)calloc(layer1_size*layer1_size, sizeof(double));
   mat NEU1E(P, layer1_size); NEU1E.zeros();
   mat NEU2E(P, layer1_size); NEU2E.zeros();
   // open the train file
@@ -566,7 +573,7 @@ void *TrainModelThread(void *id) {
           // targeting is 'word', and we want chordal distance
           if (d == 0) {
             target = word; // take chordal distance w/current word
-            label = 0; // set target distance= 0
+            label = 0; // set target distance = 0
           } else {
             // pick a random word
             next_random = next_random * (unsigned long long)25214903917 + 11;
@@ -576,7 +583,7 @@ void *TrainModelThread(void *id) {
             // if the random word overlaps with word, skip
             if (target == word) continue;
 
-            // set target dot product 0
+            // set target chordal distance 1
             label = 1;
           }
 
@@ -588,24 +595,11 @@ void *TrainModelThread(void *id) {
           // target * P * EMBEDSIZE
           l2 = target * P * layer1_size;
           
-          for ( b = 0; b < layer1_size; b++) 
-          {
-            for(c = 0; c < layer1_size; c++) 
-            {
-              sum = 0.0;
-              for(long long k = 0; k < P; k++)
-              {
-                sum += syn0[l1 + k*layer1_size + c]*syn0[l1 + k*layer1_size + b];
-                sum -= syn1neg[l2 + k*layer1_size + c]*syn1neg[l2 + k*layer1_size + b];    
-              }
-              T_0[b*layer1_size + c] = sum;
-            }
-          }
+          for ( b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) {NEU1E(b,c) = syn0[l1 + b*layer1_size + c]; NEU2E(b,c) = syn1neg[l2 + b*layer1_size + c]; }
           
-          f = 0.0; 
-
-          //Calculate f = 1/ (\sqrt 2) *|| syn0 syn0^T - syn1neg syn1neg^T ||_F
-          for (b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) f += T_0[ b*layer1_size + c]*T_0[ b*layer1_size + c];
+          arma::mat T_0 = arma::trans(NEU1E)*NEU1E - arma::trans(NEU2E)*NEU2E;
+          arma::mat temp = T_0*arma::trans(T_0);
+          f = arma::trace(temp);
           f = sqrt(f/2);
           
           // ---------
@@ -619,39 +613,24 @@ void *TrainModelThread(void *id) {
           
           // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
           // dloss/dsyn1neg_i_j := 2 (label - sigmoid(f)) * -2/f * \sum_k T_0[i][k]*syn1neg[k][j]
-          for (b = 0; b < P; b++) 
-          {
-            for (c = 0; c < layer1_size; c++) 
-            {
-              grad = 0.0;
-              for ( long long k = 0; k < layer1_size; k++)
-                grad += T_0[k*layer1_size + c]*syn1neg[l2 + b*layer1_size + k]; 
-              NEU1E(b,c) = syn1neg[l2 + b*layer1_size +c] + (-2 * grad * g)/f;
-            }
-          }
+          arma::mat grad_syn1neg = T_0*arma::trans(NEU2E);
+          NEU2E = NEU2E + (-2/f)*arma::trans(grad_syn1neg);  
            
           // STORE (SYN0 + GRADIENT*ALPHA) OF SYN0 (FOCUS) in NEU2E
           // dloss/dsyn0_i_j := 2 (label - sigmoid(f)) * 2/f * \sum_k T_0[i][k]*syn0[k][j]
-          for (b = 0; b < P; b++) 
-          {
-            for (c = 0; c < layer1_size; c++) 
-            {
-              grad = 0.0;
-              for ( long long k = 0; k < layer1_size; k++)
-                grad += T_0[k*layer1_size + c]*syn0[l1+ b*layer1_size + k]; 
-              NEU2E(b,c) = syn0[l1 + b*layer1_size +c] + (2 * grad * g)/f;
-            }
-          }
+          arma::mat grad_syn0 = T_0*arma::trans(NEU1E);
+          NEU1E = NEU1E + (2/f)*arma::trans(grad_syn0);
+
           mat Q_SYN1NEG;
           mat R_SYN1NEG;
-          arma::qr(Q_SYN1NEG, R_SYN1NEG, NEU1E.t());
+          arma::qr(Q_SYN1NEG, R_SYN1NEG, NEU2E.t());
           // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
           for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[l2 + b*layer1_size + c] = Q_SYN1NEG(c, b);
         }
         
         mat Q_SYN0;
         mat R_SYN0;
-        arma::qr(Q_SYN0, R_SYN0, NEU2E.t());
+        arma::qr(Q_SYN0, R_SYN0, NEU1E.t());
         // Learn weights input -> hidden
         // BACKPROP ON FOCUS WORD FROM NEU1E
         for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn0[l1 + b*layer1_size + c] = Q_SYN0(c, b);

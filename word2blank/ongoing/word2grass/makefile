@@ -8,7 +8,6 @@ CFLAGS = -llapacke -llapack -lblas -lm -lpthread  -march=native -Wall \
 
 CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
                  -funroll-loops -Wno-unused-result -fuse-ld=gold
-
 all : word2grass compute-accuracy simlex-accuracy metric
 #distance compute-accuracy
 

@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <armadillo>
+#include "vec.h"
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -365,26 +366,26 @@ void InitNet() {
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
      syn1[a * layer1_size + b] = 0;
   }
-  if (negative>0) 
-  {
-    a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
-    if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
-    for (a = 0; a < vocab_size; a++)
-    { 
-      for (b = 0; b < P; b++) 
-      {
-        for ( c = 0; c < layer1_size; c++)
-        {
-          next_random1 = next_random1* (unsigned long long)45632823823  + 9;
-          syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = (((next_random1 & 0xFFFF)/ (double)78832) - 0.5)/layer1_size;
-          M(b,c) = syn1neg[(a * P*layer1_size) + (b*layer1_size) + c ];
-        }
-      }
-      uword r = arma::rank(M.t());
-      if (r != P)
-        printf("Rank of the matrix is %llu\n", r);  
-    }
-  }
+  // if (negative>0) 
+  // {
+  //   a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
+  //   if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
+  //   for (a = 0; a < vocab_size; a++)
+  //   { 
+  //     for (b = 0; b < P; b++) 
+  //     {
+  //       for ( c = 0; c < layer1_size; c++)
+  //       {
+  //         next_random1 = next_random1* (unsigned long long)45632823823  + 9;
+  //         syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = (((next_random1 & 0xFFFF)/ (double)78832) - 0.5)/layer1_size;
+  //         M(b,c) = syn1neg[(a * P*layer1_size) + (b*layer1_size) + c ];
+  //       }
+  //     }
+  //     uword r = arma::rank(M.t());
+  //     if (r != P)
+  //       printf("Rank of the matrix is %llu\n", r);  
+  //   }
+  // }
   for (a = 0; a < vocab_size; a++)
   { 
     for (b = 0; b < P; b++) 

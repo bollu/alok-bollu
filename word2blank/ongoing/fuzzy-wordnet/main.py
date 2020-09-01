@@ -33,8 +33,8 @@ if __name__ == '__main__':
 
     rank_mat = wm.rank(sim_mat) 
     print("rank matrix made")
-    flip_mat = wm.flip(rank_mat,focusRank=1)
-    print("flip matrix made")
+    #flip_mat = wm.flip(rank_mat,focusRank=1)
+    #print("flip matrix made")
     # print(sim_mat)
 
     # quit = False
@@ -126,18 +126,18 @@ if __name__ == '__main__':
     # print(rank_mat)
 
     # TRMSA or RMSA
-    temp_mat = manip_mat.copy()  
+    temp_mat = rank_mat.copy()  
     # 'seed' is the MAXIMUM edge rank allowed in the msa
-    adj_mat = am.build(temp_mat,seed=2,mode='absolute',reverse=True) # Remove transpose for Rmsa
+    adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True) # Remove transpose for Rmsa
     g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     print("Graph made")
 
     Rmsa = nx.minimum_spanning_arborescence(g)
     Rmsa = nx.relabel_nodes(Rmsa,ind_keys)
     dot = to_pydot(Rmsa)
-    write_dot(Rmsa,"manip_nouns_local.dot")
-    # write_dot(Rmsa,"TRmsa_nouns.dot")
+    write_dot(Rmsa,"TRmsa_nouns.dot")
 
+    # The CSV Bit 
     # import csv  # Saving the edgelist as csv ; For Poincare implementation
     # csv_columns = ['id1','id2','weight']
     # dict_data = list()

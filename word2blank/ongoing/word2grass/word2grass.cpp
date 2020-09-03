@@ -1,3 +1,5 @@
+#include <armadillo>
+#include <iostream>
 #include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,8 +9,9 @@
 #include <math.h>
 #include <assert.h>
 #include <stddef.h>
-#include <armadillo>
-#include "vec.h"
+#include "grad.h"
+
+using namespace std;
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -16,10 +19,6 @@
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
 
-using namespace std;
-using namespace arma;
-
-// No of basis vectors used to describe the subspace, so we get O(P, layer1_size)
 const long long int P = 2;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -37,7 +36,10 @@ int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
 double alpha = 0.025, starting_alpha, sample = 1e-3;
-double*syn0, *syn1, *syn1neg, *expTable, *M;
+double *syn0, *syn1, *syn1neg, *expTable;
+arma::cube c_syn1neg;
+arma::cube c_syn0; 
+
 clock_t start;
 
 int hs = 0, negative = 5;
@@ -342,23 +344,9 @@ void ReadVocab() {
   fclose(fin);
 }
 
-// SKIPGRAM w/negative sampling
-// windowsize: 6
-// Is [the dog is *good* all the time] except on sundays when it wants meat?
-// syn1neg[the] syn1neg[dog] syn1neg[is] syn0[good] syn1neg[all]
-//
-// we SAVE syn0.
-//
-// the dog is good *all* the time
-// syn1neg[the] syn1neg[dog] syn1neg[is] syn1neg[good]  syn0[all]
-// syn0: word -> focus -> RANDOM
-// syn1neg: word -> context -> ZERO
-
 void InitNet() {
-  long long a, b, c;
-  unsigned long long next_random1 = 1, next_random2 = 1;
-  arma::mat M(P, layer1_size); M.zeros();
-  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
+  long long a, b;
+  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * layer1_size * sizeof(double));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
   if (hs) {
     a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
@@ -366,68 +354,41 @@ void InitNet() {
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
      syn1[a * layer1_size + b] = 0;
   }
-  // if (negative>0) 
-  // {
-  //   a = posix_memalign((void **)&syn1neg, 128, (long long)vocab_size * P * layer1_size * sizeof(double));
-  //   if (syn1neg == NULL) {printf("Memory allocation failed\n"); exit(1);}
-  //   for (a = 0; a < vocab_size; a++)
-  //   { 
-  //     for (b = 0; b < P; b++) 
-  //     {
-  //       for ( c = 0; c < layer1_size; c++)
-  //       {
-  //         next_random1 = next_random1* (unsigned long long)45632823823  + 9;
-  //         syn1neg[(a* P * layer1_size) + (b * layer1_size) + c] = (((next_random1 & 0xFFFF)/ (double)78832) - 0.5)/layer1_size;
-  //         M(b,c) = syn1neg[(a * P*layer1_size) + (b*layer1_size) + c ];
-  //       }
-  //     }
-  //     uword r = arma::rank(M.t());
-  //     if (r != P)
-  //       printf("Rank of the matrix is %llu\n", r);  
-  //   }
-  // }
-  for (a = 0; a < vocab_size; a++)
-  { 
-    for (b = 0; b < P; b++) 
+  if (negative>0) {
+    c_syn1neg.set_size(layer1_size, P, vocab_size);
+    for (a = 0; a < (long long)c_syn1neg.n_slices; a++)
     {
-      for ( c = 0; c < layer1_size; c++)
-      {
-        next_random2 = next_random2 * (unsigned long long)25214903917 + 11;
-        syn0[ (a*P*layer1_size) + (b*layer1_size) + c] = (((next_random2 & 0xFFFF) / (double)65536) - 0.5) / layer1_size;
-        M(b,c) = syn0[(a * P*layer1_size) + (b*layer1_size) + c ];
-      }
+      arma::mat X = arma::randu<arma::mat>(layer1_size, P);
+      arma::uword r_syn1neg = arma::rank(X);
+      if ((long long)r_syn1neg == P) c_syn1neg.slice(a) = X;
+      else printf("FULL COLUMN FAIL\n");
     }
-    uword r = arma::rank(M.t());
-    if (r != P)
-      printf("Rank of the matrix is %llu\n", r);  
+  }
+  c_syn0.set_size(layer1_size, P, vocab_size);
+  for (a = 0; a < (long long)c_syn0.n_slices; a++)
+  {
+    arma::mat Y = arma::randu<arma::mat>(layer1_size, P);
+    arma::uword r_syn0 = arma::rank(Y);
+    if ((long long)r_syn0 == P)c_syn0.slice(a) = Y;
+    else printf("FULL COLUMN FAIL\n");
   }
   CreateBinaryTree();
 }
 
-
-// THEORIES I AM NOT SURE ABOUT::
-// 1) LOSS FUNCTION SHOULD BE KEPT SAME??
-// 2) STILL CONFUSED ABOUT THE CHOICE OF METRIC OF SIMILARITY - TWO OPTIONS (RIEMMANIAN METRIC OR GEODESICS)
 void *TrainModelThread(void *id) {
   long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
   long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
-  double f, g; //sum, grad;
+  double f, g;
   clock_t now;
-  double *neu1 = (double*)calloc(P*layer1_size, sizeof(double));
-  double *neu1e = (double*)calloc(P*layer1_size, sizeof(double));
-  double *neu2e = (double*)calloc(P*layer1_size, sizeof(double));
-  //double *T_0 = (double*)calloc(layer1_size*layer1_size, sizeof(double));
-  mat NEU1E(P, layer1_size); NEU1E.zeros();
-  mat NEU2E(P, layer1_size); NEU2E.zeros();
-  // open the train file
+  double *neu1 = (double *)calloc(layer1_size, sizeof(double));
+  double *neu1e = (double *)calloc(layer1_size, sizeof(double));
+  arma::mat grad_syn0(layer1_size, P);
+  arma::mat grad_syn1neg(layer1_size, P);
   FILE *fi = fopen(train_file, "rb");
-
-  // split the file across threads, have each thread read its share
   fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
-
   while (1) {
     if (word_count - last_word_count > 10000) {
       word_count_actual += word_count - last_word_count;
@@ -473,9 +434,8 @@ void *TrainModelThread(void *id) {
     }
     word = sen[sentence_position];
     if (word == -1) continue;
-    for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1[b*layer1_size + c] = 0;
-    for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = 0;
-    for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = 0;
+    for (c = 0; c < layer1_size; c++) neu1[c] = 0;
+    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
     next_random = next_random * (unsigned long long)25214903917 + 11;
     b = next_random % window;
     if (cbow) {  //train the cbow architecture
@@ -545,11 +505,9 @@ void *TrainModelThread(void *id) {
         if (c >= sentence_length) continue;
         last_word = sen[c];
         if (last_word == -1) continue;
-        // l1 is the offset of the "current focus word" into the array
-        l1 = last_word * P * layer1_size;
-
-        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu1e[b*layer1_size + c] = 0;
-        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) neu2e[b*layer1_size + c] = 0;
+        l1 = last_word * layer1_size;
+        for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+        arma::mat buff0 = c_syn0.slice(last_word);
         // HIERARCHICAL SOFTMAX
         if (hs) for (d = 0; d < vocab[word].codelen; d++) {
           f = 0;
@@ -566,75 +524,33 @@ void *TrainModelThread(void *id) {
           // Learn weights hidden -> output
           for (c = 0; c < layer1_size; c++) syn1[c + l2] += g * syn0[c + l1];
         }
-
         // NEGATIVE SAMPLING
-        // negative := # of negative samples
         if (negative > 0) for (d = 0; d < negative + 1; d++) {
-          // if we are are in the first iteration, the word we are
-          // targeting is 'word', and we want chordal distance
           if (d == 0) {
-            target = word; // take chordal distance w/current word
-            label = 0; // set target distance = 0
+            target = word;
+            label = 0;
           } else {
-            // pick a random word
             next_random = next_random * (unsigned long long)25214903917 + 11;
             target = table[(next_random >> 16) % table_size];
-
             if (target == 0) target = next_random % (vocab_size - 1) + 1;
-            // if the random word overlaps with word, skip
             if (target == word) continue;
-
-            // set target chordal distance 1
             label = 1;
           }
-
-          // target: integer index of the word
-          // l2: offset into the arrays
-          // weights[word][subspce_dim][embedix]
-          // weights[word * P * EMBEDSIZE + subspace_dim * EMBED_SIZE + embedix]
-
-          // target * P * EMBEDSIZE
-          l2 = target * P * layer1_size;
-          
-          for ( b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) {NEU1E(b,c) = syn0[l1 + b*layer1_size + c]; NEU2E(b,c) = syn1neg[l2 + b*layer1_size + c]; }
-          
-          arma::mat T_0 = arma::trans(NEU1E)*NEU1E - arma::trans(NEU2E)*NEU2E;
-          arma::mat temp = T_0*arma::trans(T_0);
-          f = arma::trace(temp);
-          f = sqrt(f/2);
-          
-          // ---------
-          // loss := (label - sigmoid(f))^2       
-          if (f > MAX_EXP) g = (label - 1) * alpha;
-          else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-          
-          // ------
-          // UPDATE RULE :: X_i_j = (X_i_j + grad*alpha)
-          
-          // STORE (SYN1NEG + GRADIENT*ALPHA) OF SYN1NEG (CONTEXT) in NEU1E
-          // dloss/dsyn1neg_i_j := 2 (label - sigmoid(f)) * -2/f * \sum_k T_0[i][k]*syn1neg[k][j]
-          arma::mat grad_syn1neg = T_0*arma::trans(NEU2E);
-          NEU2E = NEU2E + (-2/f)*arma::trans(grad_syn1neg);  
-           
-          // STORE (SYN0 + GRADIENT*ALPHA) OF SYN0 (FOCUS) in NEU2E
-          // dloss/dsyn0_i_j := 2 (label - sigmoid(f)) * 2/f * \sum_k T_0[i][k]*syn0[k][j]
-          arma::mat grad_syn0 = T_0*arma::trans(NEU1E);
-          NEU1E = NEU1E + (2/f)*arma::trans(grad_syn0);
-
-          mat Q_SYN1NEG;
-          mat R_SYN1NEG;
-          arma::qr(Q_SYN1NEG, R_SYN1NEG, NEU2E.t());
-          // UPDATE GRADIENT OF SYN1NEG (CONTEXT)
-          for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn1neg[l2 + b*layer1_size + c] = Q_SYN1NEG(c, b);
+          //l2 = target * layer1_size;
+          arma::mat buff1neg = c_syn1neg.slice(target);
+          f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
+          getDotAndGradients_binetcauchy(c_syn0.slice(target), buff1neg , f, grad_syn0, grad_syn1neg);
+          // if (f > MAX_EXP) g = (label - 1) * alpha;
+          // else if (f < -MAX_EXP) g = (label - 0) * alpha;
+          // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          g = 2*(label - f)*alpha;
+          buff1neg += grad_syn1neg*g;
+          buff0 += grad_syn0*g;
+          buff0 = arma::orth(buff0);
+          c_syn1neg.slice(target) = arma::orth(buff1neg);
         }
-        
-        mat Q_SYN0;
-        mat R_SYN0;
-        arma::qr(Q_SYN0, R_SYN0, NEU1E.t());
         // Learn weights input -> hidden
-        // BACKPROP ON FOCUS WORD FROM NEU1E
-        for (b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) syn0[l1 + b*layer1_size + c] = Q_SYN0(c, b);
+        c_syn0.slice(last_word) = buff0;
       }
     }
     sentence_position++;
@@ -643,10 +559,9 @@ void *TrainModelThread(void *id) {
       continue;
     }
   }
-  // fclose(fi);
-  // free(neu1);
-  // free(neu1e);
-  // free(neu2e);
+  fclose(fi);
+  free(neu1);
+  free(neu1e);
   pthread_exit(NULL);
 }
 
@@ -664,16 +579,17 @@ void TrainModel() {
   start = clock();
   for (a = 0; a < num_threads; a++) pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
   for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
-  if (classes == 0) {
+  fo = fopen(output_file, "wb");
+   if (classes == 0) {
     fo = fopen(output_file, "wb");
     assert(fo != NULL);
-    // Save the word vectors
+    // Save the word matrices
     // EMBEDSIZE := layer1_size
     fprintf(fo, "%lld %lld %lld\n", vocab_size, layer1_size, P);
     for (a = 0; a < vocab_size; a++) {
       fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn0[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(double), 1, fo);
-      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn0[(a * P * layer1_size) + (b*layer1_size) + c]);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&c_syn0(c, b, a), sizeof(double), 1, fo);
+      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", c_syn0(c, b, a));
       fprintf(fo, "\n");
     }
     fclose(fo);
@@ -685,24 +601,24 @@ void TrainModel() {
     fprintf(stderr, "storing neg file at: |%s|\n", negpath);
     fo = fopen(negpath, "wb");
     assert(fo != NULL);
-    fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+    fprintf(fo, "%lld %lld %lld\n", vocab_size, layer1_size, P);
     for (a = 0; a < vocab_size; a++) {
       fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&syn1neg[(a * P * layer1_size) + (b*layer1_size) + c], sizeof(double), 1, fo);
-      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", syn1neg[(a * P * layer1_size) + (b*layer1_size) + c]);
+      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&c_syn1neg(c, b, a), sizeof(double), 1, fo);
+      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ",c_syn1neg(c, b, a));
       fprintf(fo, "\n");
     }
     fclose(fo);
 
-
   } else {
+    // Run K-means on the word vectors
     fo = fopen(output_file, "wb");
     // Run K-means on the word vectors
     int clcn = classes, iter = 10, closeid;
     int *centcn = (int *)malloc(classes * sizeof(int));
     int *cl = (int *)calloc(vocab_size, sizeof(int));
-    double closev, x;
-    double *cent = (double *)calloc(classes * layer1_size, sizeof(double));
+    real closev, x;
+    real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
     for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
     for (a = 0; a < iter; a++) {
       for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;
@@ -823,7 +739,7 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
-  expTable = (double*)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));
+  expTable = (double *)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));
   for (i = 0; i < EXP_TABLE_SIZE; i++) {
     expTable[i] = exp((i / (double)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
     expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)

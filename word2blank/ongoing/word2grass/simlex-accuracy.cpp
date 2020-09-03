@@ -30,7 +30,7 @@ double sim(int w1, int w2) {
     arma::mat temp = K*arma::trans(K);
     double s = arma::trace(temp);
     s = sqrt(s/2);
-    return s/10 ;//10*s/sqrt(2);
+    return s ;//10*s/sqrt(2);
 }
 
 

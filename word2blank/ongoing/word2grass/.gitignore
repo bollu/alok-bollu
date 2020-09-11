@@ -2,3 +2,6 @@ word2grass
 distance
 compute-accuracy
 simlex-accuracy
+test_metric
+*sw*
+*.sw.*

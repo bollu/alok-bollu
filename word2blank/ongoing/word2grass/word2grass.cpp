@@ -346,36 +346,42 @@ void ReadVocab() {
 }
 
 void InitNet() {
-  long long a, b;
-  a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * layer1_size * sizeof(double));
-  if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
-  if (hs) {
-    a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
-    if (syn1 == NULL) {printf("Memory allocation failed\n"); exit(1);}
-    for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
-     syn1[a * layer1_size + b] = 0;
-  }
-  if (negative > 0) {
-    c_syn1neg.set_size(layer1_size, P, vocab_size);
-    for (a = 0; a < (long long)c_syn1neg.n_slices; a++)
-    {
-      arma::mat X = arma::randu<arma::mat>(layer1_size, P) - 0.5;
-      X /= (layer1_size * P);
-      arma::uword r_syn1neg = arma::rank(X);
-      if ((long long)r_syn1neg == P) c_syn1neg.slice(a) = X;
-      else printf("FULL COLUMN FAIL\n");
+    long long a, b;
+    a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * layer1_size * sizeof(double));
+    if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
+    if (hs) {
+        a = posix_memalign((void **)&syn1, 128, (long long)vocab_size * layer1_size * sizeof(double));
+        if (syn1 == NULL) {printf("Memory allocation failed\n"); exit(1);}
+        for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
+            syn1[a * layer1_size + b] = 0;
     }
-  }
-  c_syn0.set_size(layer1_size, P, vocab_size);
-  for (a = 0; a < (long long)c_syn0.n_slices; a++)
-  {
-    arma::mat Y = arma::randu<arma::mat>(layer1_size, P) - 0.5;
-    Y /= (layer1_size * P);
-    arma::uword r_syn0 = arma::rank(Y);
-    if ((long long)r_syn0 == P)c_syn0.slice(a) = Y;
-    else printf("FULL COLUMN FAIL\n");
-  }
-  CreateBinaryTree();
+    if (negative > 0) {
+        c_syn1neg.set_size(layer1_size, P, vocab_size);
+        printf("c_syn1neg.n_slices: %lld\n", c_syn1neg.n_slices);
+        assert(c_syn1neg.n_slices == vocab_size);
+        for (a = 0; a < vocab_size; a++) {
+            printf("\rinitializing syn1neg |%d|", a);
+            arma::mat X = arma::randu<arma::mat>(layer1_size, P) - 0.5;
+            X /= (layer1_size * P);
+            arma::uword r_syn1neg = arma::rank(X);
+            if ((long long)r_syn1neg == P) c_syn1neg.slice(a) = X;
+            else printf("FULL COLUMN FAIL\n");
+        }
+    }
+    c_syn0.set_size(layer1_size, P, vocab_size);
+    assert(c_syn0.n_slices == vocab_size);
+    for (a = 0; a < vocab_size; a++) {
+        printf("\rinitializing syn0 |%d|", a);
+        arma::mat Y = arma::randu<arma::mat>(layer1_size, P) - 0.5;
+        Y /= (layer1_size * P);
+        arma::uword r_syn0 = arma::rank(Y);
+        if ((long long)r_syn0 == P)c_syn0.slice(a) = Y;
+        else printf("FULL COLUMN FAIL\n");
+    }
+    printf("done initializing syn0...\n");
+    printf("creating binary tree...\n");
+    CreateBinaryTree();
+    printf("done creating binary tree...\n");
 }
 
 double sigmoid(double f) {

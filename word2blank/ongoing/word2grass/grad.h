@@ -18,7 +18,7 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 }
 
 void getDotAndGradients_binetcauchy(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
-arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
+arma::Mat<double>* grad_x, arma::Mat<double>* grad_y)
 {
     const long long int ndim = sub_x.n_rows;
     const long long int pdim = sub_x.n_cols;
@@ -35,8 +35,33 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
     arma::Mat<double> ytx_inv = arma::inv(YtX);
 
     distance = 1 - (determinant_xty*determinant_xty);
-    grad_x = -2*determinant_xty*determinant_xty*(sub_y*xty_inv);
-    grad_y = -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv);
+    if(grad_x) { *grad_x += -2*determinant_xty*determinant_xty*(sub_y*xty_inv); }
+    if(grad_y) { *grad_y += -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv); }
+
+}
+
+void gradientDescentBinetCauchy(arma::Mat<double> sub_x, arma::Mat<double> sub_y,
+   double &distance, const double target, const double alpha,
+   arma::Mat<double>* grad_x, arma::Mat<double>* grad_y)
+{
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+
+    arma::Mat<double> XtY = arma::trans(sub_x)*sub_y;
+    double determinant_xty = arma::det(XtY);
+    arma::Mat<double> xty_inv = arma::inv(XtY);
+
+    arma::Mat<double> YtX = arma::trans(sub_y)*sub_x;
+    double determinant_ytx = arma::det(YtX);
+    arma::Mat<double> ytx_inv = arma::inv(YtX);
+
+    distance = 1 - (determinant_xty*determinant_xty) ;
+    double g = (target - distance)*alpha;
+    if(grad_x) { *grad_x += g * -2*determinant_xty*determinant_xty*(sub_y*xty_inv); }
+    if(grad_y) { *grad_y += g * -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv); }
 
 }
 

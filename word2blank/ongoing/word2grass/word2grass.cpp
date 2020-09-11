@@ -19,6 +19,7 @@ using namespace std;
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
 
+
 const long long int P = 2;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -354,11 +355,12 @@ void InitNet() {
     for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
      syn1[a * layer1_size + b] = 0;
   }
-  if (negative>0) {
+  if (negative > 0) {
     c_syn1neg.set_size(layer1_size, P, vocab_size);
     for (a = 0; a < (long long)c_syn1neg.n_slices; a++)
     {
-      arma::mat X = arma::randu<arma::mat>(layer1_size, P);
+      arma::mat X = arma::randu<arma::mat>(layer1_size, P) - 0.5;
+      X /= (layer1_size * P);
       arma::uword r_syn1neg = arma::rank(X);
       if ((long long)r_syn1neg == P) c_syn1neg.slice(a) = X;
       else printf("FULL COLUMN FAIL\n");
@@ -367,12 +369,17 @@ void InitNet() {
   c_syn0.set_size(layer1_size, P, vocab_size);
   for (a = 0; a < (long long)c_syn0.n_slices; a++)
   {
-    arma::mat Y = arma::randu<arma::mat>(layer1_size, P);
+    arma::mat Y = arma::randu<arma::mat>(layer1_size, P) - 0.5;
+    Y /= (layer1_size * P);
     arma::uword r_syn0 = arma::rank(Y);
     if ((long long)r_syn0 == P)c_syn0.slice(a) = Y;
     else printf("FULL COLUMN FAIL\n");
   }
   CreateBinaryTree();
+}
+
+double sigmoid(double f) {
+    return exp(f) / (exp(f) + 1);
 }
 
 void *TrainModelThread(void *id) {
@@ -507,7 +514,8 @@ void *TrainModelThread(void *id) {
         if (last_word == -1) continue;
         l1 = last_word * layer1_size;
         for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
-        arma::mat buff0 = c_syn0.slice(last_word);
+        // need to think, does this actually copy?
+        arma::mat buff0(c_syn0.slice(last_word));
         // HIERARCHICAL SOFTMAX
         if (hs) for (d = 0; d < vocab[word].codelen; d++) {
           f = 0;
@@ -539,16 +547,19 @@ void *TrainModelThread(void *id) {
           //l2 = target * layer1_size;
           arma::mat buff1neg = c_syn1neg.slice(target);
           f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
-          getDotAndGradients_binetcauchy(c_syn0.slice(target), buff1neg , f, grad_syn0, grad_syn1neg);
+          getDotAndGradients_binetcauchy(c_syn0.slice(last_word), buff1neg, f, 
+                  grad_syn0, grad_syn1neg);
+          f = sigmoid(f);
           // if (f > MAX_EXP) g = (label - 1) * alpha;
           // else if (f < -MAX_EXP) g = (label - 0) * alpha;
           // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-          g = 2*(label - f)*alpha;
+          g = (label - f)*alpha;
           buff1neg += grad_syn1neg*g;
           buff0 += grad_syn0*g;
-          buff0 = arma::orth(buff0);
           c_syn1neg.slice(target) = arma::orth(buff1neg);
         }
+        // move ortho here
+        buff0 = arma::orth(buff0);
         // Learn weights input -> hidden
         c_syn0.slice(last_word) = buff0;
       }
@@ -617,8 +628,8 @@ void TrainModel() {
     int clcn = classes, iter = 10, closeid;
     int *centcn = (int *)malloc(classes * sizeof(int));
     int *cl = (int *)calloc(vocab_size, sizeof(int));
-    real closev, x;
-    real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
+    float closev, x;
+    float *cent = (float *)calloc(classes * layer1_size, sizeof(float));
     for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
     for (a = 0; a < iter; a++) {
       for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;

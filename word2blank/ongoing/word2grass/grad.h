@@ -35,8 +35,8 @@ arma::Mat<double>& grad_x, arma::Mat<double> &grad_y)
     arma::Mat<double> ytx_inv = arma::inv(YtX);
 
     distance = 1 - (determinant_xty*determinant_xty);
-    grad_x += -2*determinant_xty*determinant_xty*(sub_y*xty_inv);
-    grad_y += -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv);
+    grad_x = -2*determinant_xty*determinant_xty*(sub_y*xty_inv);
+    grad_y = -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv);
 
 }
 

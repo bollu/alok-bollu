@@ -17,8 +17,8 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 
 }
 
-void getDotAndGradients_binetcauchy(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
-arma::Mat<double>* grad_x, arma::Mat<double>* grad_y)
+void __attribute__((alwaysinline)) getDotAndGradients_binetcauchy(const arma::Mat<double> &sub_x, const arma::Mat<double> &sub_y, double& distance, 
+arma::Mat<double>& grad_x, arma::Mat<double> &grad_y)
 {
     const long long int ndim = sub_x.n_rows;
     const long long int pdim = sub_x.n_cols;
@@ -35,8 +35,8 @@ arma::Mat<double>* grad_x, arma::Mat<double>* grad_y)
     arma::Mat<double> ytx_inv = arma::inv(YtX);
 
     distance = 1 - (determinant_xty*determinant_xty);
-    if(grad_x) { *grad_x += -2*determinant_xty*determinant_xty*(sub_y*xty_inv); }
-    if(grad_y) { *grad_y += -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv); }
+    grad_x += -2*determinant_xty*determinant_xty*(sub_y*xty_inv);
+    grad_y += -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv);
 
 }
 

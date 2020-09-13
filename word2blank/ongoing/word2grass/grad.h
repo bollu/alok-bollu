@@ -20,11 +20,16 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 void __attribute__((alwaysinline)) getDotAndGradients_binetcauchy(const arma::Mat<double> &sub_x, const arma::Mat<double> &sub_y, double& distance, 
 arma::Mat<double>& grad_x, arma::Mat<double> &grad_y)
 {
-    const long long int ndim = sub_x.n_rows;
-    const long long int pdim = sub_x.n_cols;
-
-    assert((long long int)sub_y.n_rows == ndim);
-    assert((long long int)sub_y.n_cols == pdim);
+    if (sub_y.n_rows != sub_x.n_rows) {
+        printf("\nERR: %d %d\n", sub_y.n_rows, sub_x.n_rows);
+        return;
+    }
+    if (sub_y.n_cols != sub_x.n_cols) {
+        printf("\nERR: %d %d\n", sub_y.n_cols, sub_x.n_cols);
+        return;
+    }
+    assert(sub_y.n_rows == sub_x.n_rows);
+    assert(sub_y.n_cols == sub_x.n_cols);
 
     arma::Mat<double> XtY = arma::trans(sub_x)*sub_y;
     double determinant_xty = arma::det(XtY);

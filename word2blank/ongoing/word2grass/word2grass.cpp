@@ -20,7 +20,7 @@ using namespace std;
 #define MAX_CODE_LENGTH 40
 
 
-const long long int P = 2;
+int P = -1;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
 struct vocab_word {
@@ -34,7 +34,7 @@ char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
 int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
 int *vocab_hash;
-long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
+long long vocab_max_size = 1000, vocab_size = 0, layer1_size = -1;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
 double alpha = 0.025, starting_alpha, sample = 1e-3;
 double *syn0, *syn1, *syn1neg, *expTable;
@@ -355,27 +355,24 @@ void InitNet() {
         for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
             syn1[a * layer1_size + b] = 0;
     }
-    if (negative > 0) {
-        c_syn1neg.set_size(layer1_size, P, vocab_size);
-        printf("c_syn1neg.n_slices: %lld\n", c_syn1neg.n_slices);
-        assert(c_syn1neg.n_slices == vocab_size);
-        for (a = 0; a < vocab_size; a++) {
-            printf("\rinitializing syn1neg |%d|", a);
-            arma::mat X = arma::randu<arma::mat>(layer1_size, P) - 0.5;
-            X /= (layer1_size * P);
-            arma::uword r_syn1neg = arma::rank(X);
-            if ((long long)r_syn1neg == P) c_syn1neg.slice(a) = X;
-            else printf("FULL COLUMN FAIL\n");
-        }
+
+    c_syn1neg.set_size(layer1_size, P, vocab_size);
+    printf("c_syn1neg.n_slices: %lld\n", c_syn1neg.n_slices);
+    assert(c_syn1neg.n_slices == vocab_size);
+    for (a = 0; a < vocab_size; a++) {
+        printf("\rinitializing syn1neg |%d|", a);
+        arma::mat X = arma::orth(arma::randu<arma::mat>(layer1_size, P) - 0.5);
+        arma::uword r = arma::rank(X);
+        if ((long long)r == P) c_syn1neg.slice(a) = X;
+        else printf("FULL COLUMN FAIL\n");
     }
     c_syn0.set_size(layer1_size, P, vocab_size);
     assert(c_syn0.n_slices == vocab_size);
     for (a = 0; a < vocab_size; a++) {
         printf("\rinitializing syn0 |%d|", a);
-        arma::mat Y = arma::randu<arma::mat>(layer1_size, P) - 0.5;
-        Y /= (layer1_size * P);
-        arma::uword r_syn0 = arma::rank(Y);
-        if ((long long)r_syn0 == P)c_syn0.slice(a) = Y;
+        arma::mat Y = arma::orth(arma::randu<arma::mat>(layer1_size, P) - 0.5);
+        arma::uword r = arma::rank(Y);
+        if ((long long)r == P)c_syn0.slice(a) = Y;
         else printf("FULL COLUMN FAIL\n");
     }
     printf("done initializing syn0...\n");
@@ -408,7 +405,7 @@ void *TrainModelThread(void *id) {
       last_word_count = word_count;
       if ((debug_mode > 1)) {
         now=clock();
-        printf("%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ", 13, alpha,
+        printf("\nAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ", alpha,
          word_count_actual / (double)(iter * train_words + 1) * 100,
          word_count_actual / ((double)(now - start + 1) / (double)CLOCKS_PER_SEC * 1000));
         fflush(stdout);
@@ -464,6 +461,7 @@ void *TrainModelThread(void *id) {
         cw++;
       }
       if (cw) {
+        assert(false && "disabled");
         for (c = 0; c < layer1_size; c++) neu1[c] /= cw;
         if (hs) for (d = 0; d < vocab[word].codelen; d++) {
           f = 0;
@@ -481,7 +479,7 @@ void *TrainModelThread(void *id) {
           for (c = 0; c < layer1_size; c++) syn1[c + l2] += g * neu1[c];
         }
         // NEGATIVE SAMPLING
-        if (negative > 0) for (d = 0; d < negative + 1; d++) {
+        if (negative >= 0) for (d = 0; d < negative + 1; d++) {
           if (d == 0) {
             target = word;
             label = 1;
@@ -521,55 +519,71 @@ void *TrainModelThread(void *id) {
         l1 = last_word * layer1_size;
         for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
         // need to think, does this actually copy?
-        arma::mat buff0(c_syn0.slice(last_word));
         // HIERARCHICAL SOFTMAX
-        if (hs) for (d = 0; d < vocab[word].codelen; d++) {
-          f = 0;
-          l2 = vocab[word].point[d] * layer1_size;
-          // Propagate hidden -> output
-          for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1[c + l2];
-          if (f <= -MAX_EXP) continue;
-          else if (f >= MAX_EXP) continue;
-          else f = expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))];
-          // 'g' is the gradient multiplied by the learning rate
-          g = (1 - vocab[word].code[d] - f) * alpha;
-          // Propagate errors output -> hidden
-          for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1[c + l2];
-          // Learn weights hidden -> output
-          for (c = 0; c < layer1_size; c++) syn1[c + l2] += g * syn0[c + l1];
+        if (hs) { 
+            for (d = 0; d < vocab[word].codelen; d++) {
+                l2 = vocab[word].point[d] * layer1_size;
+
+                f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
+
+                getDotAndGradients_binetcauchy(c_syn0.slice(last_word), 
+                        c_syn1neg.slice(vocab[word].point[d]), f, grad_syn0, grad_syn1neg);
+                // f = sigmoid(f);
+
+                // if (f > MAX_EXP) g = (label - 1) * alpha;
+                // else if (f < -MAX_EXP) g = (label - 0) * alpha;
+                // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+                g = (0 - f)*alpha;
+
+                c_syn1neg.slice(vocab[word].point[d]) = arma::orth(c_syn1neg.slice(vocab[word].point[d]) + grad_syn1neg*g);
+                c_syn0.slice(last_word) = arma::orth(c_syn0.slice(last_word) + grad_syn0*g);
+
+                // // Propagate hidden -> output
+                // for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1[c + l2];
+                // if (f <= -MAX_EXP) continue;
+                // else if (f >= MAX_EXP) continue;
+                // else f = expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))];
+                // // 'g' is the gradient multiplied by the learning rate
+                // g = (1 - vocab[word].code[d] - f) * alpha;
+                // // Propagate errors output -> hidden
+                // for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1[c + l2];
+                // // Learn weights hidden -> output
+                // for (c = 0; c < layer1_size; c++) syn1[c + l2] += g * syn0[c + l1];
+            }
         }
         // NEGATIVE SAMPLING
-        if (negative > 0) for (d = 0; d < negative + 1; d++) {
-          if (d == 0) {
-            target = word;
-            label = 0;
-          } else {
-            next_random = next_random * (unsigned long long)25214903917 + 11;
-            target = table[(next_random >> 16) % table_size];
-            if (target == 0) target = next_random % (vocab_size - 1) + 1;
-            if (target == word) continue;
-            label = 1;
-          }
-          //l2 = target * layer1_size;
-          arma::mat buff1neg = c_syn1neg.slice(target);
-          f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
-          getDotAndGradients_binetcauchy(c_syn0.slice(last_word), buff1neg, f, 
-                  grad_syn0, grad_syn1neg);
-          f = sigmoid(f);
-          // if (f > MAX_EXP) g = (label - 1) * alpha;
-          // else if (f < -MAX_EXP) g = (label - 0) * alpha;
-          // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-          g = (label - f)*alpha;
-          buff1neg += grad_syn1neg*g;
-          buff0 += grad_syn0*g;
-          c_syn1neg.slice(target) = arma::orth(buff1neg);
-        }
-        // move ortho here
-        buff0 = arma::orth(buff0);
-        // Learn weights input -> hidden
-        c_syn0.slice(last_word) = buff0;
-      }
-    }
+        else if (negative >= 0) { 
+            arma::mat buff0(c_syn0.slice(last_word));
+            for (d = 0; d < negative + 1; d++) {
+                if (d == 0) {
+                    target = word;
+                    label = 0;
+                } else {
+                    next_random = next_random * (unsigned long long)25214903917 + 11;
+                    target = table[(next_random >> 16) % table_size];
+                    if (target == 0) target = next_random % (vocab_size - 1) + 1;
+                    if (target == word) continue;
+                    label = 1;
+                }
+                //l2 = target * layer1_size;
+                f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
+                getDotAndGradients_binetcauchy(c_syn0.slice(last_word), c_syn1neg.slice(target), f, 
+                        grad_syn0, grad_syn1neg);
+                // f = sigmoid(f);
+                // if (f > MAX_EXP) g = (label - 1) * alpha;
+                // else if (f < -MAX_EXP) g = (label - 0) * alpha;
+                // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+                g = (label - f)*alpha;
+                if ((size_t) id == 0) { printf("\rg: %6.10f", g); }
+                buff0 += grad_syn0*g;
+                c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) + grad_syn1neg*g);
+            } // end negative samples loop
+            c_syn0.slice(last_word) = arma::orth(buff0);
+
+        } // end check negative sampling
+        else { assert(false && "neither skip gram nor hierarchical softmax??"); }
+      } // end skip gram loop
+    } // end skip gram if
     sentence_position++;
     if (sentence_position >= sentence_length) {
       sentence_length = 0;
@@ -736,7 +750,8 @@ int main(int argc, char **argv) {
   output_file[0] = 0;
   save_vocab_file[0] = 0;
   read_vocab_file[0] = 0;
-  if ((i = ArgPos((char *)"-size", argc, argv)) > 0) layer1_size = atoi(argv[i + 1]);
+  if ((i = ArgPos((char *)"-n", argc, argv)) > 0) layer1_size = atoi(argv[i + 1]);
+  if ((i = ArgPos((char *)"-p", argc, argv)) > 0) P = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-train", argc, argv)) > 0) strcpy(train_file, argv[i + 1]);
   if ((i = ArgPos((char *)"-save-vocab", argc, argv)) > 0) strcpy(save_vocab_file, argv[i + 1]);
   if ((i = ArgPos((char *)"-read-vocab", argc, argv)) > 0) strcpy(read_vocab_file, argv[i + 1]);
@@ -754,6 +769,7 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-iter", argc, argv)) > 0) iter = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-min-count", argc, argv)) > 0) min_count = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
+  assert(layer1_size > 0); assert(P > 0); assert(P < layer1_size);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   expTable = (double *)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));

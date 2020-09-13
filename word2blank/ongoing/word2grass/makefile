@@ -24,9 +24,9 @@ simlex-accuracy : simlex-accuracy.cpp
 
 distance : distance.cpp
 		$(CXX) distance.cpp -o distance $(CFLAGS_arma)
-analogy : analogy.cpp
+bollu-analogy : bollu-analogy.cpp
 		# $(CXX) analogy.cpp -o analogy $(CFLAGS_arma)
-		$(CXX) analogy.cpp -o analogy \
+		$(CXX) bollu-analogy.cpp -o bollu-analogy \
 			 -I ${HOME}/.local/include -L ${HOME}/.local/lib \
 			 -llapack -lblas -lpthread -larmadillo -lm \
 			 -DARMA_USE_LAPACK -DARMA_USE_BLAS  \

@@ -97,7 +97,8 @@ arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end
 }
 
 // http://svcl.ucsd.edu/publications/journal/2016/ggr/supplementary_material.pdf <- best reference for equations!!!
-arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt) {
+// 2.5.1: Geodesics (Grassmanian) http://www-math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf
+arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt, double t = 1.0) {
   
 	// TODO: does '0' / 'econ' in SVD matter?
     // % EXP MAP computes the exponential map on the Grassmannian G(p,n).
@@ -130,18 +131,24 @@ arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt
     DEBUG_LINE
 	arma::svd_econ(U, s, V, tgt);
     DEBUG_LINE
+    s *= t;
     arma::Mat<double> cosS = arma::diagmat(arma::cos(s));
     arma::Mat<double> sinS = arma::diagmat(arma::sin(s));
     DEBUG_LINE
     arma::Mat<double> Z = start * V * cosS * V.t() + U * sinS * V.t();
     DEBUG_LINE
-    return arma::orth(Z);
+    arma::Mat<double> Q, unused;
+    DEBUG_LINE
+    arma::qr_econ(Q, unused, Z);
+    return Q;
 }
 
 
 // if if tgtStart ∈ TangentSpace(start),
 //    move tangent vector  tgtStart to TangentSpace(end)
-arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart) {
+// eqn 2.5.2: http://www-math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf
+arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart,
+        double t = 1) {
     // function Delta = parallel transport(O1,B,O2,t)
     // % PARALLEL TRANSPORT parallel transports a tangent along geodesic.
     // %
@@ -171,15 +178,11 @@ arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double
     DEBUG_LINE
 	arma::svd_econ(U, s, V, start2End);
     DEBUG_LINE
+    s *= t;
+    DEBUG_LINE
     arma::Mat<double> M = arma::join_vert(-arma::diagmat(arma::sin(s)), arma::diagmat(arma::cos(s)));
     DEBUG_LINE
-    arma::Mat<double> part0A = arma::join_horiz(start * V, U);
-    DEBUG_LINE
-    arma::Mat<double> part0B = (M * U.t() * tgtStart);
-    DEBUG_LINE
-    arma::Mat<double> part0C = part0A * part0B;
-    DEBUG_LINE
-    arma::Mat<double> part0 = arma::join_horiz(start * V, U)* (M * U.t() * tgtStart);
+    arma::Mat<double> part0 = arma::join_horiz(start * V, U)* M * U.t() * tgtStart;
     DEBUG_LINE
     arma::Mat<double> part1 = tgtStart - U * (U.t() * tgtStart);
     DEBUG_LINE
@@ -277,9 +280,11 @@ int main(int argc, char **argv) {
 
 
         arma::Mat<double> tgt0to1_at_0 = log(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]));
+        DEBUG_LINE
         arma::Mat<double> tgt0to1_at_2 = parallel(c_syn0.slice(wix[0]), c_syn0.slice(wix[2]), tgt0to1_at_0);
         DEBUG_LINE
         arma::Mat<double> target = exp(c_syn0.slice(wix[2]), tgt0to1_at_2);
+        // arma::Mat<double> target = exp(c_syn0.slice(wix[2]), tgt0to1_at_0);
         DEBUG_LINE
         printclosest(target);
 
@@ -289,6 +294,7 @@ int main(int argc, char **argv) {
             printf("geodesic (%4.2f)\n", float(i)/NSTEPS*100.0);
             printclosest(exp(c_syn0.slice(wix[0]), tgt0to1_at_0 * float(i)/NSTEPS));
         }
+        */
 
     }
     return 0;

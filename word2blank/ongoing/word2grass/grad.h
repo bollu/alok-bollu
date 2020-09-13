@@ -11,7 +11,7 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 {
     arma::Mat<double> Proj = sub_x*arma::trans(sub_x) - sub_y*arma::trans(sub_y);
     arma::Mat<double> K = Proj*arma::trans(Proj);
-    distance = sqrt(arma::trace(K)/2);
+    distance = arma::norm(Proj, "fro")/sqrt(2);
     grad_x = (Proj*sub_x)/distance;
     grad_y = -(Proj*sub_y)/distance;
 
@@ -33,36 +33,32 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
     arma::Mat<double> YtX = arma::trans(sub_y)*sub_x;
     double determinant_ytx = arma::det(YtX);
     arma::Mat<double> ytx_inv = arma::inv(YtX);
-
     distance = 1 - (determinant_xty*determinant_xty);
     grad_x = -2*determinant_xty*determinant_xty*(sub_y*xty_inv);
     grad_y = -2*determinant_ytx*determinant_ytx*(sub_x*ytx_inv);
-
 }
 
-void getDotAndGradients_fubinistudy(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& loss, 
+void getDotAndGradients_fubinistudy(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
 arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 {
+    double sign_det2 , sign_det1;
     arma::Mat<double> K1 = arma::trans(sub_x)*sub_y;
     arma::Mat<double> K2 = arma::trans(sub_y)*sub_x;
     arma::Mat<double> K1_inv = arma::inv(K1);
     arma::Mat<double> K2_inv = arma::inv(K2);
-    double determinant = arma::det(K1);
-    double f = acos(determinant);
-    loss = f*f;
-    grad_x = 2*f*determinant*(sub_y*K1_inv)/sqrt(1 - (determinant*determinant));
-    grad_y = 2*f*determinant*(sub_x*K2_inv)/sqrt(1 - (determinant*determinant));
-}
-
-void getDotAndGradients_martin(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& loss, 
-arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
-{
-    arma::Mat<double> K1 = arma::trans(sub_x)*sub_y;
-    arma::Mat<double> K2 = arma::trans(sub_y)*sub_x;
-    arma::Mat<double> K1_inv = arma::inv(K1);
-    arma::Mat<double> K2_inv = arma::inv(K2);
-    double determinant = arma::det(K1);
-    loss = -2*log(determinant);
-    grad_x = -2*sub_y*K1_inv;
-    grad_y = -2*sub_x*K2_inv;
+    double determinant1 = arma::det(K1);
+    double determinant2 = arma::det(K2);
+    double abs_determinant1 = abs(determinant1);
+    double abs_determinant2 = abs(determinant2);
+    distance = acos(abs_determinant1);
+    if (determinant1 < 0) 
+        sign_det1 = -1; 
+    else 
+        sign_det1 = 1;
+    if (determinant2 < 0)
+        sign_det2 = -1;
+    else
+        sign_det2 = 1; 
+    grad_x = -1*sign_det1*determinant1*(sub_y*K1_inv)/sqrt(1 - (abs_determinant1*abs_determinant1));
+    grad_y = -1*sign_det2*determinant2*(sub_x*K2_inv)/sqrt(1 - (abs_determinant2*abs_determinant2));
 }

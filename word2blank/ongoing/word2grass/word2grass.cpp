@@ -534,12 +534,14 @@ void *TrainModelThread(void *id) {
             target = table[(next_random >> 16) % table_size];
             if (target == 0) target = next_random % (vocab_size - 1) + 1;
             if (target == word) continue;
-            label = 1;
+            label = sqrt(P);
+            //label = 1;
           }
           //l2 = target * layer1_size;
           arma::mat buff1neg = c_syn1neg.slice(target);
           f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
-          getDotAndGradients_binetcauchy(c_syn0.slice(target), buff1neg , f, grad_syn0, grad_syn1neg);
+          getDotAndGradients_chordalfrobenius(c_syn0.slice(last_word), buff1neg , f, grad_syn0, grad_syn1neg);
+          //getDotAndGradients_binetcauchy(c_syn0.slice(last_word), buff1neg , f, grad_syn0, grad_syn1neg);
           // if (f > MAX_EXP) g = (label - 1) * alpha;
           // else if (f < -MAX_EXP) g = (label - 0) * alpha;
           // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
@@ -617,8 +619,8 @@ void TrainModel() {
     int clcn = classes, iter = 10, closeid;
     int *centcn = (int *)malloc(classes * sizeof(int));
     int *cl = (int *)calloc(vocab_size, sizeof(int));
-    real closev, x;
-    real *cent = (real *)calloc(classes * layer1_size, sizeof(real));
+    double closev, x;
+    double *cent = (double *)calloc(classes * layer1_size, sizeof(double));
     for (a = 0; a < vocab_size; a++) cl[a] = a % clcn;
     for (a = 0; a < iter; a++) {
       for (b = 0; b < clcn * layer1_size; b++) cent[b] = 0;

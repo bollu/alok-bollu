@@ -10,9 +10,9 @@
 using namespace std;
 using namespace std::chrono;
 
-const long long int P = 2;
-const long long int N = 3;
-const long long int label = 0;
+const long long int P = 3;
+const long long int N = 4;
+const long long int label = sqrt(P);
 void train(arma::mat current, arma::mat target)
 {
     const long long int ndim = current.n_rows;
@@ -20,18 +20,16 @@ void train(arma::mat current, arma::mat target)
 
     assert((long long int)target.n_rows == ndim);
     assert((long long int)target.n_cols == pdim);
-
-    static const int NITER = 10000;
-    const double ALPHA = 2e-2;
+    long long int i = 0;
+    const double ALPHA = 1e-3;
     double distance = 0.0, loss = 0.0;
     arma::mat dcurrent(N,P); 
     arma::mat dtarget(N,P); 
-    for ( long long int i = 0; i < NITER; i++ )
+    for ( i =0 ; i< 10000; i++)
     {   
         dcurrent.zeros(); dtarget.zeros();
-        //getDotAndGradients_chordalfrobenius(current, target, distance, dcurrent, dtarget);
-        getDotAndGradients_binetcauchy(current, target, distance, dcurrent, dtarget);
-        //getDotAndGradients_martin(current, target, loss, dcurrent, dtarget);
+        getDotAndGradients_chordalfrobenius(current, target, distance, dcurrent, dtarget);
+        //getDotAndGradients_binetcauchy(current, target, distance, dcurrent, dtarget);
         //getDotAndGradients_fubinistudy(current, target, distance, dcurrent, dtarget);
         loss = (label - distance)*(label - distance);
         cout << "Loss at iteration " << i << " is " << loss << "\n";
@@ -48,6 +46,7 @@ int main()
     arma::mat current(N,P); current.randu();
     arma::mat target(N,P); target.randu();
     target = arma::orth(target);
+    current = target;
     cout << "TARGET SUBSPACE:\n" << target ;
     train(current, target);
     auto stop = high_resolution_clock::now(); 

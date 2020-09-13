@@ -2,7 +2,7 @@
 #SBATCH -p long
 #SBATCH --time=72:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name=w2v
+#SBATCH --job-name=w2gr
 #SBATCH --mail-type=END
 #SBATCH -o ./slurm/%j
 

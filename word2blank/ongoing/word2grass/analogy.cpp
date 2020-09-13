@@ -48,7 +48,18 @@ double __attribute__((alwaysinline)) hack_getDot_binetCauchy(const
 // http://svcl.ucsd.edu/publications/journal/2016/ggr/supplementary_material.pdf
 arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end) {
 	// TODO: does '0' / 'econ' in SVD matter?
-	// ytx = Y.'*X;
+    // function H = log map(X,Y)
+    // % LOG MAP computes the inverse exponential map on the Grassmannian.
+    // %
+    // % Input:
+    // % X − (n x p) matrix (representer for subspace \mathcal{X})
+    // % Y − (n x p) matrix (representer for subspace \mathcal{Y})
+    // %
+    // % Output:
+    // %
+    // % H − (n x p) direction matrix in the tangent space at subspace \mathcal{X}
+    // % H = log_x(y) <=> y = exp_x(h)
+    // ytx = Y.'*X;
 	// At = Y.'−ytx*X.';
 	// Bt = ytx\At;
 	// [U, S, V] = svd(Bt.', 'econ');
@@ -89,6 +100,24 @@ arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end
 arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt) {
   
 	// TODO: does '0' / 'econ' in SVD matter?
+    // % EXP MAP computes the exponential map on the Grassmannian G(p,n).
+    // %
+    // % Input:
+    // % Y − (n x p) matrix (representer for subspace \mathcal{Y})
+    // % D − (n x p) matrix (tangent vector at \mathcal{Y})
+    // % t − Time in [0,1]
+    // %
+    // % Output:
+    // %
+    // % Z − (n x p) matrix; Result of walking along the geodesic, defined
+    // % by (Y,D), for time t;
+    // %
+    // % Reference − Eq. (2.65) from
+    // %
+    // % Edelman et al.
+    // % The Geometry of algorithms with orthogonality constraints
+    // % Online: http://arxiv.org/pdf/physics/9806030.pdf
+
 	// tD = t*D;
 	// [U, S, V] = svd( tD, 0 );
 	// cosS = diag( cos( diag( S ) ) );
@@ -107,6 +136,54 @@ arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt
     arma::Mat<double> Z = start * V * cosS * V.t() + U * sinS * V.t();
     DEBUG_LINE
     return arma::orth(Z);
+}
+
+
+// if if tgtStart ∈ TangentSpace(start),
+//    move tangent vector  tgtStart to TangentSpace(end)
+arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart) {
+    // function Delta = parallel transport(O1,B,O2,t)
+    // % PARALLEL TRANSPORT parallel transports a tangent along geodesic.
+    // %
+    // % Input:
+    // % O1 − (n x p) matrix (representer for subspace \mathcal{X})
+    // % O2 − (n x p) matrix (representer for subspace \mathcal{Y})
+    // % B − (n x p) matrix (tangent vector at \mathcal{X})
+    // % t − time in [0,1]
+    // %
+    // % Output:
+    // %
+    // % Delta − (n x p) matrix (tangent vector B, transported to the
+    // % tangent space at \mathcal{Y}
+    // H = log map(O1,O2); % compute direction matrix
+    // [U,S,V] = svd(H, 'econ');
+    // Sigmat = diag(S)*t;
+    // M = [diag(−sin(Sigmat)); diag(cos(Sigmat))];
+    // part0 =[O1*V U]*(M*(U'*B));
+    // part1 = B − U*(U'*B);
+    // Delta = part0 + part1;
+    // end
+
+    DEBUG_LINE
+    const arma::Mat<double> start2End = log(start, end);
+    DEBUG_LINE
+	arma::Mat<double> U, V; arma::Col<double> s;
+    DEBUG_LINE
+	arma::svd_econ(U, s, V, start2End);
+    DEBUG_LINE
+    arma::Mat<double> M = arma::join_vert(-arma::diagmat(arma::sin(s)), arma::diagmat(arma::cos(s)));
+    DEBUG_LINE
+    arma::Mat<double> part0A = arma::join_horiz(start * V, U);
+    DEBUG_LINE
+    arma::Mat<double> part0B = (M * U.t() * tgtStart);
+    DEBUG_LINE
+    arma::Mat<double> part0C = part0A * part0B;
+    DEBUG_LINE
+    arma::Mat<double> part0 = arma::join_horiz(start * V, U)* (M * U.t() * tgtStart);
+    DEBUG_LINE
+    arma::Mat<double> part1 = tgtStart - U * (U.t() * tgtStart);
+    DEBUG_LINE
+    return part0 + part1;
 }
 
 
@@ -199,16 +276,18 @@ int main(int argc, char **argv) {
         if (wix[0] == -1 || wix[1] == -1 || wix[2] == -1) { continue; }
 
 
-        arma::Mat<double> tgt01 = log(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]));
+        arma::Mat<double> tgt0to1_at_0 = log(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]));
+        arma::Mat<double> tgt0to1_at_2 = parallel(c_syn0.slice(wix[0]), c_syn0.slice(wix[2]), tgt0to1_at_0);
         DEBUG_LINE
-        arma::Mat<double> target = exp(c_syn0.slice(wix[2]), tgt01);
+        arma::Mat<double> target = exp(c_syn0.slice(wix[2]), tgt0to1_at_2);
         DEBUG_LINE
         printclosest(target);
 
+        /*
         const int NSTEPS = 10;
         for(int i = 0; i <= NSTEPS; ++i) {
             printf("geodesic (%4.2f)\n", float(i)/NSTEPS*100.0);
-            printclosest(exp(c_syn0.slice(wix[0]), tgt01 * float(i)/NSTEPS));
+            printclosest(exp(c_syn0.slice(wix[0]), tgt0to1_at_0 * float(i)/NSTEPS));
         }
 
     }

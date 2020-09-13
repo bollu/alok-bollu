@@ -20,4 +20,4 @@ make word2grass
 
 time ./word2grass -train ../../utilities/text0 -output models/grass.bin \
     -alpha 0.1 -cbow 0 -n 19 -p 5 -window 8 \
-    -hs 0 -sample 1e-4 -threads 30 -binary 1 -iter 20
+    -hs 1 -sample 1e-4 -threads 30 -binary 1 -iter 20

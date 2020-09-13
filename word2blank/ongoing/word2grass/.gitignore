@@ -2,7 +2,6 @@ word2grass
 distance
 compute-accuracy
 simlex-accuracy
-<<<<<<< HEAD
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
@@ -288,10 +287,9 @@ TSWLatexianTemp*
 # option is specified. Footnotes are the stored in a file with suffix Notes.bib.
 # Uncomment the next line to have this generated file ignored.
 #*Notes.bib
-=======
 test_metric
 *sw*
 *.sw.*
 analogy
 backprop-bollu
->>>>>>> origin/grass-playground-bollu
+slurm/

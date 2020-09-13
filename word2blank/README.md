@@ -53,6 +53,7 @@ positive. Somewhat sensitive to initialisation.
 
 - `glove2man`: glove with a similar manifold training regime
 
+- `sdp-word2vec-solver` : attempted implementations to represent word2vec in the form of a sdp solver
 
 # problems with training as a manifold
 

@@ -14,11 +14,11 @@ all : word2grass compute-accuracy simlex-accuracy metric
 word2grass : word2grass.cpp
 		$(CXX) word2grass.cpp -o word2grass $(CFLAGS_arma)
 
-# distance : distance.c
-#       $(CC) distance.c -o distance $(CFLAGS)
+distance : distance.cpp
+		$(CC) distance.cpp -o distance $(CFLAGS_arma)
 
-compute-accuracy : compute-accuracy.cpp
-		$(CXX) compute-accuracy.cpp -o compute-accuracy $(CFLAGS_arma) 
+#compute-accuracy : compute-accuracy.cpp
+#		$(CXX) compute-accuracy.cpp -o compute-accuracy $(CFLAGS_arma) 
 
 simlex-accuracy : simlex-accuracy.cpp
 		$(CXX) simlex-accuracy.cpp -o simlex-accuracy $(CFLAGS_arma)

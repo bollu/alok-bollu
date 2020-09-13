@@ -18,6 +18,6 @@ mkdir -p slurm/
 rm word2grass || true
 make word2grass
 
-time ./word2grass -train ../../utilities/text0 -output models/grass.bin \
-    -alpha 0.1 -cbow 0 -n 19 -p 5 -window 8 \
-    -hs 1 -sample 1e-4 -threads 30 -binary 1 -iter 20
+time ./word2grass -train ../../utilities/text0 -output models/grass-text0.bin \
+    -alpha 0.1 -cbow 0 -n 19 -p 5 -window 4 \
+    -hs 1 -sample 1e-4 -threads 30 -binary 1 -iter 3

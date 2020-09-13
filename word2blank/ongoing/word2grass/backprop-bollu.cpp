@@ -54,7 +54,7 @@ train(arma::Mat<float> X, arma::Mat<float> Y) {
             }
         }
         const float ALPHA = 1e-3;
-        X += dX *ALPHA;
+        X -= dX *ALPHA;
         X = arma::orth(X);
 
         if ((i % (NITER/10)) == 0) { printf("  - loss: %4d%% | %4.2f\n", 10*(i / (NITER/10)), L); }

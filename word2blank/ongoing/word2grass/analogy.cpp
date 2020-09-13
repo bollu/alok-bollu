@@ -29,6 +29,7 @@ double __attribute__((alwaysinline)) hack_getDot_binetCauchy(const
 
 }
 
+
 int main(int argc, char **argv) {
     FILE *f;
     char *bestw[N];
@@ -103,6 +104,7 @@ int main(int argc, char **argv) {
 
 
         // (n * p)
+        /*
         arma::mat m = (c_syn0.slice(wix[1]).t() * c_syn0.slice(wix[0])).i();
         printf("\ndim: %d %d\n", m.n_rows, m.n_cols);
         // france : paris :: france : ?
@@ -110,12 +112,21 @@ int main(int argc, char **argv) {
         arma::mat target = c_syn0.slice(wix[1]) * arma::pinv(c_syn0.slice(wix[0])) * c_syn0.slice(wix[2]);
         printf("det (target): %f\n", arma::det(target.t() * target));
         target = arma::orth(target);
+        */
+
+        arma::Col<double> Sref = arma::svd(c_syn0.slice(wix[0]).t() * c_syn0.slice(wix[1]));
+        Sref = arma::acos(Sref);
 
 
         for (a = 0; a < N; a++) bestd[a] = 300000.0;
         for (a = 0; a < N; a++) bestw[a][0] = 0;
         for (c = 0; c < words; c++) {
-            dist =  hack_getDot_binetCauchy(target, c_syn0.slice(c));
+            arma::Col<double> Scur = arma::svd(c_syn0.slice(wix[2]).t() * c_syn0.slice(c));
+            Scur = arma::acos(Scur);
+
+            arma::Col<double> delta = Sref - Scur;
+            dist = arma::accu(delta % delta);
+
             for (a = 0; a < N; a++) {
                 if (dist < bestd[a]) {
                     for (d = N -1; d > a; d--) {

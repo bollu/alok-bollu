@@ -37,8 +37,6 @@ test_metric : test_metric.cpp
 clean:
 		-rm -rf word2grass compute-accuracy simlex-accuracy metric test_metric distance
 
-# backprop-bollu.out: backprop-bollu.cpp makefile
-# 	g++ -std=c++14 -fsanitize=address -fsanitize=undefined \
-# 		backprop-bollu.cpp -o backprop-bollu.out \
-# 		-larmadillo
+backprop-bollu: backprop-bollu.cpp makefile
+		$(CXX) backprop-bollu.cpp -o backprop-bollu $(CFLAGS_arma)
 

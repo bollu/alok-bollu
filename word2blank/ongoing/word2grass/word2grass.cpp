@@ -1,3 +1,5 @@
+// https://www.cis.upenn.edu/~cis610/Diffgeom-Grassmann.Absil.pdf
+// http://svcl.ucsd.edu/publications/journal/2016/ggr/supplementary_material.pdf
 #include <armadillo>
 #include <iostream>
 #include <libgen.h>

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 
-MAX_PRODUCT = 50
+MAX_PRODUCT = 100
 N = 20
 C = np.zeros((N, N))
 for n in range(N):

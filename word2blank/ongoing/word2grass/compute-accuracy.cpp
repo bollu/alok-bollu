@@ -14,6 +14,29 @@ const long long max_size = 2000;         // max length of strings
 const long long N = 1;                   // number of closest words
 const long long max_w = 50;              // max length of vocabulary entries
 
+double distance(arma::mat M1, arma::mat M2) {
+    // assert (w1 >= 0);
+    // assert (w2 >= 0);
+    // arma::mat M1(P, size); M1.zeros();
+    // arma::mat M2(P, size); M2.zeros();
+    // for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M1(row,col) = M[(size*P*w1) + (row*size) + col]; 
+    // for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M2(row,col) = M[(size*P*w2) + (row*size) + col]; 
+    arma::Mat<double> Proj = M1 - M2;
+    arma::Mat<double> K = Proj*arma::trans(Proj);
+    double distance = sqrt(arma::trace(K)/2);
+    return distance ;
+
+    // arma::Mat<double> K = M1*arma::trans(M2);
+    // double determinant = arma::det(K);
+    // double distance = 1 - (determinant*determinant);
+    // return distance;
+}
+
+void exp(arma::mat X)
+{
+
+}
+
 int main(int argc, char **argv)
 {
   FILE *f;
@@ -68,7 +91,7 @@ int main(int argc, char **argv)
   fclose(f);
   TCN = 0;
   while (1) {
-    for (a = 0; a < N; a++) bestd[a] = -1;
+    for (a = 0; a < N; a++) bestd[a] = 20001;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     scanf("%s", st1);
     for (a = 0; a < strlen(st1); a++) st1[a] = toupper(st1[a]);
@@ -99,7 +122,7 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = 0;
+    for (a = 0; a < N; a++) bestd[a] = 2000001;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -121,19 +144,22 @@ int main(int argc, char **argv)
     // for (row = 0; row < P; row++) for (col = 0; col < size; col++) Mat(row, col) = Q_Mat(col, row); 
     //------------
     TQS++;
+    arma::mat B = arma::expmat_sym(arma::logmat_sympd(Mat_b3.t()*Mat_b3) + arma::logmat_sympd(Mat_b2.t()*Mat_b2) - arma::logmat_sympd(Mat_b1.t()*Mat_b1));
+    B = arma::orth(B);
+    cout << B << endl;
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
       dist = 0;
       for (row = 0; row < P; row++) for (col = 0; col < size; col++) Mat_b4(row, col) = M[col + (row*size) +(c*size*P)];
-      
-      vec s_b1 = arma::svd(Mat_b4 * Mat_b1.t());
-      vec s_b2 = arma::svd(Mat_b4 * Mat_b2.t());
-      vec s_b3 = arma::svd(Mat_b4 * Mat_b3.t());
-      dist = arma::min(s_b3)*arma::min(s_b2)/arma::min(s_b1);
+      // vec s_b1 = arma::svd(Mat_b4 * Mat_b1.t());
+      // vec s_b2 = arma::svd(Mat_b4 * Mat_b2.t());
+      // vec s_b3 = arma::svd(Mat_b4 * Mat_b3.t());
+      // dist = arma::accu(s_b2 % s_b2)*arma::accu(s_b3 % s_b3)/arma::accu(s_b1 % s_b1);
+      //dist = distance(B,Mat_b4.t()*Mat_b4);
       for (a = 0; a < N; a++) {
-        if (dist > bestd[a]) {
+        if (dist < bestd[a]) {
           for (d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);

@@ -10,8 +10,8 @@
 using namespace std;
 using namespace std::chrono;
 
-const long long int P = 2;
-const long long int N = 3;
+const long long int P = 3;
+const long long int N = 4;
 const long long int label = 0;
 void train(arma::mat current, arma::mat target)
 {
@@ -20,25 +20,23 @@ void train(arma::mat current, arma::mat target)
 
     assert((long long int)target.n_rows == ndim);
     assert((long long int)target.n_cols == pdim);
-
-    static const int NITER = 10000;
-    const double ALPHA = 2e-2;
+    long long int i = 0;
+    const double ALPHA = 1e-3;
     double distance = 0.0, loss = 0.0;
     arma::mat dcurrent(N,P); 
     arma::mat dtarget(N,P); 
-    for ( long long int i = 0; i < NITER; i++ )
+    for ( i =0 ; i< 10000; i++)
     {   
        if (i % 10 == 9) { cout << "press key to continue"; getchar(); }
         dcurrent.zeros(); dtarget.zeros();
         //getDotAndGradients_chordalfrobenius(current, target, distance, dcurrent, dtarget);
-        // getDotAndGradients_binetcauchy(current, target, distance, &dcurrent, &dtarget);
-        gradientDescentBinetCauchy(current, target, distance, label, ALPHA, &current, &dtarget);
+        getDotAndGradients_binetcauchy(current, target, distance, dcurrent, dtarget);
         //getDotAndGradients_martin(current, target, loss, dcurrent, dtarget);
         //getDotAndGradients_fubinistudy(current, target, distance, dcurrent, dtarget);
         loss = (label - distance)*(label - distance);
         cout << "Loss at iteration " << i << " is " << loss << "\n";
-        // current += dcurrent*ALPHA*2*(label - distance);
-        // target += dtarget*ALPHA*2*(label - distance); target = arma::orth(target);
+        current += dcurrent*ALPHA*2*(label - distance);
+        target += dtarget*ALPHA*2*(label - distance); target = arma::orth(target);
         current = arma::orth(current);
         cout << "CURRENT SUBSPACE:\n" << current;
     }

@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <armadillo>
 
+using namespace std; 
+
 #define max_size 2000
 #define N 25
 #define max_w 100
@@ -25,12 +27,20 @@ double sim(int w1, int w2) {
     arma::mat M2(P, size); M2.zeros();
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M1(row,col) = M[(size*P*w1) + (row*size) + col]; 
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M2(row,col) = M[(size*P*w2) + (row*size) + col]; 
+    arma::Mat<double> Proj = arma::trans(M1)*M1 - arma::trans(M2)*M2;
+    arma::Mat<double> K = Proj*arma::trans(Proj);
+    double distance = sqrt(arma::trace(K)/2);
+    return distance ;
     
-    arma::mat K = arma::trans(M2)*M2 - arma::trans(M1)*M1;
-    arma::mat temp = K*arma::trans(K);
-    double s = arma::trace(temp);
-    s = sqrt(s/2);
-    return s ;//10*s/sqrt(2);
+    // arma::Mat<double> K1 = M1*arma::trans(M2);
+    // double abs_determinant = abs(arma::det(K1));
+    // double distance = acos(abs_determinant);
+    // return distance;
+    
+    // arma::Mat<double> K = M1*arma::trans(M2);
+    // double determinant = arma::det(K);
+    // double distance = 1 - (determinant*determinant);
+    // return distance;
 }
 
 
@@ -149,7 +159,7 @@ int main(int argc, char **argv) {
         }
         /// ==== all vectors legal====
         oursims[n] = sim(w1ix, w2ix);
-        fprintf(stderr, "\tw2v(%f)\n", oursims[n]);
+        fprintf(stderr, "\tw2grass(%f)\n", oursims[n]);
         n++;
 
     }

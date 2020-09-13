@@ -27,13 +27,22 @@ void train(arma::mat current, arma::mat target)
     arma::mat dtarget(N,P); 
     for ( i =0 ; i< 10000; i++)
     {   
+       if (i % 10 == 9) { cout << "press key to continue"; getchar(); }
         dcurrent.zeros(); dtarget.zeros();
+<<<<<<< HEAD
         getDotAndGradients_chordalfrobenius(current, target, distance, dcurrent, dtarget);
         //getDotAndGradients_binetcauchy(current, target, distance, dcurrent, dtarget);
+=======
+        //getDotAndGradients_chordalfrobenius(current, target, distance, dcurrent, dtarget);
+        // getDotAndGradients_binetcauchy(current, target, distance, &dcurrent, &dtarget);
+        gradientDescentBinetCauchy(current, target, distance, label, ALPHA, &current, &dtarget);
+        //getDotAndGradients_martin(current, target, loss, dcurrent, dtarget);
+>>>>>>> origin/grass-playground-bollu
         //getDotAndGradients_fubinistudy(current, target, distance, dcurrent, dtarget);
         loss = (label - distance)*(label - distance);
         cout << "Loss at iteration " << i << " is " << loss << "\n";
-        current += dcurrent*ALPHA*2*(label - distance);
+        // current += dcurrent*ALPHA*2*(label - distance);
+        // target += dtarget*ALPHA*2*(label - distance); target = arma::orth(target);
         current = arma::orth(current);
         cout << "CURRENT SUBSPACE:\n" << current;
     }

@@ -9,7 +9,7 @@ mFLAGS = -llapacke -llapack -lblas -lm -lpthread  -march=native -Wall \
 CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
                  -funroll-loops -Wno-unused-result -fuse-ld=gold \
                  -I ${HOME}/.local/include -L ${HOME}/.local/lib
-all : word2grass compute-accuracy simlex-accuracy metric
+all : word2grass compute-accuracy simlex-accuracy metric word-analogy
 #distance compute-accuracy
 
 word2grass : word2grass.cpp
@@ -24,9 +24,9 @@ simlex-accuracy : simlex-accuracy.cpp
 
 distance : distance.cpp
 		$(CXX) distance.cpp -o distance $(CFLAGS_arma)
-bollu-analogy : bollu-analogy.cpp
+word-analogy : word-analogy.cpp
 		# $(CXX) analogy.cpp -o analogy $(CFLAGS_arma)
-		$(CXX) bollu-analogy.cpp -o bollu-analogy \
+		$(CXX) word-analogy.cpp -o word-analogy \
 			 -I ${HOME}/.local/include -L ${HOME}/.local/lib \
 			 -llapack -lblas -lpthread -larmadillo -lm \
 			 -DARMA_USE_LAPACK -DARMA_USE_BLAS  \

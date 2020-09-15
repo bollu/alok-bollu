@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     double L = 0.0;
     //Find the tangent vector T_A
     arma::Mat<double> T_A = log(c_syn0.slice(b1), c_syn0.slice(b2), L);
-    //Transport tangent vector T_A to T_C 
+    //Transport tangent vector T_A to T_C along the geodesic connecting a to c
     arma::Mat<double> T_C = parallel(c_syn0.slice(b1), c_syn0.slice(b3), T_A);
     //Get the target matrix (the required word)
     arma::Mat<double> target = exp(c_syn0.slice(b3), T_C, L);
@@ -109,8 +109,8 @@ int main(int argc, char **argv)
       if (c == b2) continue;
       if (c == b3) continue;
       dist = 0;
-      //dist = getNaturalDist(target, c_syn0.slice(c));
-      dist = getChordalDist(target, c_syn0.slice(c));
+      dist = getNaturalDist(target, c_syn0.slice(c));
+      //dist = getChordalDist(target, c_syn0.slice(c));
       for (a = 0; a < N; a++) {
         if (dist < bestd[a]) {
           for (d = N - 1; d > a; d--) {

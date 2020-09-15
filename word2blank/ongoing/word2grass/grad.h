@@ -98,7 +98,7 @@ arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end
     DEBUG_LINE
     arma::Mat<double> I(n,n); I.eye();
     DEBUG_LINE
-    arma::Mat<double> PI_K = (I - (start*arma::trans(start)));
+    arma::Mat<double> PI_K = I - (start*arma::trans(start));
 	DEBUG_LINE
     arma::Mat<double> K = end*arma::inv(arma::trans(start)*end);
     DEBUG_LINE
@@ -112,7 +112,7 @@ arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end
     L = sqrt(arma::accu(theta % theta));
     DEBUG_LINE
     arma::Mat<double> T_A = U * arma::diagmat(theta) * V.t();
-    //T_A = arma::normalise(T_A);
+    T_A = arma::normalise(T_A);
     return T_A;  
 }
 
@@ -126,13 +126,21 @@ arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double
     assert((long long int)end.n_rows == n);
     assert((long long int)end.n_cols == p);
     DEBUG_LINE
-    arma::Mat<double> U, V; arma::Col<double> s;
-    DEBUG_LINE
-	arma::svd_econ(U, s, V, tgtStart);
-    DEBUG_LINE
     arma::Mat<double> I(n,n); I.eye();
     DEBUG_LINE
-    arma::Mat<double> tgt_move = (-start*V*arma::diagmat(arma::sin(s))*U.t()) + (U*arma::diagmat(arma::cos(s))*U.t()) + (I - (U*U.t()));
+    arma::Mat<double> PI_K = (I - (start*arma::trans(start)));
+	DEBUG_LINE
+    arma::Mat<double> K = end*arma::inv(arma::trans(start)*end);
+    DEBUG_LINE
+    arma::Mat<double> G = PI_K*K;
+    arma::Mat<double> U, V; arma::Col<double> s;
+    DEBUG_LINE
+	arma::svd_econ(U, s, V, G);
+    DEBUG_LINE
+    arma::Col<double> theta = arma::atan(s);
+    DEBUG_LINE
+    arma::Mat<double> tgt_move = (-start*V*arma::diagmat(arma::sin(theta))*U.t()) + (U*arma::diagmat(arma::cos(theta))*U.t()) + (I - (U*U.t()));
+    tgt_move = arma::normalise(tgt_move);
     DEBUG_LINE
     arma::Mat<double> tgt_end =  tgt_move*tgtStart;
     DEBUG_LINE
@@ -143,10 +151,10 @@ arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt
 {
     arma::Mat<double> U, V; arma::Col<double> s;
     DEBUG_LINE
-    arma::Mat<double> act_tgt = tgt;//*L;
+    arma::Mat<double> act_tgt = tgt*L;
 	arma::svd_econ(U, s, V, act_tgt);
     DEBUG_LINE
-    arma::Mat<double> end = start*V*arma::diagmat(arma::cos(s)) + U*arma::diagmat(arma::sin(s));
+    arma::Mat<double> end = start*V*arma::diagmat(arma::cos(s))*V.t() + U*arma::diagmat(arma::sin(s))*V.t();
     DEBUG_LINE
     end = arma::orth(end);
     DEBUG_LINE

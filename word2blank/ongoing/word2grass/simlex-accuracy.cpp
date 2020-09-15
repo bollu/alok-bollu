@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include <armadillo>
+#include "grad.h"
 
 using namespace std; 
 
@@ -27,10 +28,9 @@ double sim(int w1, int w2) {
     arma::mat M2(P, size); M2.zeros();
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M1(row,col) = M[(size*P*w1) + (row*size) + col]; 
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M2(row,col) = M[(size*P*w2) + (row*size) + col]; 
-    arma::Mat<double> Proj = arma::trans(M1)*M1 - arma::trans(M2)*M2;
-    arma::Mat<double> K = Proj*arma::trans(Proj);
-    double distance = sqrt(arma::trace(K)/2);
-    return distance ;
+    arma::Col<double> s = arma::svd(M1*M2.t());
+    s = arma::acos(s);
+    return sqrt(arma::accu(s % s));
     
     // arma::Mat<double> K1 = M1*arma::trans(M2);
     // double abs_determinant = abs(arma::det(K1));

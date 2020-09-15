@@ -1,16 +1,31 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
-#include <cmath>
 #include <armadillo>
 #include <string>
 using namespace std;
 
+#define DEBUG_LINE if(0) { printf("%s:%d\n", __FUNCTION__, __LINE__); }
+
 void getDotAndGradients_chordalfrobenius(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
 arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 {
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    // race condition maybe created because of multi-threading. It's OK, just quit
+    // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
+    if((long long int)sub_y.n_rows != ndim) {
+        printf("ERR\n"); return;
+    }
+    if((long long int)sub_y.n_cols != pdim) {
+        printf("ERR\n"); return;
+    }
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+
     arma::Mat<double> Proj = sub_x*arma::trans(sub_x) - sub_y*arma::trans(sub_y);
-    arma::Mat<double> K = Proj*arma::trans(Proj);
+    //arma::Mat<double> K = Proj*arma::trans(Proj);
     distance = arma::norm(Proj, "fro")/sqrt(2);
     grad_x = (Proj*sub_x)/distance;
     grad_y = -(Proj*sub_y)/distance;
@@ -69,4 +84,93 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
         sign_det2 = 1; 
     grad_x = -1*sign_det1*determinant1*(sub_y*K1_inv)/sqrt(1 - (abs_determinant1*abs_determinant1));
     grad_y = -1*sign_det2*determinant2*(sub_x*K2_inv)/sqrt(1 - (abs_determinant2*abs_determinant2));
+}
+
+
+arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end, double &L) 
+{
+    DEBUG_LINE
+	const long long int n = start.n_rows;
+    const long long int p = start.n_cols;
+    DEBUG_LINE
+    assert((long long int)end.n_rows == n);
+    assert((long long int)end.n_cols == p);
+    DEBUG_LINE
+    arma::Mat<double> I(n,n); I.eye();
+    DEBUG_LINE
+    arma::Mat<double> PI_K = (I - (start*arma::trans(start)));
+	DEBUG_LINE
+    arma::Mat<double> K = end*arma::inv(arma::trans(start)*end);
+    DEBUG_LINE
+    arma::Mat<double> G = PI_K*K;
+    arma::Mat<double> U, V; arma::Col<double> s;
+    DEBUG_LINE
+	arma::svd_econ(U, s, V, G);
+    DEBUG_LINE
+    arma::Col<double> theta = arma::atan(s);
+    DEBUG_LINE
+    L = sqrt(arma::accu(theta % theta));
+    DEBUG_LINE
+    arma::Mat<double> T_A = U * arma::diagmat(theta) * V.t();
+    //T_A = arma::normalise(T_A);
+    return T_A;  
+}
+
+
+arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart) 
+{
+    DEBUG_LINE
+	const long long int n = start.n_rows;
+    const long long int p = start.n_cols;
+    DEBUG_LINE
+    assert((long long int)end.n_rows == n);
+    assert((long long int)end.n_cols == p);
+    DEBUG_LINE
+    arma::Mat<double> U, V; arma::Col<double> s;
+    DEBUG_LINE
+	arma::svd_econ(U, s, V, tgtStart);
+    DEBUG_LINE
+    arma::Mat<double> I(n,n); I.eye();
+    DEBUG_LINE
+    arma::Mat<double> tgt_move = (-start*V*arma::diagmat(arma::sin(s))*U.t()) + (U*arma::diagmat(arma::cos(s))*U.t()) + (I - (U*U.t()));
+    DEBUG_LINE
+    arma::Mat<double> tgt_end =  tgt_move*tgtStart;
+    DEBUG_LINE
+    return tgt_end;
+}
+
+arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt, double L) 
+{
+    arma::Mat<double> U, V; arma::Col<double> s;
+    DEBUG_LINE
+    arma::Mat<double> act_tgt = tgt;//*L;
+	arma::svd_econ(U, s, V, act_tgt);
+    DEBUG_LINE
+    arma::Mat<double> end = start*V*arma::diagmat(arma::cos(s)) + U*arma::diagmat(arma::sin(s));
+    DEBUG_LINE
+    end = arma::orth(end);
+    DEBUG_LINE
+    return end;
+}
+
+double getNaturalDist(arma::Mat<double> &X, arma::Mat<double> &Y) {
+
+	const long long int n = X.n_rows;
+    const long long int p = X.n_cols;
+    assert((long long int)Y.n_rows == n);
+    assert((long long int)Y.n_cols == p);
+    arma::Col<double> s = arma::svd(X.t() * Y);
+    s = arma::acos(s);
+    return sqrt(arma::accu(s % s));
+}
+
+
+double getChordalDist(arma::Mat<double> &X, arma::Mat<double> &Y) {
+
+	const long long int n = X.n_rows;
+    const long long int p = X.n_cols;
+    assert((long long int)Y.n_rows == n);
+    assert((long long int)Y.n_cols == p);
+    arma::Mat<double> Proj = X*X.t() - Y*Y.t();
+    return (arma::norm(Proj, "fro")/sqrt(2));
 }

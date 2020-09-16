@@ -33,8 +33,8 @@ void train(arma::mat current, arma::mat target)
         getDotAndGradients_binetcauchy(current, target, distance, dcurrent, dtarget);
         //getDotAndGradients_martin(current, target, loss, dcurrent, dtarget);
         //getDotAndGradients_fubinistudy(current, target, distance, dcurrent, dtarget);
-        loss = (label - distance)*(label - distance);
-        cout << "Loss at iteration " << i << " is " << loss << "\n";
+        loss = (label - getNaturalDist(current, target)); loss *= loss;
+        cout << "(" << label << " - dist)" <<  " at iteration " << i << " is |" << loss << "|\n";
         current += dcurrent*ALPHA*2*(label - distance);
         target += dtarget*ALPHA*2*(label - distance); target = arma::orth(target);
         current = arma::orth(current);

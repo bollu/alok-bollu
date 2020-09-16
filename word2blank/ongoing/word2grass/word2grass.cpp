@@ -347,6 +347,8 @@ void ReadVocab() {
   fclose(fin);
 }
 
+// Drawing random subspace from grassman with uniform proabbility
+// https://math.stackexchange.com/questions/3014506/drawing-random-subspaces-from-grassmannian-with-uniform-probability
 void InitNet() {
     long long a, b;
     a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * layer1_size * sizeof(double));
@@ -363,7 +365,7 @@ void InitNet() {
     assert(c_syn1neg.n_slices == vocab_size);
     for (a = 0; a < vocab_size; a++) {
         printf("\rinitializing syn1neg |%d|", a);
-        arma::mat X = arma::orth(arma::randu<arma::mat>(layer1_size, P) - 0.5);
+        arma::mat X = arma::orth(arma::randn<arma::mat>(layer1_size, P));
         arma::uword r = arma::rank(X);
         if ((long long)r == P) c_syn1neg.slice(a) = X;
         else printf("FULL COLUMN FAIL\n");
@@ -372,7 +374,7 @@ void InitNet() {
     assert(c_syn0.n_slices == vocab_size);
     for (a = 0; a < vocab_size; a++) {
         printf("\rinitializing syn0 |%d|", a);
-        arma::mat Y = arma::orth(arma::randu<arma::mat>(layer1_size, P) - 0.5);
+        arma::mat Y = arma::orth(arma::randn<arma::mat>(layer1_size, P));
         arma::uword r = arma::rank(Y);
         if ((long long)r == P)c_syn0.slice(a) = Y;
         else printf("FULL COLUMN FAIL\n");

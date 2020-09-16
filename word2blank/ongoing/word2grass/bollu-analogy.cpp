@@ -25,12 +25,7 @@ char *vocab;
 long long P, size;
 char *bestw[N];
 
-double getNaturalDist(arma::Mat<double> &X, arma::Mat<double> &Y) {
-    arma::Col<double> s = arma::svd(X.t() * Y);
-    s = arma::acos(s);
-    return arma::accu(s % s);
-}
-
+// I don't understand what this does.
 double __attribute__((alwaysinline)) hack_getDot_binetCauchy(const
         arma::Mat<double> &sub_x, const arma::Mat<double> &sub_y) {
     arma::Mat<double> XtY = arma::trans(sub_x)*sub_y;
@@ -46,7 +41,7 @@ double __attribute__((alwaysinline)) hack_getDot_binetCauchy(const
 }
 
 // http://svcl.ucsd.edu/publications/journal/2016/ggr/supplementary_material.pdf
-arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end) {
+arma::Mat<double> log_paper(const arma::Mat<double> start, const arma::Mat<double> end) {
 	// TODO: does '0' / 'econ' in SVD matter?
     // function H = log map(X,Y)
     // % LOG MAP computes the inverse exponential map on the Grassmannian.
@@ -98,7 +93,7 @@ arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end
 
 // http://svcl.ucsd.edu/publications/journal/2016/ggr/supplementary_material.pdf <- best reference for equations!!!
 // 2.5.1: Geodesics (Grassmanian) http://www-math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf
-arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt, double t = 1.0) {
+arma::Mat<double> exp_paper(const arma::Mat<double> start, const arma::Mat<double> tgt, double t = 1.0) {
   
 	// TODO: does '0' / 'econ' in SVD matter?
     // % EXP MAP computes the exponential map on the Grassmannian G(p,n).
@@ -147,7 +142,7 @@ arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt
 // if if tgtStart ∈ TangentSpace(start),
 //    move tangent vector  tgtStart to TangentSpace(end)
 // eqn 2.5.2: http://www-math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf
-arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart,
+arma::Mat<double> parallel_paper(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart,
         double t = 1) {
     // function Delta = parallel transport(O1,B,O2,t)
     // % PARALLEL TRANSPORT parallel transports a tangent along geodesic.
@@ -172,7 +167,7 @@ arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double
     // end
 
     DEBUG_LINE
-    const arma::Mat<double> start2End = log(start, end);
+    const arma::Mat<double> start2End = log_paper(start, end);
     DEBUG_LINE
 	arma::Mat<double> U, V; arma::Col<double> s;
     DEBUG_LINE
@@ -188,7 +183,6 @@ arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double
     DEBUG_LINE
     return part0 + part1;
 }
-
 
 void printclosest(arma::Mat<double> target) {
     double bestd[N];
@@ -279,11 +273,11 @@ int main(int argc, char **argv) {
         if (wix[0] == -1 || wix[1] == -1 || wix[2] == -1) { continue; }
 
 
-        arma::Mat<double> tgt0to1_at_0 = log(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]));
+        arma::Mat<double> tgt0to1_at_0 = log_paper(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]));
         DEBUG_LINE
-        arma::Mat<double> tgt0to1_at_2 = parallel(c_syn0.slice(wix[0]), c_syn0.slice(wix[2]), tgt0to1_at_0);
+        arma::Mat<double> tgt0to1_at_2 = parallel_paper(c_syn0.slice(wix[0]), c_syn0.slice(wix[2]), tgt0to1_at_0);
         DEBUG_LINE
-        arma::Mat<double> target = exp(c_syn0.slice(wix[2]), tgt0to1_at_2);
+        arma::Mat<double> target = exp_paper(c_syn0.slice(wix[2]), tgt0to1_at_2);
         // arma::Mat<double> target = exp(c_syn0.slice(wix[2]), tgt0to1_at_0);
         DEBUG_LINE
         printclosest(target);

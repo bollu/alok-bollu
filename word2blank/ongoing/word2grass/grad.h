@@ -166,6 +166,7 @@ double getNaturalDist(arma::Mat<double> &X, arma::Mat<double> &Y) {
     assert((long long int)Y.n_rows == n);
     assert((long long int)Y.n_cols == p);
     arma::Col<double> s = arma::svd(X.t() * Y);
+    s = arma::clamp(s, -1, 1);
     s = arma::acos(s);
     return sqrt(arma::accu(s % s));
 }

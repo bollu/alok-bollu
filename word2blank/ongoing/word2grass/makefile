@@ -38,6 +38,15 @@ word-analogy : word-analogy.cpp
 			 -DARMA_USE_LAPACK -DARMA_USE_BLAS  \
 			 -std=c++14 -lm -fuse-ld=gold -fsanitize=address -fsanitize=undefined
 
+
+bollu-analogy : bollu-analogy.cpp
+		# $(CXX) analogy.cpp -o analogy $(CFLAGS_arma)
+		$(CXX) bollu-analogy.cpp -o bollu-analogy \
+			 -I ${HOME}/.local/include -L ${HOME}/.local/lib \
+			 -llapack -lblas -lpthread -larmadillo -lm \
+			 -DARMA_USE_LAPACK -DARMA_USE_BLAS  \
+			 -std=c++14 -lm -fuse-ld=gold -fsanitize=address -fsanitize=undefined
+
 test_metric : test_metric.cpp
 		$(CXX) test_metric.cpp -o test_metric $(CFLAGS_arma)
 clean:

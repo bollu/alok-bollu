@@ -14,6 +14,8 @@ all : word2grass simlex-accuracy distance compute-accuracy
 word2grass : word2grass.cpp
 		$(CXX) word2grass.cpp -o word2grass $(CFLAGS_arma)
 
+union : union.cpp
+		$(CXX) union.cpp -o union $(CFLAGS_arma)
 
 compute-accuracy : compute-accuracy.cpp
 		$(CXX) compute-accuracy.cpp -o compute-accuracy $(CFLAGS_arma) 
@@ -23,6 +25,11 @@ simlex-accuracy : simlex-accuracy.cpp
 
 distance : distance.cpp
 		$(CXX) distance.cpp -o distance $(CFLAGS_arma)
+
+vec-analogy : vec-analogy.cpp
+		$(CXX) vec-analogy.cpp -o vec-analogy $(CFLAGS_arma)
+
+
 word-analogy : word-analogy.cpp
 		# $(CXX) analogy.cpp -o analogy $(CFLAGS_arma)
 		$(CXX) word-analogy.cpp -o word-analogy \

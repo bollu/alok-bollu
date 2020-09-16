@@ -25,12 +25,6 @@ char *vocab;
 long long P, size;
 char *bestw[N];
 
-double getNaturalDist(arma::Mat<double> &X, arma::Mat<double> &Y) {
-    arma::Col<double> s = arma::svd(X.t() * Y);
-    s = arma::acos(s);
-    return sqrt(arma::accu(s % s));
-}
-
 double __attribute__((alwaysinline)) hack_getDot_binetCauchy(const
         arma::Mat<double> &sub_x, const arma::Mat<double> &sub_y) {
     arma::Mat<double> XtY = arma::trans(sub_x)*sub_y;
@@ -44,71 +38,6 @@ double __attribute__((alwaysinline)) hack_getDot_binetCauchy(const
     return 1 - (determinant_xty*determinant_xty);
 
 }
-
-arma::Mat<double> log(const arma::Mat<double> start, const arma::Mat<double> end, double &L) {
-
-    DEBUG_LINE
-	const int p = start.n_cols; assert(p == end.n_cols);
-    const int n = start.n_rows; assert(n == end.n_rows);
-    DEBUG_LINE
-    arma::Mat<double> I(n,n); I.eye();
-    DEBUG_LINE
-    arma::Mat<double> PI_K = (I - (start*arma::trans(start)));
-	DEBUG_LINE
-    arma::Mat<double> K = end*arma::inv(arma::trans(start)*end);
-    DEBUG_LINE
-    arma::Mat<double> G = PI_K*K;
-    arma::Mat<double> U, V; arma::Col<double> s;
-    DEBUG_LINE
-	arma::svd_econ(U, s, V, G);
-    DEBUG_LINE
-    arma::Col<double> theta = arma::atan(s);
-    DEBUG_LINE
-    L = sqrt(arma::accu(theta % theta));
-    DEBUG_LINE
-    arma::Mat<double> T_A = U * arma::diagmat(theta) * V.t();
-    //T_A = arma::normalise(T_A);
-    return T_A;
-    // arma::Mat<double> S = arma::diag(S); S = S.col  
-}
-
-// if if tgtStart ∈ TangentSpace(start),
-//    move tangent vector  tgtStart to TangentSpace(end)
-// eqn 2.5.2: http://www-math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf
-arma::Mat<double> parallel(const arma::Mat<double> start, const arma::Mat<double> end, const arma::Mat<double> tgtStart) {
-   
-    DEBUG_LINE
-	const int p = start.n_cols; assert(p == end.n_cols);
-    const int n = start.n_rows; assert(n == end.n_rows);
-    arma::Mat<double> U, V; arma::Col<double> s;
-    DEBUG_LINE
-	arma::svd_econ(U, s, V, tgtStart);
-    DEBUG_LINE
-    arma::Mat<double> I(n,n); I.eye();
-    DEBUG_LINE
-    arma::Mat<double> tgt_move = (-start*V*arma::diagmat(arma::sin(s))*U.t()) + (U*arma::diagmat(arma::cos(s))*U.t()) + (I - (U*U.t()));
-    DEBUG_LINE
-    arma::Mat<double> tgt_end =  tgt_move*tgtStart;
-    DEBUG_LINE
-    return tgt_end;
-}
-
-
-// http://svcl.ucsd.edu/publications/journal/2016/ggr/supplementary_material.pdf <- best reference for equations!!!
-// 2.5.1: Geodesics (Grassmanian) http://www-math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf
-arma::Mat<double> exp(const arma::Mat<double> start, const arma::Mat<double> tgt, double L) {
-    
-    arma::Mat<double> U, V; arma::Col<double> s;
-    DEBUG_LINE
-    arma::Mat<double> act_tgt = tgt;//*L;
-	arma::svd_econ(U, s, V, act_tgt);
-    DEBUG_LINE
-    arma::Mat<double> end = start*V*arma::diagmat(arma::cos(s)) + U*arma::diagmat(arma::sin(s));
-    DEBUG_LINE
-    end = arma::orth(end);
-    return end;
-}
-
 
 void printclosest(arma::Mat<double> target) {
     double bestd[N];
@@ -201,16 +130,15 @@ int main(int argc, char **argv) {
 
         //Get the tangent T_A
         double L = 0.0;
-        arma::Mat<double> T_A = log(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]), L);
+        arma::Mat<double> T_A = log_map(c_syn0.slice(wix[0]), c_syn0.slice(wix[1]), L);
         DEBUG_LINE
         //Transport tangent vector T_A to T_C 
-        arma::Mat<double> T_C = parallel(c_syn0.slice(wix[0]), c_syn0.slice(wix[2]), T_A);
+        arma::Mat<double> T_C = parallel(c_syn0.slice(wix[0]), c_syn0.slice(wix[2]), T_A, L);
         DEBUG_LINE
         //Get the new matrix
-        arma::Mat<double> target = exp(c_syn0.slice(wix[2]), T_C, L);
+        arma::Mat<double> target = exp_map(c_syn0.slice(wix[2]), T_C, L);
         DEBUG_LINE
         printclosest(target);
-
         /*
         const int NSTEPS = 10;
         for(int i = 0; i <= NSTEPS; ++i) {

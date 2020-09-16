@@ -21,7 +21,7 @@ void train(arma::mat current, arma::mat target)
     assert((long long int)target.n_rows == ndim);
     assert((long long int)target.n_cols == pdim);
     long long int i = 0;
-    const double ALPHA = 1e-3;
+    const double ALPHA = 1e-1;
     double distance = 0.0, loss = 0.0;
     arma::mat dcurrent(N,P); 
     arma::mat dtarget(N,P); 
@@ -33,8 +33,9 @@ void train(arma::mat current, arma::mat target)
         getDotAndGradients_binetcauchy(current, target, distance, dcurrent, dtarget);
         //getDotAndGradients_martin(current, target, loss, dcurrent, dtarget);
         //getDotAndGradients_fubinistudy(current, target, distance, dcurrent, dtarget);
-        loss = (label - getNaturalDist(current, target)); loss *= loss;
-        cout << "(" << label << " - dist)" <<  " at iteration " << i << " is |" << loss << "|\n";
+        double naturalDist = getNaturalDist(current, target);
+        loss = (label - naturalDist); loss *= loss;
+        cout << "binetCauchy " << distance << " (" << label << " - natural[" << naturalDist << "])" <<  " iter " << i << " |" << loss << "|\n";
         current += dcurrent*ALPHA*2*(label - distance);
         target += dtarget*ALPHA*2*(label - distance); target = arma::orth(target);
         current = arma::orth(current);

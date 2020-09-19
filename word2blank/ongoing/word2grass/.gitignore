@@ -294,3 +294,5 @@ analogy
 backprop-bollu
 slurm/
 bollu-analogy
+vec-compute-accuracy
+vec-analogy

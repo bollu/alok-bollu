@@ -20,6 +20,9 @@ union : union.cpp
 compute-accuracy : compute-accuracy.cpp
 		$(CXX) compute-accuracy.cpp -o compute-accuracy $(CFLAGS_arma) 
 
+vec-compute-accuracy : vec-compute-accuracy.cpp
+		$(CXX) vec-compute-accuracy.cpp -o vec-compute-accuracy $(CFLAGS_arma)
+
 simlex-accuracy : simlex-accuracy.cpp
 		$(CXX) simlex-accuracy.cpp -o simlex-accuracy $(CFLAGS_arma)
 

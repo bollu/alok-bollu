@@ -45,7 +45,7 @@ void printclosest(arma::Mat<double> target) {
     for (int a = 0; a < N; a++) bestw[a][0] = 0;
     for (int c = 0; c < words; c++) {
         DEBUG_LINE
-        const double dist = getNaturalDist(target, c_syn0.slice(c));
+        const double dist = hack_getDot_binetCauchy(target, c_syn0.slice(c));
         DEBUG_LINE
         for (int a = 0; a < N; a++) {
             if (dist < bestd[a]) {

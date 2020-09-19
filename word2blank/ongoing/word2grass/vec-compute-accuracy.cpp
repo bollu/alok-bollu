@@ -7,110 +7,17 @@
 #include <armadillo>
 #include <iostream>
 #include <cassert>
+#include "grad.h"
 
 #define DEBUG_LINE if(0) { printf("%s:%d\n", __FUNCTION__, __LINE__); }
 //compute-accuracy /path/to/model.bin < questions-words.txt > output-file.txt
 using namespace std;
-using namespace arma;
 
 const long long max_size = 2000;         // max length of strings
 const long long N = 1;                  // number of closest words
 const long long P = 1;
 const long long max_w = 50;              // max length of vocabulary entries
-arma::fcube c_syn0; 
-
-
-arma::fmat log_map(const arma::fmat start, const arma::fmat end, float &L) 
-{
-    DEBUG_LINE
-	const long long int n = start.n_rows;
-    const long long int p = start.n_cols;
-    DEBUG_LINE
-    assert((long long int)end.n_rows == n);
-    assert((long long int)end.n_cols == p);
-    DEBUG_LINE
-    arma::fmat I(n,n); I.eye();
-    DEBUG_LINE
-    arma::fmat PI_K = I - (start*arma::trans(start));
-	DEBUG_LINE
-    arma::fmat K = end*arma::inv(arma::trans(start)*end);
-    DEBUG_LINE
-    arma::fmat G = PI_K*K;
-    arma::fmat U, V; arma::fvec s;
-    DEBUG_LINE
-	arma::svd_econ(U, s, V, G);
-    DEBUG_LINE
-    arma::fvec theta = arma::atan(s);
-    DEBUG_LINE
-    L = sqrt(arma::accu(theta % theta));
-    DEBUG_LINE
-    arma::fmat T_A = U * arma::diagmat(theta) * V.t();
-    return T_A;  
-}
-
-
-arma::fmat parallel(const arma::fmat start, const arma::fmat end, const arma::fmat tgtStart, float L) 
-{
-    DEBUG_LINE
-	const long long int n = start.n_rows;
-    const long long int p = start.n_cols;
-    DEBUG_LINE
-    assert((long long int)end.n_rows == n);
-    assert((long long int)end.n_cols == p);
-    DEBUG_LINE
-    arma::fmat I(n,n); I.eye();
-    DEBUG_LINE
-    arma::fmat PI_K = I - (start*arma::trans(start));
-	DEBUG_LINE
-    arma::fmat K = end*arma::inv(arma::trans(start)*end);
-    DEBUG_LINE
-    arma::fmat G = PI_K*K;
-    arma::fmat U, V; arma::fvec s;
-    DEBUG_LINE
-	arma::svd_econ(U, s, V, G);
-    DEBUG_LINE
-    arma::fvec theta = arma::atan(s);
-    DEBUG_LINE
-    arma::fmat tgt_move = (-start*V*arma::diagmat(arma::sin(theta))*U.t()*tgtStart) + (U*arma::diagmat(arma::cos(theta))*U.t()*tgtStart) + ((I - (U*U.t()))*tgtStart);
-    DEBUG_LINE
-    //arma::fmattgt_end =  tgt_move*tgtStart;
-    DEBUG_LINE
-    return tgt_move;
-}
-
-arma::fmat exp_map(const arma::fmat start, const arma::fmat tgt, float L) 
-{
-    arma::fmat U, V; arma::fvec s;
-    DEBUG_LINE
-    //arma::fmatact_tgt = tgt;//*L;
-	arma::svd_econ(U, s, V, tgt);
-    DEBUG_LINE
-    arma::fmat end = start*V*arma::diagmat(arma::cos(s))*V.t() + U*arma::diagmat(arma::sin(s))*V.t();
-    DEBUG_LINE
-    //end = arma::orth(end);
-    DEBUG_LINE
-    return end;
-}
-
-float getNaturalDist(arma::fmat &X, arma::fmat &Y) {
-	const long long int n = X.n_rows;
-  const long long int p = X.n_cols;
-  assert((long long int)Y.n_rows == n);
-  assert((long long int)Y.n_cols == p);
-  arma::fvec s = arma::svd(X.t() * Y);
-  s = arma::acos(s);
-  return sqrt(arma::accu(s % s));
-}
-
-float getChordalDist(arma::fmat &X, arma::fmat &Y) {
-
-	const long long int n = X.n_rows;
-  const long long int p = X.n_cols;
-  assert((long long int)Y.n_rows == n);
-  assert((long long int)Y.n_cols == p);
-  arma::fmat Proj = X*X.t() - Y*Y.t();
-  return (arma::norm(Proj, "fro")/sqrt(2));
-}
+arma::cube c_syn0; 
 
 
 int main(int argc, char **argv)
@@ -123,6 +30,7 @@ int main(int argc, char **argv)
   char *vocab;
   int TCN, CCN = 0, TACN = 0, CACN = 0, SECN = 0, SYCN = 0, SEAC = 0, SYAC = 0, QID = 0, TQ = 0, TQS = 0;
   if (argc < 2) {
+    printf("Computes analogy on word2vec embeddings using word2grass math");
     printf("Usage: ./compute-accuracy <FILE> <threshold>\nwhere FILE contains word projections, and threshold is used to reduce vocabulary of the model for fast approximate evaluation (0 = off, otherwise typical value is 30000)\n");
     return 0;
   }
@@ -149,11 +57,16 @@ int main(int argc, char **argv)
     for (a = 0; a < max_w; a++) vocab[b * max_w + a] = toupper(vocab[b * max_w + a]);
     for(int p  = 0; p < P; p++) {
             for (int s = 0; s < size; s++) {
-                fread(&c_syn0(s, p, b), sizeof(float), 1, f);
+                float fl;
+                fread(&fl, sizeof(float), 1, f);
+                c_syn0(s, p, b) = fl;
           }
       }
     c_syn0.slice(b) = arma::normalise(c_syn0.slice(b));
-    arma::fmat K  = c_syn0.slice(b);
+    printf("%4.2f | %20s | det: %4.2f\n", (1.0 + (float)b)/words*100.0,
+            vocab + b*max_w, arma::det(c_syn0.slice(b).t()*c_syn0.slice(b)));
+
+    // arma::fmat K  = c_syn0.slice(b);
   }
   fclose(f);
   TCN = 0;
@@ -189,7 +102,8 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = -1;
+    // need to intialize this correctly
+    for (a = 0; a < N; a++) bestd[a] = 999999;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -198,20 +112,18 @@ int main(int argc, char **argv)
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st4)) break;
     if (b == words) continue;
     TQS++;
-    float L = 0.0;
+    double L = 0.0;
     //Find the tangent vector T_A
-    arma::fmat T_A = log_map(c_syn0.slice(b1), c_syn0.slice(b2), L);
+    arma::Mat<double> T_A = log_map(c_syn0.slice(b1), c_syn0.slice(b2), L);
     //Transport tangent vector T_A to T_C along the geodesic connecting a to c
-    arma::fmat T_C = parallel(c_syn0.slice(b1), c_syn0.slice(b3), T_A, L);
+    arma::Mat<double> T_C = parallel(c_syn0.slice(b1), c_syn0.slice(b3), T_A, L);
     //Get the target matrix (the required word)
-    arma::fmat target = exp_map(c_syn0.slice(b3), T_C, L);
+    arma::Mat<double> target = exp_map(c_syn0.slice(b3), T_C, L);
     for (c = 0; c < words; c++) {
       if (c == b1) continue;
       if (c == b2) continue;
       if (c == b3) continue;
-      dist = 0;
       dist = getNaturalDist(target, c_syn0.slice(c));
-      //dist = getChordalDist(target, c_syn0.slice(c)); 
       for (a = 0; a < N; a++) {
         if (dist < bestd[a]) {
           for (d = N - 1; d > a; d--) {

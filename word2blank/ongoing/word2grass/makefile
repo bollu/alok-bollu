@@ -11,8 +11,8 @@ CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO
                  -I ${HOME}/.local/include -L ${HOME}/.local/lib
 all : word2grass simlex-accuracy distance compute-accuracy
 
-word2grass : word2grass.cpp
-		$(CXX) word2grass.cpp -o word2grass $(CFLAGS_arma)
+word2grass : word2grass_cho.cpp
+		$(CXX) word2grass_cho.cpp -o word2grass $(CFLAGS_arma)
 
 union : union.cpp
 		$(CXX) union.cpp -o union $(CFLAGS_arma)

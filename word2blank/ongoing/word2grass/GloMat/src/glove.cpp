@@ -223,9 +223,10 @@ void *glove_thread(void *vid) {
         if (cr.word1 < 1 || cr.word2 < 1) { continue; }
         
         /* Get location of words in W & gradsq */
-        l1 = (cr.word1 - 1LL) * (vector_size + 1); // cr word indices start at 1
-        l2 = ((cr.word2 - 1LL) + vocab_size) * (vector_size + 1); // shift by vocab_size to get separate vectors for context words
-        
+        //l1 = (cr.word1 - 1LL) * (vector_size + 1); // cr word indices start at 1
+        //l2 = ((cr.word2 - 1LL) + vocab_size) * (vector_size + 1); // shift by vocab_size to get separate vectors for context words
+        l1 = (cr.word1 - 1LL);
+        l2 = (cr.word2 - 1LL) + vocab_size;
         /* Calculate cost, save diff for gradients */
         diff = 0;
         for (b = 0; b < vector_size; b++) diff += W[b + l1] * W[b + l2]; // dot product of word and context word vector

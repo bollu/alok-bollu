@@ -3,6 +3,7 @@ distance
 compute-accuracy
 simlex-accuracy
 word-analogy
+union
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof

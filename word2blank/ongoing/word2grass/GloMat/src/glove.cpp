@@ -134,14 +134,14 @@ void initialize_parameters() {
     assert(syn1neg.n_slices == vocab_size);
 
     //Allocate space to syn0_grad cube
-    syn0_grad.set_size(vector_size, P, vocab_size);
-    printf("syn0_grad.n_slices: %lld\n", syn0_grad.n_slices);
-    assert(syn0_grad.n_slices == vocab_size);
+    syn0_gradsq.set_size(vector_size, P, vocab_size);
+    printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
+    assert(syn0_gradsq.n_slices == vocab_size);
 
     //Allocate space to syn1neg_grad cube
-    syn1neg_grad.set_size(vector_size, P, vocab_size);
-    printf("syn1neg_grad.n_slices:%lld\n", syn1neg_grad.n_slices);
-    assert(syn1neg_grad.n_slices == vocab_size);
+    syn1neg_gradsq.set_size(vector_size, P, vocab_size);
+    printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
+    assert(syn1neg_gradsq.n_slices == vocab_size);
 
 
     if (load_init_param) {
@@ -198,8 +198,8 @@ void initialize_parameters() {
         //     if ((long long)r == P) grad_mat.slice(a) = X;
         //     else printf("FULL COLUMN FAIL\n");
         // }
-        syn0_grad.ones();
-        syn1neg_grad.ones();
+        syn0_gradsq.ones();
+        syn1neg_gradsq.ones();
     }
 }
 
@@ -233,13 +233,15 @@ void *glove_thread(void *vid) {
     //     fclose(fin);
     //     pthread_exit(NULL);
     // }
-
-    real* W_updates2 = (real*)malloc(vector_size * sizeof(real));
-        if (NULL == W_updates2){
-        fclose(fin);
-        free(W_updates1);
-        pthread_exit(NULL);
-    }
+    // real* W_updates2 = (real*)malloc(vector_size * sizeof(real));
+    //     if (NULL == W_updates2){
+    //     fclose(fin);
+    //     free(W_updates1);
+    //     pthread_exit(NULL);
+    // }
+    arma::mat syn0_updates ;
+    arma::mat syn1neg_updates;
+   
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
@@ -253,7 +255,7 @@ void *glove_thread(void *vid) {
         /* Calculate cost, save diff for gradients */
         diff = 0;
         distance = 0;
-        for (b = 0; b < vector_size; b++) distance = getNaturalDist(c_syn0.slice(l1), c_syn1neg.slice(l2)); // geodesic distance of word and context word matrix
+        for (b = 0; b < vector_size; b++) getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_updates, syn1neg_updates); // chordal distance of word and context word matrix
         //diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
         //not using bias
         diff = distance - log(cr.val);
@@ -268,37 +270,43 @@ void *glove_thread(void *vid) {
         cost[id] += 0.5 * fdiff * diff; // weighted squared error
         
         /* Adaptive gradient updates */
-        real W_updates1_sum = 0;
-        real W_updates2_sum = 0;
+        real syn0_updates_sum = 0;
+        real syn1neg_updates_sum = 0;
         for (b = 0; b < vector_size; b++) {
-            // learning rate times gradient for word vectors
-            temp1 = fmin(fmax(fdiff * W[b + l2], -grad_clip_value), grad_clip_value) * eta;
-            temp2 = fmin(fmax(fdiff * W[b + l1], -grad_clip_value), grad_clip_value) * eta;
-            // adaptive updates
-            W_updates1[b] = temp1 / sqrt(gradsq[b + l1]);
-            W_updates2[b] = temp2 / sqrt(gradsq[b + l2]);
-            W_updates1_sum += W_updates1[b];
-            W_updates2_sum += W_updates2[b];
-            gradsq[b + l1] += temp1 * temp1;
-            gradsq[b + l2] += temp2 * temp2;
-        }
-        if (!isnan(W_updates1_sum) && !isinf(W_updates1_sum) && !isnan(W_updates2_sum) && !isinf(W_updates2_sum)) {
-            for (b = 0; b < vector_size; b++) {
-                W[b + l1] -= W_updates1[b];
-                W[b + l2] -= W_updates2[b];
+            for(long long i = 0; i < P; i++){
+                // learning rate times gradient for word matrices
+                temp1 = fmin(fmax(fdiff * syn0_updates(b, i, l1), -grad_clip_value), grad_clip_value) * eta;
+                temp2 = fmin(fmax(fdiff * syn1neg_updates(b, i, l2), -grad_clip_value), grad_clip_value) * eta;
+                // adaptive updates
+                syn0_updates(b, i, l1) = temp1 / sqrt(syn0_gradsq(b, i, l1)); //gradsq[b + l1]);
+                syn1neg_updates(b, i ,l2) = temp2 / sqrt(syn1neg_gradsq(b, i, l2));//gradsq[b + l2]);
+                syn0_updates_sum += syn0_updates(b, i , l1);
+                syn1neg_updates_sum += syn1neg_updates(b, i , l2);
+                syn0_gradsq(b, i, l1) += temp1 * temp1;
+                syn1neg_gradsq(b, i, l2) += temp2 * temp2;
             }
+        }
+        if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
+            for (b = 0; b < vector_size; b++) for (long long i = 0; i < P; i++){
+                // W[b + l1] -= W_updates1[b];
+                // W[b + l2] -= W_updates2[b];
+                syn0(b, i ,l1) -= syn0_updates(b, i , l1);
+                syn1neg(b , i ,l2) -= syn1neg_updates(b, i ,l2); 
+            }
+            syn0.slice(l1) = arma::orth(syn0.slice(l1));
+            syn1neg.slice(l2) = arma::orth(syn1neg.slice(l2));
         }
 
         // updates for bias terms
-        W[vector_size + l1] -= check_nan(fdiff / sqrt(gradsq[vector_size + l1]));
-        W[vector_size + l2] -= check_nan(fdiff / sqrt(gradsq[vector_size + l2]));
-        fdiff *= fdiff;
-        gradsq[vector_size + l1] += fdiff;
-        gradsq[vector_size + l2] += fdiff;
+        // W[vector_size + l1] -= check_nan(fdiff / sqrt(gradsq[vector_size + l1]));
+        // W[vector_size + l2] -= check_nan(fdiff / sqrt(gradsq[vector_size + l2]));
+        // fdiff *= fdiff;
+        // gradsq[vector_size + l1] += fdiff;
+        // gradsq[vector_size + l2] += fdiff;
         
     }
-    free(W_updates1);
-    free(W_updates2);
+    // free(W_updates1);
+    // free(W_updates2);
     
     fclose(fin);
     pthread_exit(NULL);

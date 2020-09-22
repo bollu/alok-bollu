@@ -32,7 +32,7 @@
 typedef struct cooccur_rec_id {
     int word1;
     int word2;
-    real val;
+    realglove val;
     int id;
 } CRECID;
 
@@ -41,7 +41,7 @@ long long max_product; // Cutoff for product of word frequency ranks below which
 long long overflow_length; // Number of cooccurrence records whose product exceeds max_product to store in memory before writing to disk
 int window_size = 15; // default context window size
 int symmetric = 1; // 0: asymmetric, 1: symmetric
-real memory_limit = 3; // soft limit, in gigabytes, used to estimate optimal array sizes
+realglove memory_limit = 3; // soft limit, in gigabytes, used to estimate optimal array sizes
 int distance_weighting = 1; // Flag to control the distance weighting of cooccurrence counts
 char *vocab_file, *file_head;
 
@@ -220,7 +220,7 @@ int merge_files(int num) {
 }
 
 void free_resources(HASHREC** vocab_hash, CREC *cr, long long *lookup, 
-                    long long *history, real *bigram_table) {
+                    long long *history, realglove *bigram_table) {
     free_table(vocab_hash);
     free(cr);
     free(lookup);
@@ -234,7 +234,7 @@ int get_cooccurrence() {
     long long a, j = 0, k, id, counter = 0, ind = 0, vocab_size, w1, w2, *lookup = NULL, *history = NULL;
     char format[20], filename[200], str[MAX_STRING_LENGTH + 1];
     FILE *fid, *foverflow;
-    real *bigram_table = NULL, r;
+    realglove *bigram_table = NULL, r;
     HASHREC *htmp, **vocab_hash = inithashtable();
     CREC *cr = malloc(sizeof(CREC) * (overflow_length + 1));
     history = malloc(sizeof(long long) * window_size);
@@ -276,7 +276,7 @@ int get_cooccurrence() {
     if (verbose > 1) fprintf(stderr, "table contains %lld elements.\n",lookup[a-1]);
     
     /* Allocate memory for full array which will store all cooccurrence counts for words whose product of frequency ranks is less than max_product */
-    bigram_table = (real *)calloc( lookup[a-1] , sizeof(real) );
+    bigram_table = (realglove *)calloc( lookup[a-1] , sizeof(realglove) );
     if (bigram_table == NULL) {
         fprintf(stderr, "Couldn't allocate memory!");
         free_resources(vocab_hash, cr, lookup, history, bigram_table);
@@ -329,18 +329,18 @@ int get_cooccurrence() {
             w1 = history[k % window_size]; // Context word (frequency rank)
             if (verbose > 2) fprintf(stderr, "Adding cooccur between words %lld and %lld.\n", w1, w2);
             if ( w1 < max_product/w2 ) { // Product is small enough to store in a full array
-                bigram_table[lookup[w1-1] + w2 - 2] += distance_weighting ? 1.0/((real)(j-k)) : 1.0; // Weight by inverse of distance between words if needed
-                if (symmetric > 0) bigram_table[lookup[w2-1] + w1 - 2] += distance_weighting ? 1.0/((real)(j-k)) : 1.0; // If symmetric context is used, exchange roles of w2 and w1 (ie look at right context too)
+                bigram_table[lookup[w1-1] + w2 - 2] += distance_weighting ? 1.0/((realglove)(j-k)) : 1.0; // Weight by inverse of distance between words if needed
+                if (symmetric > 0) bigram_table[lookup[w2-1] + w1 - 2] += distance_weighting ? 1.0/((realglove)(j-k)) : 1.0; // If symmetric context is used, exchange roles of w2 and w1 (ie look at right context too)
             }
             else { // Product is too big, data is likely to be sparse. Store these entries in a temporary buffer to be sorted, merged (accumulated), and written to file when it gets full.
                 cr[ind].word1 = w1;
                 cr[ind].word2 = w2;
-                cr[ind].val = distance_weighting ? 1.0/((real)(j-k)) : 1.0;
+                cr[ind].val = distance_weighting ? 1.0/((realglove)(j-k)) : 1.0;
                 ind++; // Keep track of how full temporary buffer is
                 if (symmetric > 0) { // Symmetric context
                     cr[ind].word1 = w2;
                     cr[ind].word2 = w1;
-                    cr[ind].val = distance_weighting ? 1.0/((real)(j-k)) : 1.0;
+                    cr[ind].val = distance_weighting ? 1.0/((realglove)(j-k)) : 1.0;
                     ind++;
                 }
             }
@@ -368,7 +368,7 @@ int get_cooccurrence() {
             if ((r = bigram_table[lookup[x-1] - 2 + y]) != 0) {
                 fwrite(&x, sizeof(int), 1, fid);
                 fwrite(&y, sizeof(int), 1, fid);
-                fwrite(&r, sizeof(real), 1, fid);
+                fwrite(&r, sizeof(realglove), 1, fid);
             }
         }
     }
@@ -382,7 +382,7 @@ int get_cooccurrence() {
 
 int main(int argc, char **argv) {
     int i;
-    real rlimit, n = 1e5;
+    realglove rlimit, n = 1e5;
     vocab_file = malloc(sizeof(char) * MAX_STRING_LENGTH);
     file_head = malloc(sizeof(char) * MAX_STRING_LENGTH);
     
@@ -428,7 +428,7 @@ int main(int argc, char **argv) {
     
     /* The memory_limit determines a limit on the number of elements in bigram_table and the overflow buffer */
     /* Estimate the maximum value that max_product can take so that this limit is still satisfied */
-    rlimit = 0.85 * (real)memory_limit * 1073741824/(sizeof(CREC));
+    rlimit = 0.85 * (realglove)memory_limit * 1073741824/(sizeof(CREC));
     while (fabs(rlimit - n * (log(n) + 0.1544313298)) > 1e-3) n = rlimit / (log(n) + 0.1544313298);
     max_product = (long long) n;
     overflow_length = (long long) rlimit/6; // 0.85 + 1/6 ~= 1

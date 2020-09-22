@@ -34,7 +34,7 @@ int verbose = 2; // 0, 1, or 2
 int seed = 0;
 long long array_size = 2000000; // size of chunks to shuffle individually
 char *file_head; // temporary file string
-real memory_limit = 2.0; // soft limit, in gigabytes
+realglove memory_limit = 2.0; // soft limit, in gigabytes
 
 /* Generate uniformly distributed random long ints */
 static long rand_long(long n) {
@@ -200,7 +200,7 @@ int main(int argc, char **argv) {
     if ((i = find_arg((char *)"-temp-file", argc, argv)) > 0) strcpy(file_head, argv[i + 1]);
     else strcpy(file_head, (char *)"temp_shuffle");
     if ((i = find_arg((char *)"-memory", argc, argv)) > 0) memory_limit = atof(argv[i + 1]);
-    array_size = (long long) (0.95 * (real)memory_limit * 1073741824/(sizeof(CREC)));
+    array_size = (long long) (0.95 * (realglove)memory_limit * 1073741824/(sizeof(CREC)));
     if ((i = find_arg((char *)"-array-size", argc, argv)) > 0) array_size = atoll(argv[i + 1]);
     if ((i = find_arg((char *)"-seed", argc, argv)) > 0) seed = atoi(argv[i + 1]);
     const int returned_value = shuffle_by_chunks();

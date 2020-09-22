@@ -55,10 +55,10 @@ int checkpoint_every = 0; // checkpoint the model for every checkpoint_every ite
 int load_init_param = 0; // if 1 initial paramters are loaded from -init-param-file
 int save_init_param = 0; // if 1 initial paramters are saved (i.e., in the 0 checkpoint)
 int load_init_gradsq = 0; // if 1 initial squared gradients are loaded from -init-gradsq-file
-real eta = 0.05; // Initial learning rate
-real alpha = 0.75, x_max = 100.0; // Weighting function parameters, not extremely sensitive to corpus, though may need adjustment for very small or very large corpora
-real grad_clip_value = 100.0; // Clipping parameter for gradient components. Values will be clipped to [-grad_clip_value, grad_clip_value] interval.
-real *W, *gradsq, *cost;
+realglove eta = 0.05; // Initial learning rate
+realglove alpha = 0.75, x_max = 100.0; // Weighting function parameters, not extremely sensitive to corpus, though may need adjustment for very small or very large corpora
+realglove grad_clip_value = 100.0; // Clipping parameter for gradient components. Values will be clipped to [-grad_clip_value, grad_clip_value] interval.
+realglove *W, *gradsq, *cost;
 //syn0_mat stores global matrix representation of each word
 arma::cube syn0;
 //syn1neg_mat stores context matrix representation of each word
@@ -78,7 +78,7 @@ char init_gradsq_file[MAX_STRING_LENGTH];
  * Loads a save file for use as the initial values for the parameters or gradsq
  * Return value: 0 if success, -1 if fail
  */
-int load_init_file(char *file_name, real *array, long long array_size) {
+int load_init_file(char *file_name, realglove *array, long long array_size) {
     FILE *fin;
     long long a;
     fin = fopen(file_name, "rb");
@@ -92,7 +92,7 @@ int load_init_file(char *file_name, real *array, long long array_size) {
             fclose(fin);
             return -1;
         }
-        fread(&array[a], sizeof(real), 1, fin);
+        fread(&array[a], sizeof(realglove), 1, fin);
     }
     fclose(fin);
     return 0;
@@ -110,12 +110,12 @@ void initialize_parameters() {
 
     /* Allocate space for word vectors and context word vectors, and corresponding gradsq */
     //keeping it uncommented for functions which are using it but we do not require    
-    // a = posix_memalign((void **)&W, 128, W_size * sizeof(real)); // Might perform better than malloc
+    // a = posix_memalign((void **)&W, 128, W_size * sizeof(realglove)); // Might perform better than malloc
     // if (W == NULL) {
     //     fprintf(stderr, "Error allocating memory for W\n");
     //     exit(1);
     // }
-    // a = posix_memalign((void **)&gradsq, 128, W_size * sizeof(real)); // Might perform better than malloc
+    // a = posix_memalign((void **)&gradsq, 128, W_size * sizeof(realglove)); // Might perform better than malloc
     // if (gradsq == NULL) {
     //     fprintf(stderr, "Error allocating memory for gradsq\n");
     //     free(W);
@@ -154,7 +154,7 @@ void initialize_parameters() {
     } else {
         // Initialize new parameters for original code word vectors(keeping it uncommented)
         for (a = 0; a < W_size; ++a) {
-            W[a] = (rand() / (real)RAND_MAX - 0.5) / vector_size;
+            W[a] = (rand() / (realglove)RAND_MAX - 0.5) / vector_size;
         }
         //Initalising the matrices naively
         //Have to check "Statistics on Special Manifold" for a smarter method
@@ -202,7 +202,7 @@ void initialize_parameters() {
     }
 }
 
-inline real check_nan(real update) {
+inline realglove check_nan(realglove update) {
     if (isnan(update) || isinf(update)) {
         fprintf(stderr,"\ncaught NaN in update");
         return 0.;
@@ -216,7 +216,7 @@ void *glove_thread(void *vid) {
     long long a, b ,l1, l2;
     long long id = *(long long*)vid;
     CREC cr;
-    real diff, fdiff, temp1, temp2, distance;
+    realglove diff, fdiff, temp1, temp2, distance;
     FILE *fin;
     fin = fopen(input_file, "rb");
     if (fin == NULL) {
@@ -227,12 +227,12 @@ void *glove_thread(void *vid) {
     fseeko(fin, (num_lines / num_threads * id) * (sizeof(CREC)), SEEK_SET); //Threads spaced roughly equally throughout file
     cost[id] = 0;
     
-    // real* W_updates1 = (real*)malloc(vector_size * sizeof(real));
+    // realglove* W_updates1 = (realglove*)malloc(vector_size * sizeof(realglove));
     // if (NULL == W_updates1){
     //     fclose(fin);
     //     pthread_exit(NULL);
     // }
-    // real* W_updates2 = (real*)malloc(vector_size * sizeof(real));
+    // realglove* W_updates2 = (realglove*)malloc(vector_size * sizeof(realglove));
     //     if (NULL == W_updates2){
     //     fclose(fin);
     //     free(W_updates1);
@@ -269,8 +269,8 @@ void *glove_thread(void *vid) {
         cost[id] += 0.5 * fdiff * diff; // weighted squared error
         
         /* Adaptive gradient updates */
-        real syn0_updates_sum = 0;
-        real syn1neg_updates_sum = 0;
+        realglove syn0_updates_sum = 0;
+        realglove syn1neg_updates_sum = 0;
         for (b = 0; b < vector_size; b++) {
             for(long long i = 0; i < P; i++){
                 // learning rate times gradient for word matrices
@@ -342,7 +342,7 @@ int save_params(int nb_iter) {
 
         fout = fopen(output_file,"wb");
         if (fout == NULL) {log_file_loading_error("weights file", save_W_file); free(word); return 1;}
-        for (a = 0; a < vector_size ; a++) for (long long i=0; i<P; i++) fwrite(&W[a], sizeof(real), 1,fout);
+        for (a = 0; a < vector_size ; a++) for (long long i=0; i<P; i++) fwrite(&W[a], sizeof(realglove), 1,fout);
         fclose(fout);
         if (save_gradsq > 0) {
             if (nb_iter < 0)
@@ -352,7 +352,7 @@ int save_params(int nb_iter) {
 
             fgs = fopen(output_file_gsq,"wb");
             if (fgs == NULL) {log_file_loading_error("gradsq file", save_gradsq_file); free(word); return 1;}
-            for (a = 0; a < 2 * vocab_size * (vector_size + 1); a++) fwrite(&gradsq[a], sizeof(real), 1,fgs);
+            for (a = 0; a < 2 * vocab_size * (vector_size + 1); a++) fwrite(&gradsq[a], sizeof(realglove), 1,fgs);
             fclose(fgs);
         }
     }
@@ -406,8 +406,8 @@ int save_params(int nb_iter) {
         }
 
         if (use_unk_vec) {
-            real* unk_vec = (real*)calloc((vector_size + 1), sizeof(real));
-            real* unk_context = (real*)calloc((vector_size + 1), sizeof(real));
+            realglove* unk_vec = (realglove*)calloc((vector_size + 1), sizeof(realglove));
+            realglove* unk_context = (realglove*)calloc((vector_size + 1), sizeof(realglove));
             strcpy(word, "<unk>");
 
             long long num_rare_words = vocab_size < 100 ? vocab_size : 100;
@@ -448,7 +448,7 @@ int train_glove() {
     int save_params_return_code;
     int b;
     FILE *fin;
-    real total_cost = 0;
+    realglove total_cost = 0;
 
     fprintf(stderr, "TRAINING MODEL\n");
     
@@ -579,7 +579,7 @@ int main(int argc, char **argv) {
         if ((i = find_arg((char *)"-vector-size", argc, argv)) > 0) vector_size = atoi(argv[i + 1]);
         if ((i = find_arg((char *)"-iter", argc, argv)) > 0) num_iter = atoi(argv[i + 1]);
         if ((i = find_arg((char *)"-threads", argc, argv)) > 0) num_threads = atoi(argv[i + 1]);
-        cost = (real *)malloc(sizeof(real) * num_threads);
+        cost = (realglove *)malloc(sizeof(realglove) * num_threads);
         if ((i = find_arg((char *)"-alpha", argc, argv)) > 0) alpha = atof(argv[i + 1]);
         if ((i = find_arg((char *)"-x-max", argc, argv)) > 0) x_max = atof(argv[i + 1]);
         if ((i = find_arg((char *)"-eta", argc, argv)) > 0) eta = atof(argv[i + 1]);

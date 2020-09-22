@@ -10,7 +10,10 @@ CXX = g++
 # CFLAGS = -lm -pthread -Ofast -march=native -funroll-loops -Wall -Wextra -Wpedantic
 
 CFLAGS = -lm -pthread -O3 -march=native -funroll-loops -Wall -Wextra -Wpedantic
-CXXFLAGS = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall -funroll-loops -Wno-unused-result -fuse-ld=gold -I /home/souvik/.local/include -L /home/souvik/.local/lib
+CXXFLAGS = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo \
+	 -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS \
+	 -march=native -Wall -funroll-loops -Wno-unused-result -fuse-ld=gold \
+	 -I ${HOME}/.local/include -L ${HOME}/.local/lib
 BUILDDIR := build
 SRCDIR := src
 OBJDIR := $(BUILDDIR)

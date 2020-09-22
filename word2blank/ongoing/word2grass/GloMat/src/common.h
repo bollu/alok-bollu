@@ -35,11 +35,11 @@
 #define SEED 1159241
 #define HASHFN bitwisehash
 
-typedef double real;
+typedef double realglove;
 typedef struct cooccur_rec {
     int word1;
     int word2;
-    real val;
+    realglove val;
 } CREC;
 typedef struct hashrec {
     char *word;

@@ -38,7 +38,9 @@
 #include "grad.h"
 #include "common.h"
 
+using namespace std;
 #define _FILE_OFFSET_BITS 64
+#define STRERROR(ERRNO, BUF, BUFSIZE) strerror_r((ERRNO), (BUF), (BUFSIZE))
 
 int write_header=0; //0=no, 1=yes; writes vocab_size/vector_size as first line for use with some libraries, such as gensim.
 int verbose = 2; // 0, 1, or 2
@@ -74,16 +76,45 @@ char save_gradsq_file[MAX_STRING_LENGTH];
 char init_param_file[MAX_STRING_LENGTH];
 char init_gradsq_file[MAX_STRING_LENGTH];
 
+int g_scmp( char *s1, char *s2 ) {
+    while (*s1 != '\0' && *s1 == *s2) {s1++; s2++;}
+    return (*s1 - *s2);
+}
+
+int arg_pos(char *str, int argc, char **argv) {
+    int i;
+    for (i = 1; i < argc; i++) {
+        if (!g_scmp(str, argv[i])) {
+            if (i == argc - 1) {
+                printf("No argument given for %s\n", str);
+                exit(1);
+            }
+            return i;
+        }
+    }
+    return -1;
+}
+
+int log_file_loading_err(const char*file_description, char *file_name) {
+    fprintf(stderr, "Unable to open %s %s.\n", file_description, file_name);
+    fprintf(stderr, "Errno: %d\n", errno);
+    char error[MAX_STRING_LENGTH];
+    STRERROR(errno, error, MAX_STRING_LENGTH);
+    fprintf(stderr, "Error description: %s\n", error);
+    return errno;
+}
+
+
 /**
  * Loads a save file for use as the initial values for the parameters or gradsq
  * Return value: 0 if success, -1 if fail
  */
-int load_init_file(char *file_name, realglove *array, long long array_size) {
+int load_init_file(char* file_name, realglove *array, long long array_size) {
     FILE *fin;
     long long a;
     fin = fopen(file_name, "rb");
     if (fin == NULL) {
-        log_file_loading_error("init file", file_name);
+        log_file_loading_err("init file", file_name);
         return -1;
     }
     for (a = 0; a < array_size; a++) {
@@ -110,17 +141,17 @@ void initialize_parameters() {
 
     /* Allocate space for word vectors and context word vectors, and corresponding gradsq */
     //keeping it uncommented for functions which are using it but we do not require    
-    // a = posix_memalign((void **)&W, 128, W_size * sizeof(realglove)); // Might perform better than malloc
-    // if (W == NULL) {
-    //     fprintf(stderr, "Error allocating memory for W\n");
-    //     exit(1);
-    // }
-    // a = posix_memalign((void **)&gradsq, 128, W_size * sizeof(realglove)); // Might perform better than malloc
-    // if (gradsq == NULL) {
-    //     fprintf(stderr, "Error allocating memory for gradsq\n");
-    //     free(W);
-    //     exit(1);
-    // }
+    a = posix_memalign((void **)&W, 128, W_size * sizeof(realglove)); // Might perform better than malloc
+    if (W == NULL) {
+        fprintf(stderr, "Error allocating memory for W\n");
+        exit(1);
+    }
+    a = posix_memalign((void **)&gradsq, 128, W_size * sizeof(realglove)); // Might perform better than malloc
+    if (gradsq == NULL) {
+        fprintf(stderr, "Error allocating memory for gradsq\n");
+        free(W);
+        exit(1);
+    }
 
     //Allocate space to syn0 cube(no bias)
     syn0.set_size(vector_size, P, vocab_size);
@@ -221,7 +252,7 @@ void *glove_thread(void *vid) {
     fin = fopen(input_file, "rb");
     if (fin == NULL) {
         // TODO: exit all the threads or somehow mark that glove failed
-        log_file_loading_error("input file", input_file);
+        log_file_loading_err("input file", input_file);
         pthread_exit(NULL);
     }
     fseeko(fin, (num_lines / num_threads * id) * (sizeof(CREC)), SEEK_SET); //Threads spaced roughly equally throughout file
@@ -240,7 +271,6 @@ void *glove_thread(void *vid) {
     // }
     arma::mat syn0_updates ;
     arma::mat syn1neg_updates;
-   
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
@@ -341,8 +371,8 @@ int save_params(int nb_iter) {
             sprintf(output_file,"%s.%03d.bin",save_W_file,nb_iter);
 
         fout = fopen(output_file,"wb");
-        if (fout == NULL) {log_file_loading_error("weights file", save_W_file); free(word); return 1;}
-        for (a = 0; a < vector_size ; a++) for (long long i=0; i<P; i++) fwrite(&W[a], sizeof(realglove), 1,fout);
+        if (fout == NULL) {log_file_loading_err("weights file", save_W_file); free(word); return 1;}
+        for( long long l1=0 ;l1<vocab_size; l1++) for (a = 0; a < vector_size ; a++) for (long long i=0; i<P; i++) fwrite(&syn0(a,i,l1), sizeof(realglove), 1,fout);
         fclose(fout);
         if (save_gradsq > 0) {
             if (nb_iter < 0)
@@ -351,7 +381,7 @@ int save_params(int nb_iter) {
                 sprintf(output_file_gsq,"%s.%03d.bin",save_gradsq_file,nb_iter);
 
             fgs = fopen(output_file_gsq,"wb");
-            if (fgs == NULL) {log_file_loading_error("gradsq file", save_gradsq_file); free(word); return 1;}
+            if (fgs == NULL) {log_file_loading_err("gradsq file", save_gradsq_file); free(word); return 1;}
             for (a = 0; a < 2 * vocab_size * (vector_size + 1); a++) fwrite(&gradsq[a], sizeof(realglove), 1,fgs);
             fclose(fgs);
         }
@@ -368,13 +398,13 @@ int save_params(int nb_iter) {
                 sprintf(output_file_gsq,"%s.%03d.txt",save_gradsq_file,nb_iter);
 
             fgs = fopen(output_file_gsq,"wb");
-            if (fgs == NULL) {log_file_loading_error("gradsq file", save_gradsq_file); free(word); return 1;}
+            if (fgs == NULL) {log_file_loading_err("gradsq file", save_gradsq_file); free(word); return 1;}
         }
         fout = fopen(output_file,"wb");
-        if (fout == NULL) {log_file_loading_error("weights file", save_W_file); free(word); return 1;}
+        if (fout == NULL) {log_file_loading_err("weights file", save_W_file); free(word); return 1;}
         fid = fopen(vocab_file, "r");
         sprintf(format,"%%%ds",MAX_STRING_LENGTH);
-        if (fid == NULL) {log_file_loading_error("vocab file", vocab_file); free(word); fclose(fout); return 1;}
+        if (fid == NULL) {log_file_loading_err("vocab file", vocab_file); free(word); fclose(fout); return 1;}
         if (write_header) fprintf(fout, "%lld %d\n", vocab_size, vector_size);
         for (a = 0; a < vocab_size; a++) {
             if (fscanf(fid,format,word) == 0) {free(word); fclose(fid); fclose(fout); return 1;}
@@ -453,7 +483,7 @@ int train_glove() {
     fprintf(stderr, "TRAINING MODEL\n");
     
     fin = fopen(input_file, "rb");
-    if (fin == NULL) {log_file_loading_error("cooccurrence file", input_file); return 1;}
+    if (fin == NULL) {log_file_loading_err("cooccurrence file", input_file); return 1;}
     fseeko(fin, 0, SEEK_END);
     file_size = ftello(fin);
     num_lines = file_size/(sizeof(CREC)); // Assuming the file isn't corrupt and consists only of CREC's
@@ -574,44 +604,44 @@ int main(int argc, char **argv) {
         printf("./glove -input-file cooccurrence.shuf.bin -vocab-file vocab.txt -save-file vectors -gradsq-file gradsq -verbose 2 -vector-size 100 -threads 16 -alpha 0.75 -x-max 100.0 -eta 0.05 -binary 2 -model 2\n\n");
         result = 0;
     } else {
-        if ((i = find_arg((char *)"-write-header", argc, argv)) > 0) write_header = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-verbose", argc, argv)) > 0) verbose = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-vector-size", argc, argv)) > 0) vector_size = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-iter", argc, argv)) > 0) num_iter = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-threads", argc, argv)) > 0) num_threads = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-write-header", argc, argv)) > 0) write_header = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-verbose", argc, argv)) > 0) verbose = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-vector-size", argc, argv)) > 0) vector_size = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-iter", argc, argv)) > 0) num_iter = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-threads", argc, argv)) > 0) num_threads = atoi(argv[i + 1]);
         cost = (realglove *)malloc(sizeof(realglove) * num_threads);
-        if ((i = find_arg((char *)"-alpha", argc, argv)) > 0) alpha = atof(argv[i + 1]);
-        if ((i = find_arg((char *)"-x-max", argc, argv)) > 0) x_max = atof(argv[i + 1]);
-        if ((i = find_arg((char *)"-eta", argc, argv)) > 0) eta = atof(argv[i + 1]);
-        if ((i = find_arg((char *)"-grad-clip", argc, argv)) > 0) grad_clip_value = atof(argv[i + 1]);
-        if ((i = find_arg((char *)"-binary", argc, argv)) > 0) use_binary = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-model", argc, argv)) > 0) model = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-alpha", argc, argv)) > 0) alpha = atof(argv[i + 1]);
+        if ((i = arg_pos((char *)"-x-max", argc, argv)) > 0) x_max = atof(argv[i + 1]);
+        if ((i = arg_pos((char *)"-eta", argc, argv)) > 0) eta = atof(argv[i + 1]);
+        if ((i = arg_pos((char *)"-grad-clip", argc, argv)) > 0) grad_clip_value = atof(argv[i + 1]);
+        if ((i = arg_pos((char *)"-binary", argc, argv)) > 0) use_binary = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-model", argc, argv)) > 0) model = atoi(argv[i + 1]);
         if (model != 0 && model != 1) model = 2;
-        if ((i = find_arg((char *)"-save-gradsq", argc, argv)) > 0) save_gradsq = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-vocab-file", argc, argv)) > 0) strcpy(vocab_file, argv[i + 1]);
+        if ((i = arg_pos((char *)"-save-gradsq", argc, argv)) > 0) save_gradsq = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-vocab-file", argc, argv)) > 0) strcpy(vocab_file, argv[i + 1]);
         else strcpy(vocab_file, (char *)"vocab.txt");
-        if ((i = find_arg((char *)"-save-file", argc, argv)) > 0) strcpy(save_W_file, argv[i + 1]);
+        if ((i = arg_pos((char *)"-save-file", argc, argv)) > 0) strcpy(save_W_file, argv[i + 1]);
         else strcpy(save_W_file, (char *)"vectors");
-        if ((i = find_arg((char *)"-gradsq-file", argc, argv)) > 0) {
+        if ((i = arg_pos((char *)"-gradsq-file", argc, argv)) > 0) {
             strcpy(save_gradsq_file, argv[i + 1]);
             save_gradsq = 1;
         }
         else if (save_gradsq > 0) strcpy(save_gradsq_file, (char *)"gradsq");
-        if ((i = find_arg((char *)"-input-file", argc, argv)) > 0) strcpy(input_file, argv[i + 1]);
+        if ((i = arg_pos((char *)"-input-file", argc, argv)) > 0) strcpy(input_file, argv[i + 1]);
         else strcpy(input_file, (char *)"cooccurrence.shuf.bin");
-        if ((i = find_arg((char *)"-checkpoint-every", argc, argv)) > 0) checkpoint_every = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-init-param-file", argc, argv)) > 0) strcpy(init_param_file, argv[i + 1]);
+        if ((i = arg_pos((char *)"-checkpoint-every", argc, argv)) > 0) checkpoint_every = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-init-param-file", argc, argv)) > 0) strcpy(init_param_file, argv[i + 1]);
         else strcpy(init_param_file, (char *)"vectors.000.bin");
-        if ((i = find_arg((char *)"-load-init-param", argc, argv)) > 0) load_init_param = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-save-init-param", argc, argv)) > 0) save_init_param = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-init-gradsq-file", argc, argv)) > 0) strcpy(init_gradsq_file, argv[i + 1]);
+        if ((i = arg_pos((char *)"-load-init-param", argc, argv)) > 0) load_init_param = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-save-init-param", argc, argv)) > 0) save_init_param = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-init-gradsq-file", argc, argv)) > 0) strcpy(init_gradsq_file, argv[i + 1]);
         else strcpy(init_gradsq_file, (char *)"gradsq.000.bin");
-        if ((i = find_arg((char *)"-load-init-gradsq", argc, argv)) > 0) load_init_gradsq = atoi(argv[i + 1]);
-        if ((i = find_arg((char *)"-seed", argc, argv)) > 0) seed = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-load-init-gradsq", argc, argv)) > 0) load_init_gradsq = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-seed", argc, argv)) > 0) seed = atoi(argv[i + 1]);
         
         vocab_size = 0;
         fid = fopen(vocab_file, "r");
-        if (fid == NULL) {log_file_loading_error("vocab file", vocab_file); free(cost); return 1;}
+        if (fid == NULL) {log_file_loading_err("vocab file", vocab_file); free(cost); return 1;}
         while ((i = getc(fid)) != EOF) if (i == '\n') vocab_size++; // Count number of entries in vocab_file
         fclose(fid);
         if (vocab_size == 0) {fprintf(stderr, "Unable to find any vocab entries in vocab file %s.\n", vocab_file); free(cost); return 1;}

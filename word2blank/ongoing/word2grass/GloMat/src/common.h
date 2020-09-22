@@ -53,11 +53,11 @@ unsigned int bitwisehash(char *word, int tsize, unsigned int seed);
 HASHREC **inithashtable();
 int get_word(char *word, FILE *fin);
 void free_table(HASHREC **ht);
-int find_arg(char const *str, int argc, char **argv);
+int find_arg(char* str, int argc, char **argv);
 void free_fid(FILE **fid, const int num);
 
 // logs errors when loading files.  call after a failed load
-int log_file_loading_error(char const *file_description, char *file_name);
+int log_file_loading_error( const char* file_description, char *file_name);
 
 #endif /* COMMON_H */
 

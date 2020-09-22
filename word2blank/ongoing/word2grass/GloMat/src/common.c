@@ -104,7 +104,7 @@ int get_word(char *word, FILE *fin) {
     return 0;
 }
 
-int find_arg(char const *str, int argc, char **argv) {
+int find_arg(char *str, int argc, char **argv) {
     int i;
     for (i = 1; i < argc; i++) {
         if (!scmp(str, argv[i])) {
@@ -144,7 +144,7 @@ void free_fid(FILE **fid, const int num) {
 }
 
 
-int log_file_loading_error(char const *file_description, char *file_name) {
+int log_file_loading_error(const char*file_description, char *file_name) {
     fprintf(stderr, "Unable to open %s %s.\n", file_description, file_name);
     fprintf(stderr, "Errno: %d\n", errno);
     char error[MAX_STRING_LENGTH];

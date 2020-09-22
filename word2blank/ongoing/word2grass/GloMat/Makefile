@@ -35,7 +35,7 @@ $(BUILDDIR)/vocab_count : $(OBJDIR)/vocab_count.o $(OBJDIR)/common.o
 	$(CC) $^ -o $@ $(CFLAGS)
 $(OBJDIR)/%.o : $(SRCDIR)/%.c $(HEADERS)
 	$(CC) -c $< -o $@ $(CFLAGS)
-$(OBJDIRCXX)/glove.o : $(SRCDIR)/glove.cpp $(HEADERSCXX)
+$(OBJDIRCXX)/%.o : $(SRCDIR)/%.cpp $(HEADERSCXX)
 	$(CXX) -c $< -o $@ $(CXXFLAGS)
 .PHONY: clean
 clean:

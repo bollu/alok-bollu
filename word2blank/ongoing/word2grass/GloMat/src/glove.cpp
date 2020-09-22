@@ -32,11 +32,10 @@
 #include <cassert>
 #include <time.h>
 #include <armadillo>
-#include "grad.h"
 // windows pthread.h is buggy, but this #define fixes it
 #define HAVE_STRUCT_TIMESPEC
 #include <pthread.h>
-
+#include "grad.h"
 #include "common.h"
 
 #define _FILE_OFFSET_BITS 64
@@ -65,8 +64,8 @@ arma::cube syn0;
 //syn1neg_mat stores context matrix representation of each word
 arma::cube syn1neg;
 //grad_mat stores gradient of each matrix
-arma::cube syn0_grad;
-arma::cube syn1neg_grad;
+arma::cube syn0_gradsq;
+arma::cube syn1neg_gradsq;
 long long num_lines, *lines_per_thread, vocab_size;
 char vocab_file[MAX_STRING_LENGTH];
 char input_file[MAX_STRING_LENGTH];
@@ -124,24 +123,24 @@ void initialize_parameters() {
     // }
 
     //Allocate space to syn0 cube(no bias)
-    syn0.set_size((vector_size, P, vocab_size);
+    syn0.set_size(vector_size, P, vocab_size);
     printf("syn0.n_slices: %lld\n", syn0.n_slices);
-    assert(syn0.n_slices == vocab_size);
+    assert((long long)syn0.n_slices == vocab_size);
     
     //Allocate space to syn1neg cube
     syn1neg.set_size(vector_size, P, vocab_size);
     printf("syn1neg.n_slices:%lld\n", syn1neg.n_slices);
-    assert(syn1neg.n_slices == vocab_size);
+    assert((long long)syn1neg.n_slices == vocab_size);
 
     //Allocate space to syn0_grad cube
     syn0_gradsq.set_size(vector_size, P, vocab_size);
     printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
-    assert(syn0_gradsq.n_slices == vocab_size);
+    assert((long long)syn0_gradsq.n_slices == vocab_size);
 
     //Allocate space to syn1neg_grad cube
     syn1neg_gradsq.set_size(vector_size, P, vocab_size);
     printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
-    assert(syn1neg_gradsq.n_slices == vocab_size);
+    assert((long long)syn1neg_gradsq.n_slices == vocab_size);
 
 
     if (load_init_param) {
@@ -160,14 +159,14 @@ void initialize_parameters() {
         //Initalising the matrices naively
         //Have to check "Statistics on Special Manifold" for a smarter method
         for (a = 0; a < vocab_size; a++) {
-            printf("\rinitializing Syn0 |%d|", a);
+            printf("\rinitializing Syn0 |%lld|", a);
             arma::mat X = arma::orth(arma::randn<arma::mat>(vector_size, P));
             arma::uword r = arma::rank(X);
             if ((long long)r == P) syn0.slice(a) = X;
             else printf("FULL COLUMN FAIL\n");
         }
         for (a = 0; a < vocab_size; a++) {
-            printf("\rinitializing Syn1neg |%d|", a);
+            printf("\rinitializing Syn1neg |%lld|", a);
             arma::mat X = arma::orth(arma::randn<arma::mat>(vector_size, P));
             arma::uword r = arma::rank(X);
             if ((long long)r == P) syn1neg.slice(a) = X;

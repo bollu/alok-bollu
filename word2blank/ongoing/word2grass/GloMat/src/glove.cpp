@@ -60,10 +60,13 @@ real eta = 0.05; // Initial learning rate
 real alpha = 0.75, x_max = 100.0; // Weighting function parameters, not extremely sensitive to corpus, though may need adjustment for very small or very large corpora
 real grad_clip_value = 100.0; // Clipping parameter for gradient components. Values will be clipped to [-grad_clip_value, grad_clip_value] interval.
 real *W, *gradsq, *cost;
-//word_mat stores global matrix representation of each word
-arma::cube word_mat;
+//syn0_mat stores global matrix representation of each word
+arma::cube syn0;
+//syn1neg_mat stores context matrix representation of each word
+arma::cube syn1neg;
 //grad_mat stores gradient of each matrix
-arma::cube grad_mat;
+arma::cube syn0_grad;
+arma::cube syn1neg_grad;
 long long num_lines, *lines_per_thread, vocab_size;
 char vocab_file[MAX_STRING_LENGTH];
 char input_file[MAX_STRING_LENGTH];
@@ -108,27 +111,38 @@ void initialize_parameters() {
 
     /* Allocate space for word vectors and context word vectors, and corresponding gradsq */
     //keeping it uncommented for functions which are using it but we do not require    
-    a = posix_memalign((void **)&W, 128, W_size * sizeof(real)); // Might perform better than malloc
-    if (W == NULL) {
-        fprintf(stderr, "Error allocating memory for W\n");
-        exit(1);
-    }
-    a = posix_memalign((void **)&gradsq, 128, W_size * sizeof(real)); // Might perform better than malloc
-    if (gradsq == NULL) {
-        fprintf(stderr, "Error allocating memory for gradsq\n");
-        free(W);
-        exit(1);
-    }
+    // a = posix_memalign((void **)&W, 128, W_size * sizeof(real)); // Might perform better than malloc
+    // if (W == NULL) {
+    //     fprintf(stderr, "Error allocating memory for W\n");
+    //     exit(1);
+    // }
+    // a = posix_memalign((void **)&gradsq, 128, W_size * sizeof(real)); // Might perform better than malloc
+    // if (gradsq == NULL) {
+    //     fprintf(stderr, "Error allocating memory for gradsq\n");
+    //     free(W);
+    //     exit(1);
+    // }
 
-    //Allocate space to word_mat cube
-    word_mat.set_size(vector_size, P, vocab_size);
-    printf("word_mat.n_slices: %lld\n", word_mat.n_slices);
-    assert(word_mat.n_slices == vocab_size);
+    //Allocate space to syn0 cube(no bias)
+    syn0.set_size((vector_size, P, vocab_size);
+    printf("syn0.n_slices: %lld\n", syn0.n_slices);
+    assert(syn0.n_slices == vocab_size);
+    
+    //Allocate space to syn1neg cube
+    syn1neg.set_size(vector_size, P, vocab_size);
+    printf("syn1neg.n_slices:%lld\n", syn1neg.n_slices);
+    assert(syn1neg.n_slices == vocab_size);
 
-    //Allocate space to grad_mat cube
-    grad_mat.set_size(vector_size, P, vocab_size);
-    printf("grad_mat.n_slices: %lld\n", grad_mat.n_slices);
-    assert(grad_mat.n_slices == vocab_size);
+    //Allocate space to syn0_grad cube
+    syn0_grad.set_size(vector_size, P, vocab_size);
+    printf("syn0_grad.n_slices: %lld\n", syn0_grad.n_slices);
+    assert(syn0_grad.n_slices == vocab_size);
+
+    //Allocate space to syn1neg_grad cube
+    syn1neg_grad.set_size(vector_size, P, vocab_size);
+    printf("syn1neg_grad.n_slices:%lld\n", syn1neg_grad.n_slices);
+    assert(syn1neg_grad.n_slices == vocab_size);
+
 
     if (load_init_param) {
         // Load existing parameters
@@ -146,10 +160,17 @@ void initialize_parameters() {
         //Initalising the matrices naively
         //Have to check "Statistics on Special Manifold" for a smarter method
         for (a = 0; a < vocab_size; a++) {
-            printf("\rinitializing Word Matrix |%d|", a);
+            printf("\rinitializing Syn0 |%d|", a);
             arma::mat X = arma::orth(arma::randn<arma::mat>(vector_size, P));
             arma::uword r = arma::rank(X);
-            if ((long long)r == P) word_mat.slice(a) = X;
+            if ((long long)r == P) syn0.slice(a) = X;
+            else printf("FULL COLUMN FAIL\n");
+        }
+        for (a = 0; a < vocab_size; a++) {
+            printf("\rinitializing Syn1neg |%d|", a);
+            arma::mat X = arma::orth(arma::randn<arma::mat>(vector_size, P));
+            arma::uword r = arma::rank(X);
+            if ((long long)r == P) syn1neg.slice(a) = X;
             else printf("FULL COLUMN FAIL\n");
         }
 
@@ -177,7 +198,8 @@ void initialize_parameters() {
         //     if ((long long)r == P) grad_mat.slice(a) = X;
         //     else printf("FULL COLUMN FAIL\n");
         // }
-        grad_mat.ones();
+        syn0_grad.ones();
+        syn1neg_grad.ones();
     }
 }
 
@@ -195,7 +217,7 @@ void *glove_thread(void *vid) {
     long long a, b ,l1, l2;
     long long id = *(long long*)vid;
     CREC cr;
-    real diff, fdiff, temp1, temp2;
+    real diff, fdiff, temp1, temp2, distance;
     FILE *fin;
     fin = fopen(input_file, "rb");
     if (fin == NULL) {
@@ -206,11 +228,12 @@ void *glove_thread(void *vid) {
     fseeko(fin, (num_lines / num_threads * id) * (sizeof(CREC)), SEEK_SET); //Threads spaced roughly equally throughout file
     cost[id] = 0;
     
-    real* W_updates1 = (real*)malloc(vector_size * sizeof(real));
-    if (NULL == W_updates1){
-        fclose(fin);
-        pthread_exit(NULL);
-    }
+    // real* W_updates1 = (real*)malloc(vector_size * sizeof(real));
+    // if (NULL == W_updates1){
+    //     fclose(fin);
+    //     pthread_exit(NULL);
+    // }
+
     real* W_updates2 = (real*)malloc(vector_size * sizeof(real));
         if (NULL == W_updates2){
         fclose(fin);
@@ -226,11 +249,14 @@ void *glove_thread(void *vid) {
         //l1 = (cr.word1 - 1LL) * (vector_size + 1); // cr word indices start at 1
         //l2 = ((cr.word2 - 1LL) + vocab_size) * (vector_size + 1); // shift by vocab_size to get separate vectors for context words
         l1 = (cr.word1 - 1LL);
-        l2 = (cr.word2 - 1LL) + vocab_size;
+        l2 = (cr.word2 - 1LL);
         /* Calculate cost, save diff for gradients */
         diff = 0;
-        for (b = 0; b < vector_size; b++) diff += W[b + l1] * W[b + l2]; // dot product of word and context word vector
-        diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
+        distance = 0;
+        for (b = 0; b < vector_size; b++) distance = getNaturalDist(c_syn0.slice(l1), c_syn1neg.slice(l2)); // geodesic distance of word and context word matrix
+        //diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
+        //not using bias
+        diff = distance - log(cr.val);
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
 
         // Check for NaN and inf() in the diffs.

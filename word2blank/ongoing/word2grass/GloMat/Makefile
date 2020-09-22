@@ -25,7 +25,7 @@ MODULES := $(BUILDDIR)/vocab_count $(BUILDDIR)/cooccur $(BUILDDIR)/shuffle $(BUI
 all: dir $(OBJ) $(MODULES)
 dir :
 	mkdir -p $(BUILDDIR)
-$(BUILDDIR)/glove : $(OBJDIRCXX)/glove.o $(OBJDIRCXX)/common.o $()
+$(BUILDDIR)/glove : $(OBJDIRCXX)/glove.o $(OBJDIRCXX)/common.o 
 	$(CXX) $^ -o $@ $(CXXFLAGS)
 $(BUILDDIR)/shuffle : $(OBJDIR)/shuffle.o $(OBJDIR)/common.o
 	$(CC) $^ -o $@ $(CFLAGS)

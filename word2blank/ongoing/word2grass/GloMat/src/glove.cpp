@@ -275,13 +275,13 @@ void *glove_thread(void *vid) {
         for (b = 0; b < vector_size; b++) {
             for(long long i = 0; i < P; i++){
                 // learning rate times gradient for word matrices
-                temp1 = fmin(fmax(fdiff * syn0_updates(b, i, l1), -grad_clip_value), grad_clip_value) * eta;
-                temp2 = fmin(fmax(fdiff * syn1neg_updates(b, i, l2), -grad_clip_value), grad_clip_value) * eta;
+                temp1 = fmin(fmax(fdiff * syn0_updates(b, i), -grad_clip_value), grad_clip_value) * eta;
+                temp2 = fmin(fmax(fdiff * syn1neg_updates(b, i), -grad_clip_value), grad_clip_value) * eta;
                 // adaptive updates
-                syn0_updates(b, i, l1) = temp1 / sqrt(syn0_gradsq(b, i, l1)); //gradsq[b + l1]);
-                syn1neg_updates(b, i ,l2) = temp2 / sqrt(syn1neg_gradsq(b, i, l2));//gradsq[b + l2]);
-                syn0_updates_sum += syn0_updates(b, i , l1);
-                syn1neg_updates_sum += syn1neg_updates(b, i , l2);
+                syn0_updates(b, i) = temp1 / sqrt(syn0_gradsq(b, i, l1)); //gradsq[b + l1]);
+                syn1neg_updates(b, i) = temp2 / sqrt(syn1neg_gradsq(b, i, l2));//gradsq[b + l2]);
+                syn0_updates_sum += syn0_updates(b, i);
+                syn1neg_updates_sum += syn1neg_updates(b, i);
                 syn0_gradsq(b, i, l1) += temp1 * temp1;
                 syn1neg_gradsq(b, i, l2) += temp2 * temp2;
             }
@@ -343,7 +343,7 @@ int save_params(int nb_iter) {
 
         fout = fopen(output_file,"wb");
         if (fout == NULL) {log_file_loading_error("weights file", save_W_file); free(word); return 1;}
-        for (a = 0; a < 2 * vocab_size * (vector_size + 1); a++) fwrite(&W[a], sizeof(real), 1,fout);
+        for (a = 0; a < vector_size ; a++) for (long long i=0; i<P; i++) fwrite(&W[a], sizeof(real), 1,fout);
         fclose(fout);
         if (save_gradsq > 0) {
             if (nb_iter < 0)

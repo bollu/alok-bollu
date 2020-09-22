@@ -287,12 +287,14 @@ void *glove_thread(void *vid) {
             }
         }
         if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
-            for (b = 0; b < vector_size; b++) for (long long i = 0; i < P; i++){
-                // W[b + l1] -= W_updates1[b];
-                // W[b + l2] -= W_updates2[b];
-                syn0(b, i ,l1) -= syn0_updates(b, i , l1);
-                syn1neg(b , i ,l2) -= syn1neg_updates(b, i ,l2); 
-            }
+            // for (b = 0; b < vector_size; b++) for (long long i = 0; i < P; i++){
+            //     // W[b + l1] -= W_updates1[b];
+            //     // W[b + l2] -= W_updates2[b];
+            //     syn0(b, i ,l1) -= syn0_updates(b, i , l1);
+            //     syn1neg(b , i ,l2) -= syn1neg_updates(b, i ,l2); 
+            // }
+            syn0.slice(l1) -= syn0_updates;
+            syn1neg.slice(l2) -= syn1neg_updates;
             syn0.slice(l1) = arma::orth(syn0.slice(l1));
             syn1neg.slice(l2) = arma::orth(syn1neg.slice(l2));
         }

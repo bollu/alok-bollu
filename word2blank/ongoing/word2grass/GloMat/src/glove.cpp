@@ -372,8 +372,24 @@ int save_params(int nb_iter) {
 
         fout = fopen(output_file,"wb");
         if (fout == NULL) {log_file_loading_err("weights file", save_W_file); free(word); return 1;}
-        for( long long l1=0 ;l1<vocab_size; l1++) for (a = 0; a < vector_size ; a++) for (long long i=0; i<P; i++) fwrite(&syn0(a,i,l1), sizeof(realglove), 1,fout);
-        fclose(fout);
+        fid = fopen(vocab_file, "r");
+        sprintf(format,"%%%ds",MAX_STRING_LENGTH);
+        if (fid == NULL) {log_file_loading_err("vocab file", vocab_file); free(word); fclose(fout); return 1;}
+        if (write_header) fprintf(fout, "%lld %lld %lld\n", vocab_size, vector_size, P);
+        for (a = 0; a < vocab_size; a++) {
+            if (fscanf(fid,format,word) == 0) {free(word); fclose(fid); fclose(fout); return 1;}
+            // input vocab cannot contain special <unk> keyword
+            if (strcmp(word, "<unk>") == 0) {free(word); fclose(fid); fclose(fout);  return 1;}
+            fprintf(fout, "%s ",word);
+            for(b = 0; b < P; b++) for (long long c = 0; c < vector_size; c++) fwrite(&syn0(c, b, a), sizeof(realglove), 1, fout);
+            fprintf(fout, "\n");
+        }
+        if (fscanf(fid,format,word) == 0) {
+            // Eat irrelevant frequency entry
+            fclose(fout);
+            fclose(fid);
+            free(word);
+        } 
         if (save_gradsq > 0) {
             if (nb_iter < 0)
                 sprintf(output_file_gsq,"%s.bin",save_gradsq_file);

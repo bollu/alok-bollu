@@ -274,8 +274,7 @@ void *glove_thread(void *vid) {
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
-        if (cr.word1 < 1 || cr.word2 < 1) { continue; }
-        
+        if (cr.word1 < 1 || cr.word2 < 1) { continue; }        
         /* Get location of words in W & gradsq */
         //l1 = (cr.word1 - 1LL) * (vector_size + 1); // cr word indices start at 1
         //l2 = ((cr.word2 - 1LL) + vocab_size) * (vector_size + 1); // shift by vocab_size to get separate vectors for context words
@@ -284,10 +283,11 @@ void *glove_thread(void *vid) {
         /* Calculate cost, save diff for gradients */
         diff = 0;
         distance = 0;
-        for (b = 0; b < vector_size; b++) getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_updates, syn1neg_updates); // chordal distance of word and context word matrix
+        getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_updates, syn1neg_updates); // chordal distance of word and context word matrix
         //diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
         //not using bias
-        diff = distance - log(cr.val);
+        realglove dot = sqrt(P);
+	diff = (dot-distance) - log(cr.val);
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
 
         // Check for NaN and inf() in the diffs.
@@ -297,7 +297,6 @@ void *glove_thread(void *vid) {
         }
 
         cost[id] += 0.5 * fdiff * diff; // weighted squared error
-        
         /* Adaptive gradient updates */
         realglove syn0_updates_sum = 0;
         realglove syn1neg_updates_sum = 0;

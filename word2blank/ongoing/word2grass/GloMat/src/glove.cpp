@@ -248,6 +248,7 @@ void *glove_thread(void *vid) {
     long long id = *(long long*)vid;
     CREC cr;
     realglove diff, fdiff, distance;
+    realglove clampval = 0.005;
     FILE *fin;
     fin = fopen(input_file, "rb");
     if (fin == NULL) {
@@ -271,7 +272,10 @@ void *glove_thread(void *vid) {
     // }
     arma::mat syn0_updates(vector_size, P);
     arma::mat syn1neg_updates(vector_size, P);
+    arma::mat syn0_metric_grad(vector_size, P);
+    arma::mat syn1neg_metric_grad(vector_size, P);
     arma::Mat<double> grad_clip(vector_size, P); grad_clip.fill(grad_clip_value);
+    arma::Mat<double> identity_mat = arma::eye(vector_size, vector_size);
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
@@ -284,12 +288,12 @@ void *glove_thread(void *vid) {
         /* Calculate cost, save diff for gradients */
         diff = 0;
         distance = 0;
-        syn0_updates.zeros();
-        syn1neg_updates.zeros();
-        getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_updates, syn1neg_updates); // chordal distance of word and context word matrix
+        syn0_metric_grad.zeros();
+        syn1neg_metric_grad.zeros();
+        getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_metric_grad, syn1neg_metric_grad); // chordal distance of word and context word matrix
         //not using bias
-        realglove dot = sqrt(P);
-	    diff = (dot-distance) - log(cr.val);
+        realglove max_dist = sqrt(P);
+	    diff = (max_dist-distance) - log(cr.val);
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
 
         // Check for NaN and inf() in the diffs.
@@ -302,14 +306,19 @@ void *glove_thread(void *vid) {
         /* Adaptive gradient updates */
         realglove syn0_updates_sum = 0;
         realglove syn1neg_updates_sum = 0;
-        arma::Mat<double> temp1 = arma::min(arma::max(syn0_updates, -grad_clip), grad_clip)*eta;
-        arma::Mat<double> temp2 = arma::min(arma::max(syn1neg_updates, -grad_clip), grad_clip)*eta;
-        syn0_updates = temp1 / arma::sqrt(syn0_updates);
-        syn1neg_updates = temp2 / arma::sqrt(syn1neg_updates);
+        syn0_updates.zeros();
+        syn1neg_updates.zeros();
+        arma::Mat<double> temp1 = arma::min(arma::max(-syn0_metric_grad, -grad_clip), grad_clip)*eta;
+        arma::Mat<double> temp2 = arma::min(arma::max(-syn1neg_metric_grad, -grad_clip), grad_clip)*eta;
+        //Calculating grad*eta/sqrt(I + diagonal(G_t)) for syn0 and syn1neg
+        syn0_updates = temp1 / arma::sqrt(arma::diagmat(syn0_gradsq.slice(l1)) + clampval*identity_mat);
+        syn1neg_updates = temp2 / arma::sqrt(arma::diagmat(syn1neg_gradsq.slice(l2)) + clampval*identity_mat);
         syn0_updates_sum = arma::accu(syn0_updates);
         syn1neg_updates_sum = arma::accu(syn1neg_updates);
-        syn0_gradsq.slice(l1) += (temp1 % temp1);
-        syn1neg_gradsq.slice(l2) += (temp2 % temp2);
+        //Calculating the matrix G_t for syn0 which is outer_prod of gradient  
+        syn0_gradsq.slice(l1) += temp1*temp1.t();
+        //Calculating the matrix G_t for syn1neg outer prod of gradient
+        syn1neg_gradsq.slice(l2) += temp2*temp2.t();
 
         if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
             syn0.slice(l1) -= syn0_updates;

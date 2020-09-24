@@ -247,7 +247,7 @@ void *glove_thread(void *vid) {
     long long a, b ,l1, l2;
     long long id = *(long long*)vid;
     CREC cr;
-    realglove diff, fdiff, temp1, temp2, distance;
+    realglove diff, fdiff, distance;
     FILE *fin;
     fin = fopen(input_file, "rb");
     if (fin == NULL) {
@@ -269,8 +269,9 @@ void *glove_thread(void *vid) {
     //     free(W_updates1);
     //     pthread_exit(NULL);
     // }
-    arma::mat syn0_updates ;
-    arma::mat syn1neg_updates;
+    arma::mat syn0_updates(vector_size, P);
+    arma::mat syn1neg_updates(vector_size, P);
+    arma::Mat<double> grad_clip(vector_size, P); grad_clip.fill(grad_clip_value);
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
@@ -283,11 +284,12 @@ void *glove_thread(void *vid) {
         /* Calculate cost, save diff for gradients */
         diff = 0;
         distance = 0;
+        syn0_updates.zeros();
+        syn1neg_updates.zeros();
         getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_updates, syn1neg_updates); // chordal distance of word and context word matrix
-        //diff += W[vector_size + l1] + W[vector_size + l2] - log(cr.val); // add separate bias for each word
         //not using bias
         realglove dot = sqrt(P);
-	diff = (dot-distance) - log(cr.val);
+	    diff = (dot-distance) - log(cr.val);
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
 
         // Check for NaN and inf() in the diffs.
@@ -300,27 +302,16 @@ void *glove_thread(void *vid) {
         /* Adaptive gradient updates */
         realglove syn0_updates_sum = 0;
         realglove syn1neg_updates_sum = 0;
-        for (b = 0; b < vector_size; b++) {
-            for(long long i = 0; i < P; i++){
-                // learning rate times gradient for word matrices
-                temp1 = fmin(fmax(fdiff * syn0_updates(b, i), -grad_clip_value), grad_clip_value) * eta;
-                temp2 = fmin(fmax(fdiff * syn1neg_updates(b, i), -grad_clip_value), grad_clip_value) * eta;
-                // adaptive updates
-                syn0_updates(b, i) = temp1 / sqrt(syn0_gradsq(b, i, l1)); //gradsq[b + l1]);
-                syn1neg_updates(b, i) = temp2 / sqrt(syn1neg_gradsq(b, i, l2));//gradsq[b + l2]);
-                syn0_updates_sum += syn0_updates(b, i);
-                syn1neg_updates_sum += syn1neg_updates(b, i);
-                syn0_gradsq(b, i, l1) += temp1 * temp1;
-                syn1neg_gradsq(b, i, l2) += temp2 * temp2;
-            }
-        }
+        arma::Mat<double> temp1 = arma::min(arma::max(syn0_updates, -grad_clip), grad_clip)*eta;
+        arma::Mat<double> temp2 = arma::min(arma::max(syn1neg_updates, -grad_clip), grad_clip)*eta;
+        syn0_updates = temp1 / arma::sqrt(syn0_updates);
+        syn1neg_updates = temp2 / arma::sqrt(syn1neg_updates);
+        syn0_updates_sum = arma::accu(syn0_updates);
+        syn1neg_updates_sum = arma::accu(syn1neg_updates);
+        syn0_gradsq.slice(l1) += (temp1 % temp1);
+        syn1neg_gradsq.slice(l2) += (temp2 % temp2);
+
         if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
-            // for (b = 0; b < vector_size; b++) for (long long i = 0; i < P; i++){
-            //     // W[b + l1] -= W_updates1[b];
-            //     // W[b + l2] -= W_updates2[b];
-            //     syn0(b, i ,l1) -= syn0_updates(b, i , l1);
-            //     syn1neg(b , i ,l2) -= syn1neg_updates(b, i ,l2); 
-            // }
             syn0.slice(l1) -= syn0_updates;
             syn1neg.slice(l2) -= syn1neg_updates;
             syn0.slice(l1) = arma::orth(syn0.slice(l1));

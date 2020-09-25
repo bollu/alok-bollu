@@ -228,8 +228,8 @@ void initialize_parameters() {
         //     if ((long long)r == P) grad_mat.slice(a) = X;
         //     else printf("FULL COLUMN FAIL\n");
         // }
-        syn0_gradsq.ones();
-        syn1neg_gradsq.ones();
+        syn0_gradsq.zeros();
+        syn1neg_gradsq.zeros();
     }
 }
 
@@ -310,15 +310,14 @@ void *glove_thread(void *vid) {
         syn1neg_updates.zeros();
         arma::Mat<double> temp1 = arma::min(arma::max(-syn0_metric_grad, -grad_clip), grad_clip)*eta;
         arma::Mat<double> temp2 = arma::min(arma::max(-syn1neg_metric_grad, -grad_clip), grad_clip)*eta;
-        //Calculating grad*eta/sqrt(I + diagonal(G_t)) for syn0 and syn1neg
-        syn0_updates = temp1 / arma::sqrt(arma::diagmat(syn0_gradsq.slice(l1)) + clampval*identity_mat);
-        syn1neg_updates = temp2 / arma::sqrt(arma::diagmat(syn1neg_gradsq.slice(l2)) + clampval*identity_mat);
+        //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
+        syn0_updates = arma::inv(sqrtmat_sympd(syn0_gradsq.slice(l1) + clampval*identity_mat))%temp1;
+        syn1neg_updates = arma::inv(arma::sqrtmat_sympd(syn1neg_gradsq.slice(l2) + clampval*identity_mat))%temp2;
         syn0_updates_sum = arma::accu(syn0_updates);
         syn1neg_updates_sum = arma::accu(syn1neg_updates);
-        //Calculating the matrix G_t for syn0 which is outer_prod of gradient  
-        syn0_gradsq.slice(l1) += temp1*temp1.t();
-        //Calculating the matrix G_t for syn1neg outer prod of gradient
-        syn1neg_gradsq.slice(l2) += temp2*temp2.t();
+        //Calculating the matrix r for syn0 and syn1neg which is hadamard product of gradient  
+        syn0_gradsq.slice(l1) += temp1%temp1; 
+        syn1neg_gradsq.slice(l2) += temp2%temp2;
 
         if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
             syn0.slice(l1) -= syn0_updates;

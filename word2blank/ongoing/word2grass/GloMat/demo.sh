@@ -15,7 +15,7 @@ make
 #   rm text8.zip
 # fi
 
-CORPUS=~/Documents/text8
+CORPUS=~/Documents/text0
 VOCAB_FILE=vocab.txt
 COOCCURRENCE_FILE=cooccurrence.bin
 COOCCURRENCE_SHUF_FILE=cooccurrence.shuf.bin

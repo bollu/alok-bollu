@@ -275,7 +275,7 @@ void *glove_thread(void *vid) {
     arma::mat syn0_metric_grad(vector_size, P);
     arma::mat syn1neg_metric_grad(vector_size, P);
     arma::Mat<double> grad_clip(vector_size, P); grad_clip.fill(grad_clip_value);
-    arma::Mat<double> identity_mat = arma::eye(vector_size, vector_size);
+    arma::Mat<double> clamp_mat(vector_size, P); clamp_mat.fill(clampval); 
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
@@ -301,7 +301,6 @@ void *glove_thread(void *vid) {
             fprintf(stderr,"Caught NaN in diff for kdiff for thread. Skipping update");
             continue;
         }
-
         cost[id] += 0.5 * fdiff * diff; // weighted squared error
         /* Adaptive gradient updates */
         realglove syn0_updates_sum = 0;
@@ -311,8 +310,8 @@ void *glove_thread(void *vid) {
         arma::Mat<double> temp1 = arma::min(arma::max(-syn0_metric_grad, -grad_clip), grad_clip)*eta;
         arma::Mat<double> temp2 = arma::min(arma::max(-syn1neg_metric_grad, -grad_clip), grad_clip)*eta;
         //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
-        syn0_updates = arma::inv(sqrtmat_sympd(syn0_gradsq.slice(l1) + clampval*identity_mat))%temp1;
-        syn1neg_updates = arma::inv(arma::sqrtmat_sympd(syn1neg_gradsq.slice(l2) + clampval*identity_mat))%temp2;
+        syn0_updates = temp1 / (arma::sqrt(syn0_gradsq.slice(l1)) + clamp_mat);
+        syn1neg_updates = temp2 / (arma::sqrt(syn1neg_gradsq.slice(l2)) + clamp_mat);
         syn0_updates_sum = arma::accu(syn0_updates);
         syn1neg_updates_sum = arma::accu(syn1neg_updates);
         //Calculating the matrix r for syn0 and syn1neg which is hadamard product of gradient  

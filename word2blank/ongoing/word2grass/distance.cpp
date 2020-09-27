@@ -69,6 +69,7 @@ int main(int argc, char **argv) {
             if ((a < max_w) && (vocab[b * max_w + a] != '\n')) a++;
         }
         vocab[b * max_w + a] = 0;
+        printf("reading |%s|\n", vocab + b*max_w);
         for(int p  = 0; p < P; p++) {
             for (int s = 0; s < size; s++) {
                 fread(&c_syn0(s, p, b), sizeof(double), 1, f);

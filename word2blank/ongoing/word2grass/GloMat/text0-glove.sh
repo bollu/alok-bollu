@@ -17,13 +17,13 @@ SAVE_FILE=matrices
 VERBOSE=2
 MEMORY=4.0
 VOCAB_MIN_COUNT=5
-VECTOR_SIZE=9
-MAX_ITER=1
+VECTOR_SIZE=20
+MAX_ITER=3
 # WINDOW_SIZE=15
 WINDOW_SIZE=4
 WRITE_HEADER=1
 BINARY=1
-NUM_THREADS=10
+NUM_THREADS=20
 X_MAX=10
 if hash python 2>/dev/null; then
     PYTHON=python
@@ -43,5 +43,3 @@ fi
 echo "$ $BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -iter $MAX_ITER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE"
 # gdb -ex run --args $BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -iter $MAX_ITER -write-header $WRITE_HEADER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE
 $BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -iter $MAX_ITER -write-header $WRITE_HEADER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE
-echo "$ $PYTHON eval/python/evaluate.py"
-$PYTHON eval/python/evaluate.py

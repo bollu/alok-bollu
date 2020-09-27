@@ -22,17 +22,10 @@ VOCAB_FILE=vocab.txt
 COOCCURRENCE_FILE=cooccurrence.bin
 COOCCURRENCE_SHUF_FILE=cooccurrence.shuf.bin
 BUILDDIR=build
-SAVE_FILE=matrices
 VERBOSE=2
 MEMORY=4.0
 VOCAB_MIN_COUNT=5
-VECTOR_SIZE=50
-MAX_ITER=15
 WINDOW_SIZE=15
-WRITE_HEADER=1
-BINARY=1
-NUM_THREADS=8
-X_MAX=10
 if hash python 2>/dev/null; then
     PYTHON=python
 else

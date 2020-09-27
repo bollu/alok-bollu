@@ -45,11 +45,11 @@ using namespace std;
 int write_header=0; //0=no, 1=yes; writes vocab_size/vector_size as first line for use with some libraries, such as gensim.
 int verbose = 2; // 0, 1, or 2
 int seed = 0;
-int use_unk_vec = 1; // 0 or 1
-int P = 2;
+int use_unk_vec = 0; // 0 or 1
+long long int P = -1;
 int num_threads = 8; // pthreads
 int num_iter = 25; // Number of full passes through cooccurrence matrix
-int vector_size = 50; // Word vector size
+long long int vector_size = 50; // Word vector size
 int save_gradsq = 0; // By default don't save squared gradient values
 int use_binary = 0; // 0: save as text files; 1: save as binary; 2: both. For binary, save both word and context word vectors.
 int model = 2; // For text file output only. 0: concatenate word and context vectors (and biases) i.e. save everything; 1: Just save word vectors (no bias); 2: Save (word + context word) vectors (no biases)
@@ -274,7 +274,6 @@ void *glove_thread(void *vid) {
     arma::mat syn1neg_updates(vector_size, P);
     arma::mat syn0_metric_grad(vector_size, P);
     arma::mat syn1neg_metric_grad(vector_size, P);
-    arma::Mat<double> grad_clip(vector_size, P); grad_clip.fill(grad_clip_value);
     arma::Mat<double> clamp_mat(vector_size, P); clamp_mat.fill(clampval); 
     for (a = 0; a < lines_per_thread[id]; a++) {
         fread(&cr, sizeof(CREC), 1, fin);
@@ -286,16 +285,30 @@ void *glove_thread(void *vid) {
         l1 = (cr.word1 - 1LL);
         l2 = (cr.word2 - 1LL);
         /* Calculate cost, save diff for gradients */
+        // diff = 0;
+        // distance = 0;
+        // syn0_metric_grad.zeros();
+        // syn1neg_metric_grad.zeros();
+        // getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_metric_grad, syn1neg_metric_grad); // chordal distance of word and context word matrix
+        // //not using bias
+        // realglove max_dist = sqrt(P);
+	    // diff = (max_dist-distance) - log(cr.val);
         diff = 0;
         distance = 0;
         syn0_metric_grad.zeros();
         syn1neg_metric_grad.zeros();
         getDotAndGradients_chordalfrobenius(syn0.slice(l1), syn1neg.slice(l2), distance, syn0_metric_grad, syn1neg_metric_grad); // chordal distance of word and context word matrix
         //not using bias
-        realglove max_dist = sqrt(P);
-	    diff = (max_dist-distance) - log(cr.val);
+        // added sqrt based on: http://helper.ipam.ucla.edu/publications/glws1/glws1_15465.pdf
+        const realglove max_dist = sqrt(P);
+        // map [0, sqrt(P) -> [1, 0]
+        const realglove dot = (max_dist - distance)/max_dist;
+        if (dot < 0) {
+            printf("\nmax_dist: %4.2f | distance: %4.2f | (max_dist - distance): %4.2f\n", max_dist, distance, max_dist - distance);
+        }
+        //assert(dot >= 0);
+        //assert(dot <= 1);
         fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
-
         // Check for NaN and inf() in the diffs.
         if (isnan(diff) || isnan(fdiff) || isinf(diff) || isinf(fdiff)) {
             fprintf(stderr,"Caught NaN in diff for kdiff for thread. Skipping update");
@@ -307,8 +320,8 @@ void *glove_thread(void *vid) {
         realglove syn1neg_updates_sum = 0;
         syn0_updates.zeros();
         syn1neg_updates.zeros();
-        arma::Mat<double> temp1 = arma::min(arma::max(-syn0_metric_grad, -grad_clip), grad_clip)*eta;
-        arma::Mat<double> temp2 = arma::min(arma::max(-syn1neg_metric_grad, -grad_clip), grad_clip)*eta;
+        arma::Mat<double> temp1 = arma::clamp(-syn0_metric_grad, -grad_clip_value, grad_clip_value)*eta;
+        arma::Mat<double> temp2 = arma::clamp(-syn1neg_metric_grad, -grad_clip_value, grad_clip_value)*eta;
         //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
         syn0_updates = temp1 / (arma::sqrt(syn0_gradsq.slice(l1)) + clamp_mat);
         syn1neg_updates = temp2 / (arma::sqrt(syn1neg_gradsq.slice(l2)) + clamp_mat);
@@ -380,12 +393,12 @@ int save_params(int nb_iter) {
             fprintf(fout, "%s ",word);
             for(b = 0; b < P; b++) for (long long c = 0; c < vector_size; c++) fwrite(&syn0(c, b, a), sizeof(realglove), 1, fout);
             fprintf(fout, "\n");
-        }
-        if (fscanf(fid,format,word) == 0) {
-            // Eat irrelevant frequency entry
-            fclose(fout);
-            fclose(fid);
-            free(word);
+            if (fscanf(fid,format,word) == 0) {
+            	// Eat irrelevant frequency entry
+            	fclose(fout);
+            	fclose(fid);
+            	free(word);
+	     }
         } 
         if (save_gradsq > 0) {
             if (nb_iter < 0)
@@ -418,7 +431,7 @@ int save_params(int nb_iter) {
         fid = fopen(vocab_file, "r");
         sprintf(format,"%%%ds",MAX_STRING_LENGTH);
         if (fid == NULL) {log_file_loading_err("vocab file", vocab_file); free(word); fclose(fout); return 1;}
-        if (write_header) fprintf(fout, "%lld %d\n", vocab_size, vector_size);
+        if (write_header) fprintf(fout, "%lld %lld %lld\n", vocab_size, vector_size, P);
         for (a = 0; a < vocab_size; a++) {
             if (fscanf(fid,format,word) == 0) {free(word); fclose(fid); fclose(fout); return 1;}
             // input vocab cannot contain special <unk> keyword
@@ -429,7 +442,7 @@ int save_params(int nb_iter) {
                 for (b = 0; b < (vector_size + 1); b++) fprintf(fout," %lf", W[(vocab_size + a) * (vector_size + 1) + b]);
             }
             if (model == 1) // Save only "word" vectors (without bias)
-                for (b = 0; b < vector_size; b++) fprintf(fout," %lf", W[a * (vector_size + 1) + b]);
+               for(b = 0; b < P; b++) for (long long c = 0; c < vector_size; c++) fprintf(fout," %lf", syn0(c, b, a));
             if (model == 2) // Save "word + context word" vectors (without bias)
                 for (b = 0; b < vector_size; b++) fprintf(fout," %lf", W[a * (vector_size + 1) + b] + W[(vocab_size + a) * (vector_size + 1) + b]);
             fprintf(fout,"\n");
@@ -512,7 +525,8 @@ int train_glove() {
             return save_params_return_code;
         if (verbose > 1) fprintf(stderr,"done.\n");
     }
-    if (verbose > 0) fprintf(stderr,"vector size: %d\n", vector_size);
+    if (verbose > 0) fprintf(stderr,"N: %d\n", vector_size);
+    if (verbose > 0) fprintf(stderr,"P:%d\n", P);
     if (verbose > 0) fprintf(stderr,"vocab size: %lld\n", vocab_size);
     if (verbose > 0) fprintf(stderr,"x_max: %lf\n", x_max);
     if (verbose > 0) fprintf(stderr,"alpha: %lf\n", alpha);
@@ -619,7 +633,8 @@ int main(int argc, char **argv) {
     } else {
         if ((i = arg_pos((char *)"-write-header", argc, argv)) > 0) write_header = atoi(argv[i + 1]);
         if ((i = arg_pos((char *)"-verbose", argc, argv)) > 0) verbose = atoi(argv[i + 1]);
-        if ((i = arg_pos((char *)"-vector-size", argc, argv)) > 0) vector_size = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-n", argc, argv)) > 0) vector_size = atoi(argv[i + 1]);
+        if ((i = arg_pos((char *)"-p", argc, argv))> 0) P = atoi(argv[i+1]);
         if ((i = arg_pos((char *)"-iter", argc, argv)) > 0) num_iter = atoi(argv[i + 1]);
         if ((i = arg_pos((char *)"-threads", argc, argv)) > 0) num_threads = atoi(argv[i + 1]);
         cost = (realglove *)malloc(sizeof(realglove) * num_threads);

@@ -15,7 +15,7 @@ make
 #   rm text8.zip
 # fi
 
-CORPUS=~/Documents/text0
+CORPUS=~/text0
 VOCAB_FILE=vocab.txt
 COOCCURRENCE_FILE=cooccurrence.bin
 COOCCURRENCE_SHUF_FILE=cooccurrence.shuf.bin
@@ -23,13 +23,15 @@ BUILDDIR=build
 SAVE_FILE=matrices
 VERBOSE=2
 MEMORY=4.0
+P=2
+MODEL=1
 VOCAB_MIN_COUNT=5
 VECTOR_SIZE=50
 MAX_ITER=15
 WINDOW_SIZE=15
 WRITE_HEADER=1
-BINARY=1
-NUM_THREADS=8
+BINARY=2
+NUM_THREADS=80
 X_MAX=10
 if hash python 2>/dev/null; then
     PYTHON=python
@@ -44,8 +46,8 @@ echo "$ $BUILDDIR/cooccur -memory $MEMORY -vocab-file $VOCAB_FILE -verbose $VERB
 $BUILDDIR/cooccur -memory $MEMORY -vocab-file $VOCAB_FILE -verbose $VERBOSE -window-size $WINDOW_SIZE < $CORPUS > $COOCCURRENCE_FILE
 echo "$ $BUILDDIR/shuffle -memory $MEMORY -verbose $VERBOSE < $COOCCURRENCE_FILE > $COOCCURRENCE_SHUF_FILE"
 $BUILDDIR/shuffle -memory $MEMORY -verbose $VERBOSE < $COOCCURRENCE_FILE > $COOCCURRENCE_SHUF_FILE
-echo "$ $BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -iter $MAX_ITER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE"
-$BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -iter $MAX_ITER -write-header $WRITE_HEADER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE
+echo "$ $BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -model $MODEL -x-max $X_MAX -iter $MAX_ITER -vector-size $VECTOR_SIZE -p $P -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE"
+$BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -model $MODEL -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -iter $MAX_ITER -write-header $WRITE_HEADER -vector-size $VECTOR_SIZE -p $P -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE
 if [ "$CORPUS" = 'text8' ]; then
    if [ "$1" = 'matlab' ]; then
        matlab -nodisplay -nodesktop -nojvm -nosplash < ./eval/matlab/read_and_evaluate.m 1>&2 

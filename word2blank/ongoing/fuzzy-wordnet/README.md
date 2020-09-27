@@ -22,3 +22,5 @@
     * Run [`eval.py`](https://github.com/bollu/alok-bollu/blob/master/word2blank/ongoing/fuzzy-wordnet/evaluation/eval.py) with embedding text file set as input. 
     * Output spits out Spearman’s ρ for Lexical Entailment on HYPERLEX ([LEAR_paper](https://arxiv.org/abs/1710.06371))
     * Current ρ on TRmsa graph based embeddings (dim=10): 0.011
+
+![Pipeline](https://imgur.com/a/qM4LkSv)

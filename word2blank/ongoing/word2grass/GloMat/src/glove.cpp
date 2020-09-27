@@ -197,18 +197,20 @@ void initialize_parameters() {
         //Initalising the matrices naively
         //Have to check "Statistics on Special Manifold" for a smarter method
         for (a = 0; a < vocab_size; a++) {
-            printf("\rinitializing Syn0 |%lld|", a);
-            arma::mat X = arma::orth(arma::randn<arma::mat>(vector_size, P));
-            arma::uword r = arma::rank(X);
-            if ((long long)r == P) syn0.slice(a) = X;
-            else printf("FULL COLUMN FAIL\n");
+            arma::uword r;
+            do {
+                printf("\rinitializing Syn0 |%lld|", a);
+                syn0.slice(a) = arma::orth(arma::randn<arma::mat>(vector_size, P));
+                r = arma::rank(syn0.slice(a));
+            } while ((long long)r != P);
         }
         for (a = 0; a < vocab_size; a++) {
-            printf("\rinitializing Syn1neg |%lld|", a);
-            arma::mat X = arma::orth(arma::randn<arma::mat>(vector_size, P));
-            arma::uword r = arma::rank(X);
-            if ((long long)r == P) syn1neg.slice(a) = X;
-            else printf("FULL COLUMN FAIL\n");
+            arma::uword r;
+            do {
+                printf("\rinitializing Syn0 |%lld|", a);
+                syn1neg.slice(a) = arma::orth(arma::randn<arma::mat>(vector_size, P));
+                r = arma::rank(syn1neg.slice(a));
+            } while ((long long)r != P);
         }
 
     }
@@ -289,8 +291,6 @@ void *glove_thread(void *vid) {
     if (id == 0) { printf("\nProgress: ?"); }
 
     for (a = 0; a < lines_per_thread[id]; a++) {
-        if (id == 0) { printf("\rProgress: %lld/%lld: %4.2f", 
-                a, lines_per_thread[id], (float)(a*100)/lines_per_thread[id]); }
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
         if (cr.word1 < 1 || cr.word2 < 1) { continue; }        
@@ -313,13 +313,25 @@ void *glove_thread(void *vid) {
 
         DEBUG_LINE
         //not using bias
-        const realglove max_dist = sqrt(P);
+        // added sqrt based on: http://helper.ipam.ucla.edu/publications/glws1/glws1_15465.pdf
+        const realglove max_dist = sqrt(2*P);
         // map [0, sqrt(P) -> [1, 0]
         DEBUG_LINE
-	    diff = ((max_dist - distance)/max_dist) - log(cr.val);
+        const realglove dot = (max_dist - distance)/max_dist;
+        if (dot < 0) {
+            printf("\nmax_dist: %4.2f | distance: %4.2f | (max_dist - distance): %4.2f\n", max_dist, distance, max_dist - distance);
+        }
+        assert(dot >= 0);
+        assert(dot <= 1);
+	    diff = (log(cr.val) - dot);
 
         DEBUG_LINE
-        fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
+        if (0) {
+            fdiff = (cr.val > x_max) ? diff : pow(cr.val / x_max, alpha) * diff; // multiply weighting function (f) with diff
+        } else { fdiff = diff; }
+
+        if (id == 0) { printf("\rProgress: %lld/%lld: %4.2f fdiff: %4.2f", 
+                a, lines_per_thread[id], (float)(a*100)/lines_per_thread[id], fdiff); }
 
         DEBUG_LINE
 
@@ -334,40 +346,55 @@ void *glove_thread(void *vid) {
         DEBUG_LINE
         syn0_updates.zeros();
         DEBUG(cerr << "syn0_updates: " << syn0_updates << "\n");
-
         syn1neg_updates.zeros();
         DEBUG_LINE
         // learning rate times gradient.
         //arma::min(arma::max(syn0_metric_grad, -grad_clip_value), grad_clip_value)*eta;
         DEBUG_LINE
-        arma::Mat<double> temp1 = arma::clamp(syn0_metric_grad, -grad_clip_value, grad_clip_value);
-        DEBUG_LINE
-
-        //arma::min(arma::max(syn1neg_metric_grad, -grad_clip_value), grad_clip_value)*eta;
-        DEBUG_LINE
-        arma::Mat<double> temp2 = arma::clamp(syn0_metric_grad, -grad_clip_value, grad_clip_value);
-
-        //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
-        DEBUG_LINE
-        syn0_updates = temp1 / (arma::sqrt(syn0_gradsq.slice(l1)) + 1.0);
-        DEBUG_LINE
-        DEBUG_LINE
-        syn1neg_updates = temp2 / (arma::sqrt(syn1neg_gradsq.slice(l2)) + 1.0);
-        //Calculating the matrix r for syn0 and syn1neg which is hadamard product of gradient  
-        syn0_gradsq.slice(l1) += temp1%temp1; 
-        syn1neg_gradsq.slice(l2) += temp2%temp2;
-
+        arma::Mat<double> temp1;
+        if (0) {
+             temp1 = arma::clamp(-fdiff * syn0_metric_grad, -grad_clip_value, grad_clip_value);
+        } else {
+            temp1 = fdiff * syn0_metric_grad;
+        }
 
         DEBUG_LINE
-        DEBUG_LINE
-        syn0.slice(l1) -= syn0_updates;                    
-        DEBUG(cerr << "syn0.slice(l1): " << syn0.slice(l1) << "\n");
+
+        syn0.slice(l1) += temp1;                    
         syn0.slice(l1) = arma::orth(syn0.slice(l1));       
-        DEBUG(cerr << "syn0.slice(l1): " << syn0.slice(l1) << "\n");
-        DEBUG_LINE
-        syn1neg.slice(l2) -= syn1neg_updates;              
-        DEBUG_LINE
+
+        arma::Mat<double> temp2;
+        if (0) { 
+            temp2 = arma::clamp(-fdiff * syn1neg_metric_grad, -grad_clip_value, grad_clip_value);
+        } else { 
+            temp2 = fdiff * syn1neg_metric_grad;
+        }
+        syn1neg.slice(l2) += temp2;              
         syn1neg.slice(l2) = arma::orth(syn1neg.slice(l2)); 
+
+        if (0) {
+            //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
+            DEBUG_LINE
+                syn0_updates = temp1 / (arma::sqrt(syn0_gradsq.slice(l1)) + 1.0);
+            DEBUG_LINE
+                DEBUG_LINE
+                syn1neg_updates = temp2 / (arma::sqrt(syn1neg_gradsq.slice(l2)) + 1.0);
+            //Calculating the matrix r for syn0 and syn1neg which is hadamard product of gradient  
+            syn0_gradsq.slice(l1) += temp1%temp1; 
+            syn1neg_gradsq.slice(l2) += temp2%temp2;
+
+
+            DEBUG_LINE
+                DEBUG_LINE
+                syn0.slice(l1) -= syn0_updates;                    
+            DEBUG(cerr << "syn0.slice(l1): " << syn0.slice(l1) << "\n");
+            syn0.slice(l1) = arma::orth(syn0.slice(l1));       
+            DEBUG(cerr << "syn0.slice(l1): " << syn0.slice(l1) << "\n");
+            DEBUG_LINE
+                syn1neg.slice(l2) -= syn1neg_updates;              
+            DEBUG_LINE
+                syn1neg.slice(l2) = arma::orth(syn1neg.slice(l2)); 
+        }
 
         // comment out grad checking: if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
         // comment out grad checking:     syn0.slice(l1) -= syn0_updates;
@@ -642,7 +669,7 @@ int main(int argc, char **argv) {
         printf("\t\tNumber of threads; default 8\n");
         printf("\t-iter <int>\n");
         printf("\t\tNumber of training iterations; default 25\n");
-        printf("\t-eta <float>\n");
+        printf("\t-esyn1neg_updatesta <float>\n");
         printf("\t\tInitial learning rate; default 0.05\n");
         printf("\t-alpha <float>\n");
         printf("\t\tParameter in exponent of weighting function; default 0.75\n");

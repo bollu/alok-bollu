@@ -289,7 +289,8 @@ void *glove_thread(void *vid) {
     if (id == 0) { printf("\nProgress: ?"); }
 
     for (a = 0; a < lines_per_thread[id]; a++) {
-        if (id == 0) { printf("\rProgress: %lld/%lld", a, lines_per_thread[id]); }
+        if (id == 0) { printf("\rProgress: %lld/%lld: %4.2f", 
+                a, lines_per_thread[id], (float)(a*100)/lines_per_thread[id]); }
         fread(&cr, sizeof(CREC), 1, fin);
         if (feof(fin)) break;
         if (cr.word1 < 1 || cr.word2 < 1) { continue; }        

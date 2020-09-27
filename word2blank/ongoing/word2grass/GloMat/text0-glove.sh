@@ -5,7 +5,7 @@ set -o xtrace
 # Makes programs, downloads sample data, trains a GloVe model, and then evaluates it.
 # One optional argument can specify the language used for eval script: matlab, octave or [default] python
 
-rm build/glove || true
+rm build/glove build/glove.o build/common.o || true
 make
 
 CORPUS=../../../utilities/text0
@@ -17,8 +17,8 @@ SAVE_FILE=matrices
 VERBOSE=2
 MEMORY=4.0
 VOCAB_MIN_COUNT=5
-VECTOR_SIZE=50
-MAX_ITER=3
+VECTOR_SIZE=9
+MAX_ITER=1
 # WINDOW_SIZE=15
 WINDOW_SIZE=4
 WRITE_HEADER=1

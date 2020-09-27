@@ -14,9 +14,8 @@ CFLAGS = -g -lm -pthread -O3 -march=native -funroll-loops -Wall -Wextra -Wpedant
 # 	 -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS \
 # 	 -march=native -Wall -Wextra -Wpedantic -funroll-loops -Wno-unused-result -fuse-ld=gold \
 # 	 -I ${HOME}/.local/include -L ${HOME}/.local/lib
-CXXFLAGS = -g -std=c++14 -lm -O0 -llapack -lblas -lpthread -larmadillo \
-	 -fsanitize=address -fsanitize=undefined \
-	 -march=native -Wall -Wextra -Wpedantic -funroll-loops -Wno-unused-result -fuse-ld=gold -static-libasan \
+CXXFLAGS = -g -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo \
+	 -march=native -Wall -Wextra -Wpedantic -funroll-loops -Wno-unused-result -fuse-ld=gold \
 	 -I ${HOME}/.local/include -L ${HOME}/.local/lib
 BUILDDIR := build
 SRCDIR := src

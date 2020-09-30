@@ -416,6 +416,9 @@ void *TrainModelThread(void *id) {
   double *neu1e = (double *)calloc(layer1_size, sizeof(double));
   arma::mat grad_syn0(layer1_size, P);
   arma::mat grad_syn1neg(layer1_size, P);
+  arma::mat syn0_updates(layer1_size, P);
+  arma::mat syn1neg_updates(layer1_size, P);
+  arma::mat clamp_mat(layer1_size, P); clamp_mat.fill(1e-8); 
   FILE *fi = fopen(train_file, "rb");
   fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
   while (1) {
@@ -588,15 +591,27 @@ void *TrainModelThread(void *id) {
                 f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
                 getDotAndGradients_chordalfrobenius(c_syn0.slice(last_word), c_syn1neg.slice(target), f, 
                         grad_syn0, grad_syn1neg);
-                // f = sigmoid(f);
-                // if (f > MAX_EXP) g = (label - 1) * alpha;
-                // else if (f < -MAX_EXP) g = (label - 0) * alpha;
-                // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+                double syn0_updates_sum = 0;
+                double syn1neg_updates_sum = 0;
+                syn0_updates.zeros(); syn1neg_updates.zeros();
                 g = (label - f)*alpha;
                 if ((size_t) id == 0) { printf("\rg: %6.10f", g); }
-                buff0 += grad_syn0*g;
-                c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) + grad_syn1neg*g);
+                //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
+                arma::mat temp1 = -g*grad_syn0;
+                arma::mat temp2 = -g*grad_syn1neg; 
+                syn0_updates = temp1 / (arma::sqrt(syn0_gradsq.slice(last_word)) + clamp_mat);
+                syn1neg_updates = temp2 / (arma::sqrt(syn1neg_gradsq.slice(target)) + clamp_mat);
+                syn0_updates_sum = arma::accu(syn0_updates);
+                syn1neg_updates_sum = arma::accu(syn1neg_updates);
+                //Calculating the matrix r for syn0 and syn1neg which is hadamard product of gradient  
+                syn0_gradsq.slice(last_word) += temp1%temp1; 
+                syn1neg_gradsq.slice(target) += temp2%temp2;
+                if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
+                    buff0 -= syn0_updates;
+                    c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) - syn1neg_updates);
+                }
             } // end negative samples loop
+
             c_syn0.slice(last_word) = arma::orth(buff0);
 
         } // end check negative sampling

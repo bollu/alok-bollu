@@ -17,6 +17,9 @@ word2grass : word2grass_cho.cpp
 word2grass_ada : word2grass_adagrad.cpp
 		$(CXX) word2grass_adagrad.cpp -o word2grass_ada $(CFLAGS_arma)
 
+toy_word2vec : toy_word2vec.cpp
+		$(CXX) toy_word2vec.cpp -o toy_word2vec $(CFLAGS_arma)
+
 union : union.cpp
 		$(CXX) union.cpp -o union $(CFLAGS_arma)
 

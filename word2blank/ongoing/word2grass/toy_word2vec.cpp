@@ -12,7 +12,7 @@ using namespace std;
 
 int SIZE  = 3;
 int NVEC = 2;
-int NITER = 500;
+int NITER = 15;
 int NEG = NVEC - 1;
 double ALPHA = 1e-2;
 
@@ -59,16 +59,19 @@ int main()
                 double dot = arma::norm_dot(focus.col(j), context.col(k));
                 cout << "|iter|- " << i << " |j|- " << j << " |k|- " << k << " |label|- " << label << " |dot|- " << dot << endl;
                 //cout << "|sigmoid(dot)| " << sigmoid(dot) << " |label -sigmoid(dot)| " << (label - sigmoid(dot)) << endl;
+                //gradient calculation for focus and context
                 arma::vec temp1 = -2*(label - dot)*context.col(k);
                 arma::vec temp2 = -2*(label - dot)*focus.col(i);
                 cout << "|focus gradient|" << temp1.t() ;
                 cout << "|context gradient|" << temp2.t() ;
+                //calculates the update values for focus vector 
                 arma::vec focus_updates = (temp1*ALPHA)/(arma::sqrt(focus_gradsq) + clamp_vec);
                 cout << "|FOCUS UPDATES| " << focus_updates.t();
                 arma::vec context_updates = (temp2*ALPHA)/(arma::sqrt(context_gradsq) + clamp_vec);
                 cout << "|CONTEXT UPDATES| " << context_updates.t();
                 focus_updates_sum = arma::accu(focus_updates);
                 context_updates_sum = arma::accu(context_updates);
+                //store the sum of gradient squares
                 focus_gradsq.col(j) += temp1%temp1; 
                 context_gradsq.col(k) += temp2%temp2;
                 if (!isnan(focus_updates_sum) && !isinf(focus_updates_sum) && !isnan(context_updates_sum) && !isinf(context_updates_sum)) {

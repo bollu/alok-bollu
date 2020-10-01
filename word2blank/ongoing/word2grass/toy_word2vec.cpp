@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <iostream>
 #include <stdio.h>
+#include <cmath>
 #include <assert.h>
 #include <armadillo>
 #include <vector>
@@ -11,9 +12,14 @@ using namespace std;
 
 int SIZE  = 3;
 int NVEC = 3;
-int NITER = 1000;
+int NITER = 500;
 int NEG = NVEC - 1;
 double ALPHA = 1e-2;
+
+double sigmoid(double x)
+{
+    return exp(x)/(1 + exp(x));
+}
 
 void generate_vectors(arma::mat& focus, arma::mat& context)
 {
@@ -46,10 +52,12 @@ int main()
             for(int k=0; k<NEG; k++)
             {
                 if (k == j) label = 1; else label = 0;
-                double dot = arma::norm_dot(focus.col(j), context.col(k));
-                cout << "iter:" << i << " j:" << j << " k:" << k << " dot:" << dot << endl;
-                arma::vec temp1 = -2*(label - dot)*context.col(k);
-                arma::vec temp2 = -2*(label - dot)*focus.col(i);
+                double dot = arma::dot(focus.col(j), context.col(k));
+                cout << "iter:" << i << " j:" << j << " k:" << k << " label:" << label << " dot:" << dot << endl;
+                arma::vec temp1 = -2*(label - sigmoid(dot))*sigmoid(dot)*(1 - sigmoid(dot))*context.col(k);
+                arma::vec temp2 = -2*(label - sigmoid(dot))*sigmoid(dot)*(1 - sigmoid(dot))*focus.col(i);
+                cout << "focus gradient:" << temp1.t() ;
+                cout << "context gradient:" << temp2.t() ;
                 arma::vec focus_updates = (temp1*ALPHA)/(arma::sqrt(focus_gradsq) + clamp_vec);
                 arma::vec context_updates = (temp2*ALPHA)/(arma::sqrt(context_gradsq) + clamp_vec);
                 focus_updates_sum = arma::accu(focus_updates);
@@ -59,11 +67,14 @@ int main()
                 if (!isnan(focus_updates_sum) && !isinf(focus_updates_sum) && !isnan(context_updates_sum) && !isinf(context_updates_sum)) {
                     buff0 -= focus_updates;
                     context.col(k) -= context_updates;
-                } 
+                }
+                buff0 -= temp1;
+                context.col(k) -= temp2;
             }
             focus.col(j) = buff0;
         }
     }
-    cout << focus << endl;
+    for (int i=0 ; i<NVEC; i++)
+        cout << focus.col(i) << endl;
     return 0;
 }

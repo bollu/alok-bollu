@@ -4,6 +4,7 @@ compute-accuracy
 simlex-accuracy
 word-analogy
 union
+toy-word2vec
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof

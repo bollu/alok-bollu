@@ -8,18 +8,20 @@
 #include <string>
 #include "grad.h"
 
+#define MAX_EXP 
 using namespace std;
 
 int SIZE  = 3;
 int NVEC = 2;
-int NITER = 15;
+int NITER = 1500;
 int NEG = NVEC - 1;
-double ALPHA = 1e-2;
+double ALPHA = 1e-3;
+
 
 double sigmoid(double x)
 {
-    arma::vec X(1); X.fill(x);
-    return arma::as_scalar(arma::exp(X)/(1 + arma::exp(X)));
+    if (isinf(exp(x))) return 1;
+    return exp(x)/(1 + exp(x));
 }
 
 void generate_vectors(arma::mat& focus, arma::mat& context)
@@ -56,12 +58,12 @@ int main()
                 if (k == j) label = 1; else label = 0;
                 cout << "|focus vector| " << focus.col(j).t() ;
                 cout << "|context vector| " << context.col(k).t();
-                double dot = arma::norm_dot(focus.col(j), context.col(k));
-                cout << "|iter|- " << i << " |j|- " << j << " |k|- " << k << " |label|- " << label << " |dot|- " << dot << endl;
-                //cout << "|sigmoid(dot)| " << sigmoid(dot) << " |label -sigmoid(dot)| " << (label - sigmoid(dot)) << endl;
+                double dot = arma::dot(focus.col(j), context.col(k));
+                cout << "|iter|: " << i << " |j|: " << j << " |k|: " << k << " |label|: " << label << " |dot|: " << dot << endl;
+                cout << "|sigmoid(dot)|: " << sigmoid(dot) << " |label -sigmoid(dot)|: " << (label - sigmoid(dot)) << endl;
                 //gradient calculation for focus and context
-                arma::vec temp1 = -2*(label - dot)*context.col(k);
-                arma::vec temp2 = -2*(label - dot)*focus.col(i);
+                arma::vec temp1 = -2*(label - sigmoid(dot))*sigmoid(dot)*(1 - sigmoid(dot))*context.col(k);
+                arma::vec temp2 = -2*(label - sigmoid(dot))*sigmoid(dot)*(1 - sigmoid(dot))*focus.col(i);
                 cout << "|focus gradient|" << temp1.t() ;
                 cout << "|context gradient|" << temp2.t() ;
                 //calculates the update values for focus vector 
@@ -72,12 +74,14 @@ int main()
                 focus_updates_sum = arma::accu(focus_updates);
                 context_updates_sum = arma::accu(context_updates);
                 //store the sum of gradient squares
-                focus_gradsq.col(j) += temp1%temp1; 
+                focus_gradsq.col(j) += temp1%temp1; //
                 context_gradsq.col(k) += temp2%temp2;
                 if (!isnan(focus_updates_sum) && !isinf(focus_updates_sum) && !isnan(context_updates_sum) && !isinf(context_updates_sum)) {
                     buff0 -= focus_updates;
                     context.col(k) -= context_updates;
                 }
+                // buff0 -= temp1*ALPHA;
+                // context.col(k) -= temp2*ALPHA;
             }
             focus.col(j) = buff0;
         }

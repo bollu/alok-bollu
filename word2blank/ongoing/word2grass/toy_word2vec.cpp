@@ -12,7 +12,7 @@
 using namespace std;
 
 int SIZE  = 3;
-int NVEC = 2;
+int NVEC = 4;
 int NITER = 1500;
 int NEG = NVEC - 1;
 double ALPHA = 1e-3;
@@ -67,9 +67,9 @@ int main()
                 cout << "|focus gradient|" << temp1.t() ;
                 cout << "|context gradient|" << temp2.t() ;
                 //calculates the update values for focus vector 
-                arma::vec focus_updates = (temp1*ALPHA)/(arma::sqrt(focus_gradsq) + clamp_vec);
+                arma::vec focus_updates = (temp1*ALPHA)/(arma::sqrt(focus_gradsq.col(j)) + clamp_vec);
                 cout << "|FOCUS UPDATES| " << focus_updates.t();
-                arma::vec context_updates = (temp2*ALPHA)/(arma::sqrt(context_gradsq) + clamp_vec);
+                arma::vec context_updates = (temp2*ALPHA)/(arma::sqrt(context_gradsq.col(k)) + clamp_vec);
                 cout << "|CONTEXT UPDATES| " << context_updates.t();
                 focus_updates_sum = arma::accu(focus_updates);
                 context_updates_sum = arma::accu(context_updates);

@@ -20,16 +20,16 @@ if __name__ == '__main__':
     # fname = 'trmsa_nouns_wt.vec'
     fname = 'wiki-news-300d-nouns.txt'  #Filtered Vectors acc to nouns.txt #Run filter_vecs.py to generate
     # fname = 'wiki-news-300d-1M.vec'
-    VOCAB = 10000   # set greater than total if all words are to be covered
+    VOCAB = 100   # set greater than total if all words are to be covered
     emb = util.load_embedding(path.join(dirname, fname), VOCAB)
     # emb = util.load_embedding('/home/kvaditya/GitHubRepos/glove.6B.300d.txt', VOCAB,typ='glove')
     print("embeddings loaded")
     ind_keys, word_keys, word_mat = wm.build(emb)
     word_mat = wm.normalize(word_mat, 0)
-    word_mat = wm.discretize(word_mat, 0)
-    sim_mat = wm.similarity(word_mat)
+    # word_mat = wm.discretize(word_mat, 0)
+    sim_mat = wm.similarity(word_mat)   # COS
     print("similarity matrix made")
-    # sim_mat = wm.xor_similarity(word_mat)
+    # sim_mat = wm.xor_similarity(word_mat) # XOR
 
     rank_mat = wm.rank(sim_mat) 
     print("rank matrix made")
@@ -126,9 +126,10 @@ if __name__ == '__main__':
     # print(rank_mat)
 
     # TRMSA or RMSA
-    temp_mat = rank_mat.copy()  
+    # temp_mat = rank_mat.copy()  # RMSA
+    temp_mat = np.transpose(rank_mat.copy()) # TRMSA
     # 'seed' is the MAXIMUM edge rank allowed in the msa
-    adj_mat = am.build(np.transpose(temp_mat),seed=20,mode='absolute',reverse=True) # Remove transpose for Rmsa
+    adj_mat = am.build(temp_mat,seed=20,mode='absolute',reverse=True) # Remove transpose for Rmsa
     g = nx.convert_matrix.from_numpy_array(adj_mat, create_using=nx.DiGraph)
     print("Graph made")
 

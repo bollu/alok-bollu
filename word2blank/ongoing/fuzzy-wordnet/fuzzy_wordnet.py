@@ -797,16 +797,16 @@ def demo_TRmsa(fpath='/home/kvaditya/GitHubRepos/wiki-news-300d-nouns.txt',pipel
 
         print('building demo TRmsa using long pipeline')
 
-        if not path.exists(embFile):
+        if not path.exists(fpath):
             print('error: path does not exist')
             return None
-        if not path.isfile(embFile):
+        if not path.isfile(fpath):
             print('error: path not a file')
             return None
         else:
 
             # step_1) loading embeddings and generating embedding matrix & index-word mappings for the matrix
-            emb = load_embedding(embFile,VOCAB=100,typ='w2v')
+            emb = load_embedding(fpath,VOCAB=100,typ='w2v')
             indKeys, wordKeys, word_mat = buildWordMat(emb)
             word_mat = normalize(word_mat, axis=0)
             # word_mat = discretize(word_mat, axis=0)  # uncomment to enable discretization
@@ -815,7 +815,7 @@ def demo_TRmsa(fpath='/home/kvaditya/GitHubRepos/wiki-news-300d-nouns.txt',pipel
             sim_mat = cos_similarity(word_mat)
 
             #step_3) building rank similarity matrix
-            renk_mat = rankMatrix(sim_mat)
+            rank_mat = rankMatrix(sim_mat)
 
             # step_4) building the adjacency matrix, followed by generating the graph
             temp_mat = np.transpose(rank_mat)   # TRmsa
@@ -828,8 +828,8 @@ def demo_TRmsa(fpath='/home/kvaditya/GitHubRepos/wiki-news-300d-nouns.txt',pipel
 
             # step_6) saving tree to dot file
             dot = to_pydot(tree)
-            dotPath = 'TRmsa.dot'
-            write_dot(tree,'TRmsa.dot')
+            dotPath = 'demo_TRmsa.dot'
+            write_dot(tree,dotPath)
 
             # step_7) converting dot file to png
             cmd = 'dot -Tpng '+dotPath

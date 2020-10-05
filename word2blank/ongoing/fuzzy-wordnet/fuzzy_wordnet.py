@@ -15,6 +15,7 @@ from scipy.spatial.distance import cosine
 import sklearn.preprocessing as preprocessing
 from sklearn.metrics.pairwise import cosine_similarity
 import scipy.cluster.hierarchy as sch
+from scipy.stats import entropy
 from gensim.test.utils import datapath, get_tmpfile
 from gensim.models import KeyedVectors
 from gensim.scripts.glove2word2vec import glove2word2vec
@@ -40,12 +41,12 @@ def load_embedding(fpath, VOCAB, typ='w2v'):
             - emb: vocab wide embeddging dictionary
     '''
     emb = dict()
-    if typ is 'glove':
+    if typ == 'glove':
         glove_file = datapath(fpath)
         tmp_file = get_tmpfile("test_word2vec.txt")
         _ = glove2word2vec(glove_file, tmp_file)
         wv_from_bin = KeyedVectors.load_word2vec_format(tmp_file, limit=VOCAB)
-    elif typ is 'w2v':
+    elif typ == 'w2v':
         wv_from_bin = KeyedVectors.load_word2vec_format(fpath, limit=VOCAB)
         
     for word, vector in zip(wv_from_bin.vocab, wv_from_bin.vectors):
@@ -155,6 +156,23 @@ def xor_similarity(word_mat):
 
 ########################################################################################
 
+def kl_similarity(word_mat):
+    '''
+        description:
+            - given embeddings matrix, returns pairwise KL similarity matrix (1-KL divergence score)
+        params: 
+            - word_mat: embeddings matrix (VOCABxNDMIS)
+        returns:
+            - word_mat: similarity matrix (VOCABxVOCAB) 
+    '''
+    m,n = word_mat.shape
+    sim_mat = np.zeros((m,m))
+    for i in range(m):
+        for j in range(m):
+            val = 1-entropy(pk=word_mat[i], qk=word_mat[j])
+            sim_mat[i][j] = val
+    return sim_mat
+
 def rankMatrix(sim_mat,limit=1):
     '''
         description:
@@ -244,26 +262,26 @@ def buildAdjMat(sim_mat,thresh=0.6,mode='abs',reverse=False):
 
     np.fill_diagonal(sim_mat, 0)    # ignore self-loops
 
-    if mode is 'abs':  # edge[wA,wB] = True if similarity > thresh
+    if mode == 'abs':  # edge[wA,wB] = True if similarity > thresh
         print('absolute)')
         for i in range(np.shape(sim_mat)[0]):
             if reverse:
-                sub_threshold_indices = sim_mat[i] > thresh
+                sub_threshold_indices = sim_mat[i] >= thresh
             else:
                 sub_threshold_indices = sim_mat[i] < thresh
             sim_mat[i][sub_threshold_indices] = 0
 
-    elif mode is 'mean':    # edge[wA,wB] = True if similarity > thresh*(mean similarity of row)
+    elif mode == 'mean':    # edge[wA,wB] = True if similarity > thresh*(mean similarity of row)
         print('mean)')
         for i in range(np.shape(sim_mat)[0]):
             thresh = thresh*np.mean(sim_mat[i])
             if reverse:
-                sub_threshold_indices = sim_mat[i] > thresh
+                sub_threshold_indices = sim_mat[i] >= thresh
             else:
                 sub_threshold_indices = sim_mat[i] < thresh
             sim_mat[i][sub_threshold_indices] = 0
 
-    elif mode is 'indegree':    # True if wB ∈ Top (int)'thresh' words acc to similarity
+    elif mode == 'indegree':    # True if wB ∈ Top (int)'thresh' words acc to similarity
         print('indegree)')
         for i in range(np.shape(sim_mat)[0]):
             simRow = [[sim_mat[i][j], j] for j in range(np.shape(sim_mat)[1])]
@@ -312,12 +330,12 @@ def decluster(tree,comp,parent,sim_mat,thresh=0.2,rate=0.01):
     comp_len = 0
     for comp in scc:
         comp_len+=1
-    if comp_len is 1:
+    if comp_len == 1:
         # print('Redundant Iteration (No new node created)')
         return decluster(tree, comp, parent, sim_mat, thresh+rate, rate)
     else:
         for compC in scc:   # child component of parent node
-            if len(compC) is 1:
+            if len(compC) == 1:
                 for word in compC:
                     tree.add_edge(parent,word)
             else: 
@@ -350,7 +368,7 @@ def singleton_analysis(sim_mat,init_thresh=0.5,rate=0.1):
 
     root = node_index = node_index+1
     for comp in scc:
-        if len(comp) is 1:
+        if len(comp) == 1:
             for word in comp:
                 tree.add_edge(root,word)
         else:
@@ -379,7 +397,7 @@ def custom_singleton_analysis(comp, sim_mat,init_thresh=0.2,rate=0.001):
         comp = range(np.shape(sim_mat)[0])
     print(comp)
     tree = nx.DiGraph()
-    if len(comp) is 1:
+    if len(comp) == 1:
         print("Specify atleast 2 tokens")
         return None
 
@@ -544,7 +562,7 @@ def centrality(graph,indKeys,centralityType='betw'):
             - cenSorted: word-keyed dictionary sorted in descending order by centrality
     '''
     cen = None
-    if centralityType is 'betw':
+    if centralityType == 'betw':
         cen = nx.betweenness_centrality(graph)
     cenSorted = {[cen[ind],indKeys[ind]] for ind in cen}
     cenSorted.sort(reverse=True)
@@ -627,10 +645,12 @@ def vecMat2adjMat(word_mat,simType='cos',edgeType='abs',edgeThresh='0.6'):
             - adjMat: adjacency matrix (VOCABxVOCAB)
     '''
     sim_mat = None
-    if simType is 'cos':
+    if simType == 'cos':
         sim_mat = cos_similarity(word_mat)
-    elif simType is 'xor':
+    elif simType == 'xor':
         sim_mat = xor_similarity(word_mat)
+    elif simType == 'kl':
+        sim_mat = kl_similarity(word_mat)
     adjMat = buildAdjMat(sim_mat,thresh=0.6,mode='abs',reverse=False)
     return adjMat
 
@@ -677,17 +697,19 @@ def vecMat2tree(word_mat,indKeys,treeType='TRmsa',treeThresh=20,simType='cos',fo
         sim_mat = cos_similarity(word_mat)
     elif simType == 'xor':
         sim_mat = xor_similarity(word_mat)
+    elif simType == 'kl':
+        sim_mat = kl_similarity(word_mat)
 
-    if treeType is 'msa':
+    if treeType == 'msa':
         argMax = True   # maximize similarity edge weight in arboroscence
         temp_mat = sim_mat.copy()
-    elif treeType is 'Rmsa':
+    elif treeType == 'Rmsa':
         rank_mat = rankMatrix(sim_mat)
         temp_mat = rank_mat.copy()
-    elif treeType is 'TRmsa':
+    elif treeType == 'TRmsa':
         rank_mat = rankMatrix(sim_mat)
         temp_mat = rank_mat.T.copy()
-    elif treeType is 'FRmsa':
+    elif treeType == 'FRmsa':
         rank_mat = rankMatrix(sim_mat)
         flipped_rank_mat = flipMatrix(rank_mat,focusRank=focusRank)
         temp_mat = flipped_rank_mat.copy()
@@ -797,16 +819,16 @@ def demo_TRmsa(fpath='/home/kvaditya/GitHubRepos/wiki-news-300d-nouns.txt',pipel
 
         print('building demo TRmsa using long pipeline')
 
-        if not path.exists(fpath):
+        if not path.exists(embFile):
             print('error: path does not exist')
             return None
-        if not path.isfile(fpath):
+        if not path.isfile(embFile):
             print('error: path not a file')
             return None
         else:
 
             # step_1) loading embeddings and generating embedding matrix & index-word mappings for the matrix
-            emb = load_embedding(fpath,VOCAB=100,typ='w2v')
+            emb = load_embedding(embFile,VOCAB=100,typ='w2v')
             indKeys, wordKeys, word_mat = buildWordMat(emb)
             word_mat = normalize(word_mat, axis=0)
             # word_mat = discretize(word_mat, axis=0)  # uncomment to enable discretization
@@ -815,7 +837,7 @@ def demo_TRmsa(fpath='/home/kvaditya/GitHubRepos/wiki-news-300d-nouns.txt',pipel
             sim_mat = cos_similarity(word_mat)
 
             #step_3) building rank similarity matrix
-            rank_mat = rankMatrix(sim_mat)
+            renk_mat = rankMatrix(sim_mat)
 
             # step_4) building the adjacency matrix, followed by generating the graph
             temp_mat = np.transpose(rank_mat)   # TRmsa
@@ -828,8 +850,8 @@ def demo_TRmsa(fpath='/home/kvaditya/GitHubRepos/wiki-news-300d-nouns.txt',pipel
 
             # step_6) saving tree to dot file
             dot = to_pydot(tree)
-            dotPath = 'demo_TRmsa.dot'
-            write_dot(tree,dotPath)
+            dotPath = 'TRmsa.dot'
+            write_dot(tree,'TRmsa.dot')
 
             # step_7) converting dot file to png
             cmd = 'dot -Tpng '+dotPath

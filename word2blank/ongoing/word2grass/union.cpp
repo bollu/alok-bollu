@@ -15,6 +15,7 @@ const long long max_w = 50;              // max length of vocabulary entries
 
 arma::cube c_syn0; 
 long long words;
+double samples=1.0;
 char *vocab;
 long long P, size;
 char *bestw[N];
@@ -121,11 +122,12 @@ int main(int argc, char **argv) {
         arma::Mat<double> U, V; arma::Col<double> s;
         arma::svd_econ(U, s, V, G);
         arma::Col<double> theta = arma::atan(s);
-        double i[] = {0.35, 0.4, 0.5, 0.6, 0.65};
-        for ( long long int itera = 0 ; itera < 5; itera++)
+        double iter = 0.0;
+        while(iter <= samples)
         {
-            arma::Mat<double> subsp = subspace(U, V, theta, start, i[itera]);
-            printclosest(subsp, i[itera]);
+            arma::Mat<double> subsp = subspace(U, V, theta, start, iter);
+            printclosest(subsp, iter);
+            iter += 0.005;
         }    
     }   
     return 0;

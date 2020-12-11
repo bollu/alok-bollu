@@ -13,9 +13,9 @@ using namespace std;
 int N  = 3;
 int P = 2;
 int NMAT = 4;
-long long int NITER = 3000000;
+long long int NITER = 90000;
 int NEG = NMAT - 1;
-double ALPHA = 1e-2;
+double ALPHA = 2e-2;
 
 
 double sigmoid(double x)
@@ -43,8 +43,9 @@ void generate_matrices(arma::cube& focus, arma::cube& context)
     {
         for (int j=0; j<NMAT; j++)
         {
-            //double dist = getNaturalDist(focus.slice(i), context.slice(j));
-            double dist = getChordalDist(focus.slice(i), context.slice(j));
+            //arma::vec angles = getPrincAng(focus.slice(i), context.slice(j));
+            double dist = getNaturalDist(focus.slice(i), context.slice(j));
+            //double dist = getChordalDist(focus.slice(i), context.slice(j));
             cout << "Focus vector No: " << i << " ; Context Vector No: " << j << "; distance: " << dist << endl;
         }
     }
@@ -71,7 +72,7 @@ int main()
             double focus_updates_sum = 0;
             double context_updates_sum = 0;
             arma::mat buff0 = focus.slice(j);
-            for(int k=0; k<NEG; k++)
+            for(int k=0; k<NMAT; k++)
             {
                 if (k == j) label = 0; else label = 1;
                 //cout << "|focus vector| " << focus.slice(j).t() ;
@@ -113,8 +114,9 @@ int main()
     {
         for (int j=0; j<NMAT; j++)
         {
-            //double dist = getNaturalDist(focus.slice(i), context.slice(j));
-            double dist = getChordalDist(focus.slice(i), context.slice(j));
+            //arma::vec angles = getPrincAng(focus.slice(i), context.slice(j));
+            double dist = getNaturalDist(focus.slice(i), context.slice(j));
+            //double dist = getChordalDist(focus.slice(i), context.slice(j));
             cout << "Focus vector No: " << i << " ; Context Vector No: " << j << "; distance: " << dist << endl;
         }
     }

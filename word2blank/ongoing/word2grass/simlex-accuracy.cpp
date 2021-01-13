@@ -28,10 +28,14 @@ double sim(int w1, int w2) {
     arma::mat M2(P, size); M2.zeros();
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M1(row,col) = M[(size*P*w1) + (row*size) + col]; 
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M2(row,col) = M[(size*P*w2) + (row*size) + col]; 
-    arma::Col<double> s = arma::svd(M1*M2.t());
-    s = arma::acos(s);
-    return sqrt(arma::accu(s % s));
-    
+    // double k = P/size;
+    // arma::Mat<double> I(size,size); I.eye();
+    // arma::Mat<double> sub_xd = (M1.t()*M1-(k*I))/sqrt(2);
+    // arma::Mat<double> sub_yd = (M2.t()*M2-(k*I))/sqrt(2);
+    // double distance = arma::trace(M1*M2.t());
+    // return distance;
+    double Proj = arma::norm(M1*M2.t(),"fro");
+    return Proj*Proj;
     // arma::Mat<double> K1 = M1*arma::trans(M2);
     // double abs_determinant = abs(arma::det(K1));
     // double distance = acos(abs_determinant);

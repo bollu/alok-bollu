@@ -32,6 +32,104 @@ arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 
 }
 
+void getDotAndGradients_steifel(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
+arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
+{
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    // race condition maybe created because of multi-threading. It's OK, just quit
+    // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
+    if((long long int)sub_y.n_rows != ndim) {
+        printf("ERR\n"); return;
+    }
+    if((long long int)sub_y.n_cols != pdim) {
+        printf("ERR\n"); return;
+    }
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+
+    distance = arma::trace(sub_x.t()*sub_y);
+    //arma::Mat<double> K = Proj*arma::trans(Proj);
+    //distance = Proj*Proj;
+    grad_x = sub_y;
+    grad_y = sub_x;
+
+}
+
+void getDot_chordalinner(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance)
+{
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    // race condition maybe created because of multi-threading. It's OK, just quit
+    // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
+    if((long long int)sub_y.n_rows != ndim) {
+        printf("ERR\n"); return;
+    }
+    if((long long int)sub_y.n_cols != pdim) {
+        printf("ERR\n"); return;
+    }
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+
+    double Proj = arma::norm(sub_x.t()*sub_y, "fro");
+    //arma::Mat<double> K = Proj*arma::trans(Proj);
+    distance = Proj*Proj;
+}
+
+arma::Mat<double> getGradients_chordalinner(arma::Mat<double> sub_x, arma::Mat<double> sub_y)
+{
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    // race condition maybe created because of multi-threading. It's OK, just quit
+    // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
+    if((long long int)sub_y.n_rows != ndim) {
+        printf("ERR\n"); return;
+    }
+    if((long long int)sub_y.n_cols != pdim) {
+        printf("ERR\n"); return;
+    }
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+    
+    arma::Mat<double> grad = 2*sub_y*sub_y.t()*sub_x;
+    return grad;
+}
+
+
+arma::Mat<double> ortho_proj(arma::Mat<double> grad_x, arma::Mat<double> x)
+{
+    arma::Mat<double> proj = grad_x -  (x*(x.t()*grad_x + grad_x.t()*x))/2;
+    return proj;
+}
+
+void getDotAndGradients_chordalinner(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
+arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
+{
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    // race condition maybe created because of multi-threading. It's OK, just quit
+    // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
+    if((long long int)sub_y.n_rows != ndim) {
+        printf("ERR\n"); return;
+    }
+    if((long long int)sub_y.n_cols != pdim) {
+        printf("ERR\n"); return;
+    }
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+
+    double Proj = arma::norm(sub_x.t()*sub_y, "fro");
+    distance = Proj*Proj;
+    
+    grad_x = 2*sub_y*sub_y.t()*sub_x;
+    grad_y = 2*sub_x*sub_x.t()*sub_y;
+
+}
+
 void getDotAndGradients_binetcauchy(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
 arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
 {

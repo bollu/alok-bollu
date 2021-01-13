@@ -392,8 +392,8 @@ void InitNet() {
     printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
     assert((long long)syn1neg_gradsq.n_slices == vocab_size);
     //Initialise gradient square
-    syn0_gradsq.zeros();
-    syn1neg_gradsq.zeros();
+    syn0_gradsq.ones();
+    syn1neg_gradsq.ones();
 
     printf("creating binary tree...\n");
     CreateBinaryTree();
@@ -416,8 +416,8 @@ void *TrainModelThread(void *id) {
   double *neu1e = (double *)calloc(layer1_size, sizeof(double));
   arma::mat grad_syn0(layer1_size, P);
   arma::mat grad_syn1neg(layer1_size, P);
-  arma::mat syn0_updates(layer1_size, P);
-  arma::mat syn1neg_updates(layer1_size, P);
+  // arma::mat syn0_updates(layer1_size, P);
+  // arma::mat syn1neg_updates(layer1_size, P);
   arma::mat clamp_mat(layer1_size, P); clamp_mat.fill(1e-8); 
   FILE *fi = fopen(train_file, "rb");
   fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
@@ -531,7 +531,8 @@ void *TrainModelThread(void *id) {
           for (c = 0; c < layer1_size; c++) syn0[c + last_word * layer1_size] += neu1e[c];
         }
       }
-    } else {  //train skip-gram
+    } 
+    else {  //train skip-gram
       for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
         c = sentence_position - window + a;
         if (c < 0) continue;
@@ -593,27 +594,26 @@ void *TrainModelThread(void *id) {
                         grad_syn0, grad_syn1neg);
                 double syn0_updates_sum = 0;
                 double syn1neg_updates_sum = 0;
-                syn0_updates.zeros(); syn1neg_updates.zeros();
+                //syn0_updates.zeros(); syn1neg_updates.zeros();
                 g = (label - f);
                 if ((size_t) id == 0) { printf("\rg: %6.10f", g); }
                 //Calculating grad*eta o 1/sqrt(I + r) for syn0 and syn1neg
-                arma::mat temp1 = -g*grad_syn0;
-                arma::mat temp2 = -g*grad_syn1neg; 
-                syn0_updates = (temp1*alpha) / (arma::sqrt(syn0_gradsq.slice(last_word)) + clamp_mat);
-                syn1neg_updates = (temp2*alpha) / (arma::sqrt(syn1neg_gradsq.slice(target)) + clamp_mat);
+                double alp = 0.01;
+                arma::mat temp1 = g*grad_syn0;
+                arma::mat temp2 = g*grad_syn1neg; 
+                arma::mat syn0_updates = (temp1* alp)/(arma::sqrt(syn0_gradsq.slice(last_word)) + clamp_mat);
+                arma::mat syn1neg_updates = (temp2* alp)/(arma::sqrt(syn1neg_gradsq.slice(target)) + clamp_mat);
                 syn0_updates_sum = arma::accu(syn0_updates);
                 syn1neg_updates_sum = arma::accu(syn1neg_updates);
                 //Calculating the matrix r for syn0 and syn1neg which is hadamard product of gradient  
                 syn0_gradsq.slice(last_word) += temp1%temp1; 
                 syn1neg_gradsq.slice(target) += temp2%temp2;
                 if (!isnan(syn0_updates_sum) && !isinf(syn0_updates_sum) && !isnan(syn1neg_updates_sum) && !isinf(syn1neg_updates_sum)) {
-                    buff0 -= syn0_updates;
-                    c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) - syn1neg_updates);
+                    buff0 += syn0_updates;
+                    c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) + syn1neg_updates);
                 }
             } // end negative samples loop
-
             c_syn0.slice(last_word) = arma::orth(buff0);
-
         } // end check negative sampling
         else { assert(false && "neither skip gram nor hierarchical softmax??"); }
       } // end skip gram loop

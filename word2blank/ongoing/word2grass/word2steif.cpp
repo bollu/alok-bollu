@@ -528,7 +528,8 @@ void *TrainModelThread(void *id) {
           for (c = 0; c < layer1_size; c++) syn0[c + last_word * layer1_size] += neu1e[c];
         }
       }
-    } else {  //train skip-gram
+    } 
+    else {  //train skip-gram
       for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
         c = sentence_position - window + a;
         if (c < 0) continue;
@@ -576,13 +577,13 @@ void *TrainModelThread(void *id) {
             for (d = 0; d < negative + 1; d++) {
                 if (d == 0) {
                     target = word;
-                    label = 0;
+                    label = P;
                 } else {
                     next_random = next_random * (unsigned long long)25214903917 + 11;
                     target = table[(next_random >> 16) % table_size];
                     if (target == 0) target = next_random % (vocab_size - 1) + 1;
                     if (target == word) continue;
-                    label = sqrt(P);
+                    label = 0;
                 }
                 //l2 = target * layer1_size;
                 f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
@@ -594,10 +595,11 @@ void *TrainModelThread(void *id) {
                 // if (f > MAX_EXP) g = (label - 1) * alpha;
                 // else if (f < -MAX_EXP) g = (label - 0) * alpha;
                 // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-                g = (label - f)*alpha;
-                if ((size_t) id == 0) { printf("\rg: %6.10f", g); }
-                buff0 += grad_syn0*g;
-                c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) + grad_syn1neg*g);
+                g = -2*(label - f)*alpha;
+                arma::Mat<double> proj_grad_syn0 = ortho_proj(grad_syn0, c_syn0.slice(last_word));
+                arma::Mat<double> proj_grad_syn1neg = ortho_proj(grad_syn1neg, c_syn1neg.slice(target));
+                buff0 += -proj_grad_syn0*g;
+                c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) - proj_grad_syn1neg*g);
             } // end negative samples loop
             c_syn0.slice(last_word) = arma::orth(buff0);
 

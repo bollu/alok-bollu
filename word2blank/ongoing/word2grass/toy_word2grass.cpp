@@ -10,12 +10,12 @@
 
 using namespace std;
 
-int N  = 3;
-int P = 2;
-int NMAT = 4;
-long long int NITER = 90000;
+int N  = 100;
+int P = 1;
+int NMAT = 5;
+long long int NITER = 10000;
 int NEG = NMAT - 1;
-double ALPHA = 2e-2;
+double ALPHA = 1e-2;
 
 
 double sigmoid(double x)
@@ -44,9 +44,9 @@ void generate_matrices(arma::cube& focus, arma::cube& context)
         for (int j=0; j<NMAT; j++)
         {
             //arma::vec angles = getPrincAng(focus.slice(i), context.slice(j));
-            double dist = getNaturalDist(focus.slice(i), context.slice(j));
-            //double dist = getChordalDist(focus.slice(i), context.slice(j));
-            cout << "Focus vector No: " << i << " ; Context Vector No: " << j << "; distance: " << dist << endl;
+            //double dist = getNaturalDist(focus.slice(i), context.slice(j));
+            double dist = getChordalDist(focus.slice(i), context.slice(j));
+            cout << "Focus vector No: " << i << " ; Context Vector No: " << j << "; distance: " << dist/sqrt(P) << endl;
         }
     }
     // printf("BEFORE CONTEXT\n");
@@ -59,8 +59,8 @@ int main()
     int label;
     arma::cube focus(N, P, NMAT);
     arma::cube context(N, P, NMAT);
-    arma::cube focus_gradsq(N, P, NMAT); focus_gradsq.zeros();
-    arma::cube context_gradsq(N, P, NMAT); context_gradsq.zeros(); 
+    arma::cube focus_gradsq(N, P, NMAT); focus_gradsq.ones();
+    arma::cube context_gradsq(N, P, NMAT); context_gradsq.ones(); 
     arma::mat clamp_mat(N, P); clamp_mat.fill(1e-8);
     arma::mat grad_context(N, P);
     arma::mat grad_focus(N, P);
@@ -83,8 +83,8 @@ int main()
                 //cout << "|iter|: " << i << " |j|: " << j << " |k|: " << k << " |label|: " << label << " |dist|: " << f << endl;
                 //cout << "|sigmoid(dot)|: " << sigmoid(dot) << " |label -sigmoid(dot)|: " << (label - sigmoid(dot)) << endl;
                 //gradient calculation for focus and context
-                //arma::mat temp1 = -2*(label - sigmoid(f))*sigmoid(f)*(1 - sigmoid(f))*grad_focus;
-                //arma::mat temp2 = -2*(label - sigmoid(f))*sigmoid(f)*(1 - sigmoid(f))*grad_context;
+                //arma::mat temp1 = -2*(label - f)*grad_focus;
+                //arma::mat temp2 = -2*(label - f)*grad_context;
                 arma::mat temp1 = (-2*(label - f/sqrt(P))*grad_focus)/sqrt(P);
                 arma::mat temp2 = (-2*(label - f/sqrt(P))*grad_context)/sqrt(P);
                 //cout << "|focus gradient|" << temp1.t() ;
@@ -114,10 +114,11 @@ int main()
     {
         for (int j=0; j<NMAT; j++)
         {
-            //arma::vec angles = getPrincAng(focus.slice(i), context.slice(j));
-            double dist = getNaturalDist(focus.slice(i), context.slice(j));
-            //double dist = getChordalDist(focus.slice(i), context.slice(j));
-            cout << "Focus vector No: " << i << " ; Context Vector No: " << j << "; distance: " << dist << endl;
+            arma::vec angles = getPrincAng(focus.slice(i), context.slice(j));
+            //cout << angles.t() << endl;
+            //double dist = getNaturalDist(focus.slice(i), context.slice(j));
+            double dist = getChordalDist(focus.slice(i), context.slice(j));
+            cout << "Focus vector No: " << i << " ; Context Vector No: " << j << "; distance: " << dist/sqrt(P) << endl;
         }
     }
     return 0;

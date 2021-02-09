@@ -6,7 +6,7 @@ RELEASE=-O3
 mFLAGS = -llapacke -llapack -lblas -lm -lpthread  -march=native -Wall \
                  -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
 
-CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_DONT_USE_WRAPPER -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
+CFLAGS_arma = -std=c++14 -lgfortran -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_DONT_USE_WRAPPER -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
                  -funroll-loops -Wno-unused-result -fuse-ld=gold \
                  -I ${HOME}/.local/include -L ${HOME}/.local/lib
 all : word2grass simlex-accuracy distance compute-accuracy word2grass_ada

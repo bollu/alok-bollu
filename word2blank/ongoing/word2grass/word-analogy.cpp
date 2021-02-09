@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <armadillo>
 #include <vector>

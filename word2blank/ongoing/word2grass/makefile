@@ -43,12 +43,12 @@ vec-analogy : vec-analogy.cpp
 
 
 word-analogy : word-analogy.cpp
-		# $(CXX) analogy.cpp -o analogy $(CFLAGS_arma)
-		$(CXX) word-analogy.cpp -o word-analogy \
-			 -I ${HOME}/.local/include -L ${HOME}/.local/lib \
-			 -llapack -lblas -lpthread -larmadillo -lm \
-			 -DARMA_USE_LAPACK -DARMA_USE_BLAS  \
-			 -std=c++14 -lm -fuse-ld=gold -fsanitize=address -fsanitize=undefined
+		$(CXX) word-analogy.cpp -o word-analogy $(CFLAGS_arma)
+		# $(CXX) word-analogy.cpp -o word-analogy \
+		# 	 -I ${HOME}/.local/include -L ${HOME}/.local/lib \
+		# 	 -llapack -lblas -lpthread -larmadillo -lm \
+		# 	 -DARMA_USE_LAPACK -DARMA_USE_BLAS  \
+		# 	 -std=c++14 -lm -fuse-ld=gold -fsanitize=address -fsanitize=undefined
 
 
 bollu-analogy : bollu-analogy.cpp

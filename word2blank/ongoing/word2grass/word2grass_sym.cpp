@@ -21,7 +21,6 @@ using namespace std;
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
 
-
 int P = -1;
 const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -38,7 +37,7 @@ int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = -1;
 long long train_words = 0, word_count_actual = 0, iter = 10, file_size = 0, classes = 0;
-double alpha = 0.04, starting_alpha, sample = 1e-3, margin = 0.15;
+double alpha = 0.025, starting_alpha, sample = 1e-3;
 double *syn0, *syn1, *syn1neg, *expTable;
 arma::cube c_syn1neg;
 arma::cube c_syn0; 
@@ -360,40 +359,44 @@ void InitNet() {
         for (a = 0; a < vocab_size; a++) for (b = 0; b < layer1_size; b++)
             syn1[a * layer1_size + b] = 0;
     }
-
-    c_syn1neg.set_size(layer1_size, P, vocab_size);
+    c_syn1neg.set_size(layer1_size, layer1_size, vocab_size);
     printf("c_syn1neg.n_slices: %lld\n", c_syn1neg.n_slices);
     assert(c_syn1neg.n_slices == vocab_size);
     for (a = 0; a < vocab_size; a++) {
         printf("\rinitializing syn1neg |%d|", a);
         arma::mat X = arma::orth(arma::randn<arma::mat>(layer1_size, P));
-        arma::uword r = arma::rank(X);
-        if ((long long)r == P) c_syn1neg.slice(a) = X;
-        else printf("FULL COLUMN FAIL\n");
+        arma::mat Psyn1neg_k = X*X.t();
+        arma::uword r = arma::rank(Psyn1neg_k);
+        if ((long long)r == P && Psyn1neg_k.is_symmetric()) c_syn1neg.slice(a) = Psyn1neg_k;
+        else printf("RANK NOT EQUAL TO P\n");
     }
-    c_syn0.set_size(layer1_size, P, vocab_size);
+    printf("done initializing syn1neg...\n");
+
+    c_syn0.set_size(layer1_size, layer1_size, vocab_size);
+    printf("c_syn0.n_slices: %lld\n", c_syn0.n_slices);
     assert(c_syn0.n_slices == vocab_size);
     for (a = 0; a < vocab_size; a++) {
         printf("\rinitializing syn0 |%d|", a);
         arma::mat Y = arma::orth(arma::randn<arma::mat>(layer1_size, P));
-        arma::uword r = arma::rank(Y);
-        if ((long long)r == P)c_syn0.slice(a) = Y;
-        else printf("FULL COLUMN FAIL\n");
+        arma::mat Psyn0_k = Y*Y.t(); 
+        arma::uword r = arma::rank(Psyn0_k);
+        if ((long long)r == P && Psyn0_k.is_symmetric()) c_syn0.slice(a) = Psyn0_k;
+        else printf("RANK NOT EQUAL TO P\n");
     }
     printf("done initializing syn0...\n");
 
     //Allocate space to syn0_grad cube
-    syn0_gradsq.set_size(layer1_size, P, vocab_size);
-    printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
-    assert((long long)syn0_gradsq.n_slices == vocab_size);
+    // syn0_gradsq.set_size(layer1_size, P, vocab_size);
+    // printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
+    // assert((long long)syn0_gradsq.n_slices == vocab_size);
 
-    //Allocate space to syn1neg_grad cube
-    syn1neg_gradsq.set_size(layer1_size, P, vocab_size);
-    printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
-    assert((long long)syn1neg_gradsq.n_slices == vocab_size);
-    //Initialise gradient square
-    syn0_gradsq.zeros();
-    syn1neg_gradsq.zeros();
+    // //Allocate space to syn1neg_grad cube
+    // syn1neg_gradsq.set_size(layer1_size, P, vocab_size);
+    // printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
+    // assert((long long)syn1neg_gradsq.n_slices == vocab_size);
+    // //Initialise gradient square
+    // syn0_gradsq.zeros();
+    // syn1neg_gradsq.zeros();
 
     printf("creating binary tree...\n");
     CreateBinaryTree();
@@ -407,15 +410,15 @@ double sigmoid(double f) {
 void *TrainModelThread(void *id) {
   long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
-  long long l1, l2, c, target, context_word, label, local_iter = iter;
+  long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
-  double f, g, h, obj_w = 0;
+  double f, g;
   clock_t now;
   double *neu1 = (double *)calloc(layer1_size, sizeof(double));
   double *neu1e = (double *)calloc(layer1_size, sizeof(double));
-  arma::mat grad_syn0(layer1_size, P);
-  arma::mat grad_syn1neg(layer1_size, P);
+  arma::mat grad_syn0(layer1_size, layer1_size);
+  arma::mat grad_syn1neg(layer1_size, layer1_size);
   FILE *fi = fopen(train_file, "rb");
   fseek(fi, file_size / (long long)num_threads * (long long)id, SEEK_SET);
   while (1) {
@@ -424,9 +427,9 @@ void *TrainModelThread(void *id) {
       last_word_count = word_count;
       if ((debug_mode > 1)) {
         now=clock();
-        printf("%cAlpha: %f  Objective (w): %f Progress: %.2f%%  Words/thread/sec: %.2fk  ", 13, alpha, 
-               obj_w, word_count_actual / (double) (iter * train_words + 1) * 100,
-               word_count_actual / ((double) (now - start + 1) / (double) CLOCKS_PER_SEC * 1000));
+        printf("%cAlpha: %f  Progress: %.2f%%  Words/thread/sec: %.2fk  ", 13, alpha,
+         word_count_actual / (double)(iter * train_words + 1) * 100,
+         word_count_actual / ((double)(now - start + 1) / (double)CLOCKS_PER_SEC * 1000));
         fflush(stdout);
       }
       alpha = starting_alpha * (1 - word_count_actual / (double)(iter * train_words + 1));
@@ -528,15 +531,14 @@ void *TrainModelThread(void *id) {
           for (c = 0; c < layer1_size; c++) syn0[c + last_word * layer1_size] += neu1e[c];
         }
       }
-    } 
-    else {  //train skip-gram
+    } else {  //train skip-gram
       for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
         c = sentence_position - window + a;
         if (c < 0) continue;
         if (c >= sentence_length) continue;
-        last_word = sen[c]; //positive center word 
+        last_word = sen[c];
         if (last_word == -1) continue;
-        l1 = last_word * layer1_size; 
+        l1 = last_word * layer1_size;
         for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
         // need to think, does this actually copy?
         // HIERARCHICAL SOFTMAX
@@ -572,45 +574,30 @@ void *TrainModelThread(void *id) {
             }
         }
         // NEGATIVE SAMPLING
-        else if (negative >= 0) {
-            obj_w = 0;
-            //arma::mat buff0(c_syn0.slice(last_word));
+        else if (negative >= 0) { 
+            arma::mat buff0(layer1_size, layer1_size); buff0.zeros();
             for (d = 0; d < negative + 1; d++) {
                 if (d == 0) {
-                    context_word = word; //context word 
+                    target = word;
+                    label = P;
                 } else {
                     next_random = next_random * (unsigned long long)25214903917 + 11;
-                    target = table[(next_random >> 16) % table_size]; //negative center word 
-                    if (target == 0) target = next_random % (vocab_size - 1) + 1; 
+                    target = table[(next_random >> 16) % table_size];
+                    if (target == 0) target = next_random % (vocab_size - 1) + 1;
                     if (target == word) continue;
-                    //label = 0;
-                    f = 0; getDot_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(context_word), f);
-                    h = 0; getDot_chordalinner(c_syn0.slice(target), c_syn1neg.slice(context_word), h);
-                    if (f - h < margin) {
-                      obj_w += margin - (f - h);
-                      //compute context word gradient
-                      arma::Mat<double> grad_context = -1*getGradients_chordalinner(c_syn1neg.slice(context_word), c_syn0.slice(last_word)) + getGradients_chordalinner(c_syn1neg.slice(word), c_syn0.slice(target));
-                      arma::Mat<double> proj_grad_context = ortho_proj(grad_context, c_syn1neg.slice(context_word));
-                      
-                      //update positive center word 
-                      arma::Mat<double> grad_poscen = -1*getGradients_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(context_word));
-                      arma::Mat<double> proj_grad_poscen = ortho_proj(grad_poscen, c_syn0.slice(last_word));
-                      //step = ??
-                      c_syn0.slice(last_word) = arma::orth(c_syn0.slice(target) - alpha*proj_grad_poscen);
-
-                      //update negative center word 
-                      arma::Mat<double> grad_negcen = getGradients_chordalinner(c_syn0.slice(target), c_syn1neg.slice(context_word));
-                      arma::Mat<double> proj_grad_negcen = ortho_proj(grad_negcen, c_syn0.slice(target));
-                      //step = ??
-                      c_syn0.slice(target) = arma::orth(c_syn0.slice(target) - alpha*proj_grad_negcen);
-
-                      //update context word
-                      //step = ??
-                      c_syn1neg.slice(context_word) = arma::orth(c_syn1neg.slice(context_word) - alpha*proj_grad_context);
-                    }
-                  } 
-                } // end negative samples loop
-              } // end check negative sampling
+                    label = 0;
+                }
+                //l2 = target * layer1_size;
+                f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
+                getDotAndGradients_syminner(c_syn0.slice(last_word), c_syn1neg.slice(target), f, grad_syn0, grad_syn1neg);
+                g = 2*(label - f)*alpha;
+                buff0 += grad_syn0*g; 
+                c_syn1neg.slice(target) = retraction(c_syn1neg.slice(target), grad_syn1neg*g);
+            } // end negative samples loop
+            cout << "buff0: " << buff0 << endl;
+            assert(buff0.is_symmetric(0.01)); 
+            c_syn0.slice(last_word) = retraction(c_syn0.slice(last_word), buff0);
+        } // end check negative sampling
         else { assert(false && "neither skip gram nor hierarchical softmax??"); }
       } // end skip gram loop
     } // end skip gram if
@@ -649,8 +636,9 @@ void TrainModel() {
     fprintf(fo, "%lld %lld %lld\n", vocab_size, layer1_size, P);
     for (a = 0; a < vocab_size; a++) {
       fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&c_syn0(c, b, a), sizeof(double), 1, fo);
-      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", c_syn0(c, b, a));
+      assert(c_syn0.slice(a).is_symmetric(0.001)); 
+      if (binary) for(b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) fwrite(&c_syn0(c, b, a), sizeof(double), 1, fo);
+      else for(b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ", c_syn0(c, b, a));
       fprintf(fo, "\n");
     }
     fclose(fo);
@@ -665,8 +653,8 @@ void TrainModel() {
     fprintf(fo, "%lld %lld %lld\n", vocab_size, layer1_size, P);
     for (a = 0; a < vocab_size; a++) {
       fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fwrite(&c_syn1neg(c, b, a), sizeof(double), 1, fo);
-      else for(b = 0; b < P; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ",c_syn1neg(c, b, a));
+      if (binary) for(b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) fwrite(&c_syn1neg(c, b, a), sizeof(double), 1, fo);
+      else for(b = 0; b < layer1_size; b++) for (c = 0; c < layer1_size; c++) fprintf(fo, "%lf ",c_syn1neg(c, b, a));
       fprintf(fo, "\n");
     }
     fclose(fo);
@@ -799,7 +787,7 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-iter", argc, argv)) > 0) iter = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-min-count", argc, argv)) > 0) min_count = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
-  assert(layer1_size > 0); assert(P > 0); assert(P < layer1_size);
+  assert(layer1_size > 0); assert(P > 0); assert(P <= layer1_size);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   expTable = (double *)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));

@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <armadillo>
@@ -65,10 +64,10 @@ void getDot_chordalinner(arma::Mat<double> sub_x, arma::Mat<double> sub_y, doubl
     // race condition maybe created because of multi-threading. It's OK, just quit
     // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
     if((long long int)sub_y.n_rows != ndim) {
-        printf("ERR\n"); return;
+        printf("ERR\n");
     }
     if((long long int)sub_y.n_cols != pdim) {
-        printf("ERR\n"); return;
+        printf("ERR\n"); 
     }
     assert((long long int)sub_y.n_rows == ndim);
     assert((long long int)sub_y.n_cols == pdim);
@@ -86,10 +85,10 @@ arma::Mat<double> getGradients_chordalinner(arma::Mat<double> sub_x, arma::Mat<d
     // race condition maybe created because of multi-threading. It's OK, just quit
     // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
     if((long long int)sub_y.n_rows != ndim) {
-        printf("ERR\n"); return;
+        printf("ERR\n"); 
     }
     if((long long int)sub_y.n_cols != pdim) {
-        printf("ERR\n"); return;
+        printf("ERR\n"); 
     }
     assert((long long int)sub_y.n_rows == ndim);
     assert((long long int)sub_y.n_cols == pdim);
@@ -104,6 +103,64 @@ arma::Mat<double> ortho_proj(arma::Mat<double> grad_x, arma::Mat<double> x)
     arma::Mat<double> proj = grad_x -  (x*(x.t()*grad_x + grad_x.t()*x))/2;
     return proj;
 }
+
+void getDotAndGradients_syminner(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
+arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
+{
+    const long long int ndim = sub_x.n_rows;
+    const long long int pdim = sub_x.n_cols;
+
+    // race condition maybe created because of multi-threading. It's OK, just quit
+    // the update this round. because grad_x, grad_y are zeroed, we'll be OK.
+    if((long long int)sub_y.n_rows != ndim) {
+        printf("ERR\n"); return;
+    }
+    if((long long int)sub_y.n_cols != pdim) {
+        printf("ERR\n"); return;
+    }
+    assert((long long int)sub_y.n_rows == ndim);
+    assert((long long int)sub_y.n_cols == pdim);
+    if (!sub_x.is_symmetric(0.01))
+        cout << sub_x << endl;
+    if (!sub_y.is_symmetric(0.01))
+        cout << sub_y << endl;    
+    distance = arma::trace(sub_x*sub_y);
+    //F_X * X + X * F_X − 2*X*F_X*X
+    grad_x = (sub_y*sub_x + sub_x*sub_y) - 2*(sub_x*sub_y*sub_x);
+    grad_y = (sub_x*sub_y + sub_y*sub_x) - 2*(sub_y*sub_x*sub_y);
+    if (!grad_x.is_symmetric(0.01))
+        cout << grad_x << endl;
+    if(!grad_y.is_symmetric(0.01))
+       cout << grad_y << endl;
+}
+
+arma::Mat<double> get_orthomat(arma::Mat<double> P_x)
+{
+   arma::mat Q; arma::mat R;
+   Q = arma::orth(P_x);
+   //cout << Q << endl;
+   return Q;
+}
+
+arma::Mat<double> retraction(arma::Mat<double> X, arma::Mat<double> eta)
+{
+    const long long int ndim = X.n_rows;
+    arma::Mat<double> I(ndim, ndim); I.eye();
+    //arma::Mat<double> Y = arma::orth(X);
+    arma::Mat<double> Q; arma::Mat<double> R; 
+    //arma::Mat<double> inter = (I + eta)*Y;
+    arma::Mat<double> inter = I + eta*X - X*eta;
+    arma::qr(Q, R, inter);
+    arma::mat P = Q*X*Q.t();
+    assert(P.is_symmetric(0.01));
+    return P;
+    //arma::mat P =  Q*Q.t();
+    //cout << "new: " << P << endl;
+    //assert(P.is_symmetric(0.01));
+    //return Q*Q.t(); 
+}
+
+
 
 void getDotAndGradients_chordalinner(arma::Mat<double> sub_x, arma::Mat<double> sub_y, double& distance, 
 arma::Mat<double>& grad_x, arma::Mat<double>& grad_y)
@@ -248,7 +305,7 @@ arma::Mat<double> exp_map(const arma::Mat<double> start, const arma::Mat<double>
     arma::Mat<double> U, V; arma::vec s;
     DEBUG_LINE
     //arma::Mat<double> act_tgt = tgt;//*L;
-	arma::svd_econ(U, s, V, tgt);
+    arma::svd_econ(U, s, V, tgt);
     DEBUG_LINE
     arma::Mat<double> end = start*V*arma::diagmat(arma::cos(s))*V.t() + U*arma::diagmat(arma::sin(s))*V.t();
     DEBUG_LINE
@@ -259,7 +316,7 @@ arma::Mat<double> exp_map(const arma::Mat<double> start, const arma::Mat<double>
 
 double getNaturalDist(arma::Mat<double> &X, arma::Mat<double> &Y) {
 
-	const long long int n = X.n_rows;
+    const long long int n = X.n_rows;
     const long long int p = X.n_cols;
     assert((long long int)Y.n_rows == n);
     assert((long long int)Y.n_cols == p);

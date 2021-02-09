@@ -6,7 +6,7 @@ RELEASE=-O3
 mFLAGS = -llapacke -llapack -lblas -lm -lpthread  -march=native -Wall \
                  -funroll-loops -Wno-unused-result ${RELEASE} -fuse-ld=gold
 
-CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
+CFLAGS_arma = -std=c++14 -lm -O3 -llapack -lblas -lpthread -larmadillo -DARMA_NO_DEBUG -DARMA_DONT_USE_WRAPPER -DARMA_MAT_PREALLOC -DARMA_USE_LAPACK -DARMA_USE_BLAS -march=native -Wall \
                  -funroll-loops -Wno-unused-result -fuse-ld=gold \
                  -I ${HOME}/.local/include -L ${HOME}/.local/lib
 all : word2grass simlex-accuracy distance compute-accuracy word2grass_ada
@@ -14,8 +14,8 @@ all : word2grass simlex-accuracy distance compute-accuracy word2grass_ada
 word2grass : word2grass_cho.cpp
 		$(CXX) word2grass_cho.cpp -o word2grass $(CFLAGS_arma)
 
-word2grass_ada : word2grass_adagrad.cpp
-		$(CXX) word2grass_adagrad.cpp -o word2grass_ada $(CFLAGS_arma)
+word2grass_sym : word2grass_sym.cpp
+		$(CXX) word2grass_sym.cpp -o word2grass_sym $(CFLAGS_arma)
 
 toy_word2vec : toy_word2vec.cpp
 		$(CXX) toy_word2vec.cpp -o toy_word2vec $(CFLAGS_arma)

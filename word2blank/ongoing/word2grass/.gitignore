@@ -7,6 +7,8 @@ union
 toy_word2vec
 word2grass_sym
 .vs_code
+.toy_word2grass
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof

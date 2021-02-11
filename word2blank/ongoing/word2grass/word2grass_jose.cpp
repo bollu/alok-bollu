@@ -42,7 +42,7 @@ double alpha = 0.04, starting_alpha, sample = 1e-3, margin = 0.15;
 double *syn0, *syn1, *syn1neg, *expTable;
 arma::cube c_syn1neg;
 arma::cube c_syn0; 
-arma::vec bias;
+arma::cube bias;
 arma::cube syn0_gradsq;
 arma::cube syn1neg_gradsq;
 clock_t start;
@@ -383,19 +383,28 @@ void InitNet() {
     }
     printf("done initializing syn0...\n");
     
-    bias.set_size(vocab_size); bias.zeros(); 
+    bias.set_size(layer1_size, P, vocab_size); //bias.zeros();
+    assert(bias.n_slices == vocab_size);
+    for (a = 0; a < vocab_size; a++) {
+        printf("\rinitializing bias |%d|", a);
+        arma::mat Z = arma::orth(arma::randn<arma::mat>(layer1_size, P));
+        arma::uword r = arma::rank(Z);
+        if ((long long)r == P)bias.slice(a) = Z;
+        else printf("FULL COLUMN FAIL\n");
+    }
+    printf("done initializing bias matrices...\n");
     //Allocate space to syn0_grad cube
-    syn0_gradsq.set_size(layer1_size, P, vocab_size);
-    printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
-    assert((long long)syn0_gradsq.n_slices == vocab_size);
+    // syn0_gradsq.set_size(layer1_size, P, vocab_size);
+    // printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
+    // assert((long long)syn0_gradsq.n_slices == vocab_size);
 
-    //Allocate space to syn1neg_grad cube
-    syn1neg_gradsq.set_size(layer1_size, P, vocab_size);
-    printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
-    assert((long long)syn1neg_gradsq.n_slices == vocab_size);
-    //Initialise gradient square
-    syn0_gradsq.zeros();
-    syn1neg_gradsq.zeros();
+    // //Allocate space to syn1neg_grad cube
+    // syn1neg_gradsq.set_size(layer1_size, P, vocab_size);
+    // printf("syn1neg_gradsq.n_slices:%lld\n", syn1neg_gradsq.n_slices);
+    // assert((long long)syn1neg_gradsq.n_slices == vocab_size);
+    // //Initialise gradient square
+    // syn0_gradsq.zeros();
+    // syn1neg_gradsq.zeros();
 
     printf("creating binary tree...\n");
     CreateBinaryTree();
@@ -589,7 +598,10 @@ void *TrainModelThread(void *id) {
                     f = 0; getDot_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(word), f);
                     h = 0; getDot_chordalinner(c_syn0.slice(target), c_syn1neg.slice(word), h);
                     if (f - h < margin) {
-                      obj_w += margin - (f - h);
+                      //loss = m - (f + b1 - h - b2)
+                      double b1 = arma::trace(bias.slice(last_word)*bias.slice(last_word).t());
+                      double b2 = arma::trace(bias.slice(target)*bias.slice(target).t());
+                      obj_w += margin - (f + b1 - h - b2);
                       //compute context word gradient
                       arma::Mat<double> grad_context = -1*getGradients_chordalinner(c_syn1neg.slice(word), c_syn0.slice(last_word)) + getGradients_chordalinner(c_syn1neg.slice(word), c_syn0.slice(target));
                       arma::Mat<double> proj_grad_context = ortho_proj(grad_context, c_syn1neg.slice(word));
@@ -597,18 +609,25 @@ void *TrainModelThread(void *id) {
                       //update positive center word 
                       arma::Mat<double> grad_poscen = -1*getGradients_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(word));
                       arma::Mat<double> proj_grad_poscen = ortho_proj(grad_poscen, c_syn0.slice(last_word));
-                      //step = ??
-                      c_syn0.slice(last_word) = arma::orth(c_syn0.slice(last_word) - alpha*proj_grad_poscen);
+                      c_syn0.slice(last_word) = exp_map(c_syn0.slice(last_word) , -1*alpha*proj_grad_poscen, 1.0);
+
+                      //update positive center word bias
+                      arma::Mat<double> grad_b1 = -2*bias.slice(last_word);
+                      arma::Mat<double> proj_grad_b1 = ortho_proj(grad_b1, bias.slice(last_word));
+                      bias.slice(last_word) = exp_map(bias.slice(last_word), -1*alpha*proj_grad_b1 , 1.0);
 
                       //update negative center word 
                       arma::Mat<double> grad_negcen = getGradients_chordalinner(c_syn0.slice(target), c_syn1neg.slice(word));
                       arma::Mat<double> proj_grad_negcen = ortho_proj(grad_negcen, c_syn0.slice(target));
-                      //step = ??
-                      c_syn0.slice(target) = arma::orth(c_syn0.slice(target) - alpha*proj_grad_negcen);
+                      c_syn0.slice(target) = exp_map(c_syn0.slice(target) , -1*alpha*proj_grad_negcen, 1.0);
 
+                      //update negative center word bias 
+                      arma::Mat<double> grad_b2 = 2*bias.slice(target);
+                      arma::Mat<double> proj_grad_b2 = ortho_proj(grad_b1, bias.slice(target));
+                      bias.slice(target) = exp_map(bias.slice(target), -1*alpha*proj_grad_b2 , 1.0);
+                      
                       //update context word
-                      //step = ??
-                      c_syn1neg.slice(word) = arma::orth(c_syn1neg.slice(word) - alpha*proj_grad_context);
+                      c_syn1neg.slice(word) = exp_map(c_syn1neg.slice(word), -1*alpha*proj_grad_context, 1.0);
                     }
                   } 
                 } // end negative samples loop

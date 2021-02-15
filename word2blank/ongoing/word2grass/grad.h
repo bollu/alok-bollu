@@ -97,11 +97,16 @@ arma::Mat<double> getGradients_chordalinner(arma::Mat<double> sub_x, arma::Mat<d
     return grad;
 }
 
+arma::Mat<double> steif_proj(arma::Mat<double> grad_x, arma::Mat<double> x)
+{
+    arma::Mat<double> proj = grad_x -  (x*(x.t()*grad_x + grad_x.t()*x))/2;
+    return proj;
+}
+
 
 arma::Mat<double> ortho_proj(arma::Mat<double> grad_x, arma::Mat<double> x)
 {
     arma::mat proj = grad_x - x*x.t()*grad_x;
-    //arma::Mat<double> proj = grad_x -  (x*(x.t()*grad_x + grad_x.t()*x))/2;
     return proj;
 }
 

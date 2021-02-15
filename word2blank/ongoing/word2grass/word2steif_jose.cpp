@@ -382,6 +382,17 @@ void InitNet() {
         else printf("FULL COLUMN FAIL\n");
     }
     printf("done initializing syn0...\n");
+    
+    bias.set_size(layer1_size, P, vocab_size); //bias.zeros();
+    assert(bias.n_slices == vocab_size);
+    for (a = 0; a < vocab_size; a++) {
+        printf("\rinitializing bias |%d|", a);
+        arma::mat Z = arma::orth(arma::randn<arma::mat>(layer1_size, P));
+        arma::uword r = arma::rank(Z);
+        if ((long long)r == P)bias.slice(a) = Z;
+        else printf("FULL COLUMN FAIL\n");
+    }
+    printf("done initializing bias matrices...\n");
     //Allocate space to syn0_grad cube
     // syn0_gradsq.set_size(layer1_size, P, vocab_size);
     // printf("syn0_gradsq.n_slices: %lld\n", syn0_gradsq.n_slices);
@@ -584,32 +595,29 @@ void *TrainModelThread(void *id) {
                     if (target == 0) target = next_random % (vocab_size - 1) + 1; 
                     if (target == word) continue;
                     //label = 0;
-                    f = 0; getDot_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(word), f);
-                    h = 0; getDot_chordalinner(c_syn0.slice(target), c_syn1neg.slice(word), h);
-                    arma::Mat<double> V = c_syn0.slice(last_word)*c_syn0.slice(last_word).t();
-                    arma::Mat<double> V_p = c_syn0.slice(target)*c_syn0.slice(target).t();
-                    double b1 = log(1 + (layer1_size*arma::trace(V))/P + (layer1_size*(layer1_size+2)*arma::trace(V*V.t()))/(2*P*(P+2)));
-                    double b2 = log(1 + (layer1_size*arma::trace(V_p))/P + (layer1_size*(layer1_size+2)*arma::trace(V_p*V_p.t()))/(2*P*(P+2)));
+                    f = arma::trace(c_syn0.slice(last_word).t()*c_syn1neg.slice(word));
+                    h = arma::trace(c_syn0.slice(target).t()*c_syn1neg.slice(word));
+                    double b1 = log(1 + (arma::trace(c_syn0.slice(last_word).t()*c_syn0.slice(last_word)))/(2*P));
+                    double b2 = log(1 + (arma::trace(c_syn0.slice(target).t()*c_syn0.slice(target)))/(2*P));
                     if ((-b1 + f + b2 - h) < margin) {
                       //loss = m - (f - b1 - h + b2)
                       obj_w += margin - (- b1 + f + b2 - h);
                       //compute context word gradient
-                      //compute context word gradient
-                      arma::Mat<double> grad_context = -1*getGradients_chordalinner(c_syn1neg.slice(word), c_syn0.slice(last_word)) + getGradients_chordalinner(c_syn1neg.slice(word), c_syn0.slice(target));
-                      arma::Mat<double> proj_grad_context = ortho_proj(grad_context, c_syn1neg.slice(word));
+                      arma::Mat<double> grad_context = -c_syn0.slice(last_word) + c_syn0.slice(target);
+                      arma::Mat<double> proj_grad_context = steif_proj(grad_context, c_syn1neg.slice(word));
                       
                       //update positive center word 
-                      arma::Mat<double> grad_poscen = ((2*layer1_size*c_syn0.slice(last_word))/P + (layer1_size*(layer1_size+2)*V)/(P*(P+2)))/b1 -1*getGradients_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(word));
-                      arma::Mat<double> proj_grad_poscen = ortho_proj(grad_poscen, c_syn0.slice(last_word));
-                      c_syn0.slice(last_word) = exp_map(c_syn0.slice(last_word) , -1*alpha*proj_grad_poscen, 1.0);
+                      arma::Mat<double> grad_poscen = (c_syn0.slice(last_word))/(b1*P) - c_syn1neg.slice(word) ;
+                      arma::Mat<double> proj_grad_poscen = steif_proj(grad_poscen, c_syn0.slice(last_word));
+                      c_syn0.slice(last_word) = arma::orth(c_syn0.slice(last_word) - alpha*proj_grad_poscen);
 
                       //update negative center word 
-                      arma::Mat<double> grad_negcen = -((2*layer1_size*c_syn0.slice(target))/P + (layer1_size*(layer1_size+2)*V_p)/(P*(P+2)))/b2 + getGradients_chordalinner(c_syn0.slice(target), c_syn1neg.slice(word));
-                      arma::Mat<double> proj_grad_negcen = ortho_proj(grad_negcen, c_syn0.slice(target));
-                      c_syn0.slice(target) = exp_map(c_syn0.slice(target) , -1*alpha*proj_grad_negcen, 1.0);
+                      arma::Mat<double> grad_negcen = -(c_syn0.slice(target))/(b2*P) + c_syn1neg.slice(word);
+                      arma::Mat<double> proj_grad_negcen = steif_proj(grad_negcen, c_syn0.slice(target));
+                      c_syn0.slice(target) = arma::orth(c_syn0.slice(target) - alpha*proj_grad_negcen);
                       
                       //update context word
-                      c_syn1neg.slice(word) = exp_map(c_syn1neg.slice(word), -1*alpha*proj_grad_context, 1.0);
+                      c_syn1neg.slice(word) = arma::orth(c_syn1neg.slice(word) - alpha*proj_grad_context);
                     }
                   } 
                 } // end negative samples loop
@@ -802,7 +810,7 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-iter", argc, argv)) > 0) iter = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-min-count", argc, argv)) > 0) min_count = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
-  assert(layer1_size > 0); assert(P > 0); assert(P <= layer1_size);
+  assert(layer1_size > 0); assert(P > 0); assert(P < layer1_size);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   expTable = (double *)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));

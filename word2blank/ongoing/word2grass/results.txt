@@ -1,0 +1,8 @@
+text_file  dim  p  simlex
+
+text0      20   1    0.195 
+text0      20   2    0.201
+text0      20   3    0.208
+text0      20   4    0.213
+text0      20   5    0.206
+text0      20   10   0.154    

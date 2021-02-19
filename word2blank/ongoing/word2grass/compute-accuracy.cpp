@@ -62,7 +62,7 @@ int main(int argc, char **argv)
   fclose(f);
   TCN = 0;
   while (1) {
-    for (a = 0; a < N; a++) bestd[a] = 300000.0;
+    for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     scanf("%s", st1);
     for (a = 0; a < strlen(st1); a++) st1[a] = toupper(st1[a]);
@@ -93,7 +93,7 @@ int main(int argc, char **argv)
     b2 = b;
     for (b = 0; b < words; b++) if (!strcmp(&vocab[b * max_w], st3)) break;
     b3 = b;
-    for (a = 0; a < N; a++) bestd[a] = 300000.0;
+    for (a = 0; a < N; a++) bestd[a] = -1;
     for (a = 0; a < N; a++) bestw[a][0] = 0;
     TQ++;
     if (b1 == words) continue;
@@ -114,15 +114,15 @@ int main(int argc, char **argv)
       if (c == b2) continue;
       if (c == b3) continue;
       dist = 0;
-      dist = getNaturalDist(target, c_syn0.slice(c));
-      //dist = getChordalDist(target, c_syn0.slice(c));
+      //dist = getNaturalDist(target, c_syn0.slice(c));
+      dist = norm(target.t()*c_syn0.slice(c), "fro");
       for (a = 0; a < N; a++) {
-        if (dist < bestd[a]) {
+        if (dist > bestd[a]) {
           for (d = N - 1; d > a; d--) {
             bestd[d] = bestd[d - 1];
             strcpy(bestw[d], bestw[d - 1]);
           }
-          bestd[a] = dist;
+          bestd[a] = dist/sqrt(P);
           strcpy(bestw[a], &vocab[c * max_w]);
           break;
         }

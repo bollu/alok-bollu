@@ -29,9 +29,7 @@ double sim(int w1, int w2) {
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M1(row,col) = M[(size*P*w1) + (row*size) + col]; 
     for ( row = 0; row < P; row++) for ( col = 0; col < size; col++) M2(row,col) = M[(size*P*w2) + (row*size) + col]; 
 
-    // double distance = arma::trace(M1*M2.t());
-    // return distance;
-    // return arma::trace(M1*M2.t());
+    //return arma::trace(M1*M2.t());
     double Proj = arma::norm(M1*M2.t(),"fro");
     return Proj*Proj;
 }

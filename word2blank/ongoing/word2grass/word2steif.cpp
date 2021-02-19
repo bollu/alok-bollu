@@ -587,19 +587,16 @@ void *TrainModelThread(void *id) {
                 }
                 //l2 = target * layer1_size;
                 f = 0; grad_syn0.zeros(); grad_syn1neg.zeros();
-                // getDotAndGradients_chordalfrobenius(c_syn0.slice(last_word), c_syn1neg.slice(target), f, 
-                //         grad_syn0, grad_syn1neg);
-                getDotAndGradients_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(target), f, 
-                         grad_syn0, grad_syn1neg);
-                // f = sigmoid(f);
-                // if (f > MAX_EXP) g = (label - 1) * alpha;
-                // else if (f < -MAX_EXP) g = (label - 0) * alpha;
-                // else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-                g = -2*(label - f)*alpha;
-                arma::Mat<double> proj_grad_syn0 = ortho_proj(grad_syn0, c_syn0.slice(last_word));
-                arma::Mat<double> proj_grad_syn1neg = ortho_proj(grad_syn1neg, c_syn1neg.slice(target));
-                buff0 += -proj_grad_syn0*g;
-                c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) - proj_grad_syn1neg*g);
+                getDotAndGradients_chordalinner(c_syn0.slice(last_word), c_syn1neg.slice(target), f, grad_syn0, grad_syn1neg);
+                //f = sigmoid(f);
+                //if (f > MAX_EXP) g = (label - 1) * alpha;
+                //else if (f < -MAX_EXP) g = (label - 0) * alpha;
+                //else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+                g = 2*(label - f)*alpha;
+                arma::Mat<double> proj_grad_syn0 = steif_proj(g*grad_syn0, c_syn0.slice(last_word));
+                arma::Mat<double> proj_grad_syn1neg = steif_proj(g*grad_syn1neg, c_syn1neg.slice(target));
+                buff0 += proj_grad_syn0;
+                c_syn1neg.slice(target) = arma::orth(c_syn1neg.slice(target) + proj_grad_syn1neg);
             } // end negative samples loop
             c_syn0.slice(last_word) = arma::orth(buff0);
 
@@ -792,7 +789,7 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-iter", argc, argv)) > 0) iter = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-min-count", argc, argv)) > 0) min_count = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
-  assert(layer1_size > 0); assert(P > 0); assert(P < layer1_size);
+  assert(layer1_size > 0); assert(P > 0); assert(P <= layer1_size);
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   expTable = (double *)malloc((EXP_TABLE_SIZE + 1) * sizeof(double));

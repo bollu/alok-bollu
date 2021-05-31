@@ -1,20 +1,4 @@
-i# Spherical Text Embedding
-
-The source code used for Spherical Text Embedding, published in NeurIPS 2019. The code structure (especially file reading and saving functions) is adapted from the [Word2Vec implementation](https://github.com/tmikolov/word2vec).
-
-## Requirements
-
-* GCC compiler (used to compile the source c file): See the [guide for installing GCC](https://gcc.gnu.org/wiki/InstallingGCC).
-
-## Pre-trained Embeddings
-
-We provide pre-trained ``JoSE`` embeddings on the [wikipedia dump](datasets/wiki/README.md).
-* [50-d](https://drive.google.com/open?id=1bH7Jix1oQVzFxOz9ZtBa2RJZCLr6Zxvx)
-* [100-d](https://drive.google.com/file/d/1hfA8BbhdnbxKejoW78lZU_voJCEfrSVH/view?usp=sharing)
-* [200-d](https://drive.google.com/file/d/1qwMSFyf_6OVDxYoWywhsEhiZ3GlL041q/view?usp=sharing)
-* [300-d](https://drive.google.com/file/d/13rPhPCOO1jA2ROhb4gBa8-2wsjdq-87Y/view?usp=sharing)
-
-Unlike Euclidean embeddings such as Word2Vec and GloVe, spherical embeddings do not necessarily benefit from higher-dimensional space, so it might be a good idea to start with lower-dimensional ones first.
+#Grassmannian Text Embeddings
 
 ## Run the Code
 
@@ -76,7 +60,7 @@ Examples:
 
 ## Word Similarity Evaluation
 
-Word similarity evaluation is done on the wikipedia dump. The script will first download a zipped file of the pre-processed wikipedia dump (retrieved 2019.05; the zipped version is of ~4GB; the unzipped one is of ~13GB; for a detailed description of the dataset, see [its README file](datasets/wiki/README.md)), and then run ``JoSE`` on it. Finally, the trained embeddings are evaluated on three benchmark word similarity datasets: WordSim-353, MEN and SimLex-999.
+Word similarity evaluation is done on the wikipedia dump with the file ``grass_sim.py``. A batch script will soon be written which will first download a zipped file of the pre-processed wikipedia dump (retrieved 2019.05; the zipped version is of ~4GB; the unzipped one is of ~13GB; for a detailed description of the dataset, see [its README file](datasets/wiki/README.md)), and then run our code on it. Finally, the trained embeddings are evaluated on three benchmark word similarity datasets: WordSim-353, MEN and SimLex-999.
 
 ## Sentiment Analysis Evaluation
 
@@ -84,4 +68,4 @@ Word similarity evaluation is done on the wikipedia dump. The script will first 
 
 ## Topical Document Classification Evaluation
 
-"grass_classification.py" performs KNN classification following the original 20 Newsgroup train/test split with the trained document embeddings as features.
+``grass_classification.py`` performs KNN classification following the original 20 Newsgroup train/test split with the trained document embeddings as features.

@@ -18,7 +18,9 @@ test_file = {
 
 def get_emb(vec_file):
     f = open(vec_file, 'r', errors='ignore')
-    contents = f.readlines()[1:]
+    tmp = f.readlines()
+    dimension = [int(x) for x in tmp[0].split(' ')]
+    contents = tmp[1:]
     word_emb = {}
     vocabulary = {}
     vocabulary_inv = {}
@@ -28,7 +30,7 @@ def get_emb(vec_file):
         word = tokens[0]
         vec = tokens[1:]
         vec = np.array([float(ele) for ele in vec])
-        mat = np.reshape(vec,(1, vec.shape[0]))
+        mat = np.reshape(vec,(dimension[2], dimension[1]))
         sym_mat = mat.T@mat
         word_emb[word] = np.reshape(sym_mat, -1)
         vocabulary[word] = i
